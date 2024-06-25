@@ -65,7 +65,10 @@
       "Vendor Details": "Detail Vendor",
       "Justification Form": "Form Justifikasi",
       "Company Profile": "Profil Perusahaan",
-      "Attachment File Guide": "Panduan pengunggahan file"
+      "Attachment File Guide": "Panduan pengunggahan file",
+      "Please insert address without ',' (comma) character": "Mohon mengisi alamat tanpa karakter koma",
+      "Please fill without ',' (comma) character": "Mohon mengisi alamat tanpa karakter koma",
+      "Please insert this field": "Mohon untuk mengisi kolom ini"
     }
   },
   "en": {
@@ -134,7 +137,10 @@
       "Vendor Details": "Vendor Details",
       "Justification Form": "Justification Form",
       "Company Profile": "Company Profile",
-      "Attachment File Guide": "Attachment File Guide"
+      "Attachment File Guide": "Attachment File Guide",
+      "Please insert address without ',' (comma) character": "Please insert address without ',' (comma) character",
+      "Please fill without ',' (comma) character": "Please fill without ',' (comma) character",
+      "Please insert this field": "Please insert this field"
     }
   }
 }

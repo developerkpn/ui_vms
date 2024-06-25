@@ -1162,14 +1162,16 @@ function RefactorFormVendorPage() {
                 </Link>
               </Box>
             </Alert>
-            <Alert severity="warning" variant="filled" sx={{ width: '45rem', mt: '1rem', mb: '1rem' }}>
-              <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                {t('Please Download Justifikasi')}
-                <Link href={`${process.env.REACT_APP_URL_LOC}/master/file/Form VENDOR LOCAL JUSTIFIKASI.docx`}>
-                  Link Download File Form Justifikasi
-                </Link>
-              </Box>
-            </Alert>
+            {ticketState === 'CREA' && (
+              <Alert severity="warning" variant="filled" sx={{ width: '45rem', mt: '1rem', mb: '1rem' }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                  {t('Please Download Justifikasi')}
+                  <Link href={`${process.env.REACT_APP_URL_LOC}/master/file/Form VENDOR LOCAL JUSTIFIKASI.docx`}>
+                    Link Download File Form Justifikasi
+                  </Link>
+                </Box>
+              </Alert>
+            )}
             <Accordion expanded={expanded.panelReqDet} onChange={handleExpanded('panelReqDet')}>
               <AccordionSummary
                 sx={{
@@ -1233,7 +1235,7 @@ function RefactorFormVendorPage() {
                       }
                       onChangeovr={funChgTitle}
                       options={title}
-                      rules={{ required: 'Please insert this field' }}
+                      rules={{ required: t(t('Please insert this field')) }}
                     />
                   </Grid>
                   <Grid item xs={3}>
@@ -1248,7 +1250,7 @@ function RefactorFormVendorPage() {
                         )
                       }
                       options={localoverseas}
-                      rules={{ required: 'Please insert this field' }}
+                      rules={{ required: t('Please insert this field') }}
                       onChangeovr={funChgLoc}
                     />
                   </Grid>
@@ -1264,7 +1266,7 @@ function RefactorFormVendorPage() {
                         )
                       }
                       rules={{
-                        required: 'Please insert this field',
+                        required: t('Please insert this field'),
                         maxLength: { value: 300, message: 'Max 300 Character' },
                       }}
                       onChangeovr={funChgname}
@@ -1322,7 +1324,7 @@ function RefactorFormVendorPage() {
                         )
                       }
                       rules={{
-                        required: 'Please insert this field',
+                        required: t('Please insert this field'),
                         pattern: {
                           value: /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/g,
                           message: 'invalid email address',
@@ -1340,7 +1342,7 @@ function RefactorFormVendorPage() {
                         control={control}
                         readOnly={!(UPDATE.CREA && ticketState === 'CREA')}
                         rules={{
-                          required: 'Please insert this field',
+                          required: t('Please insert this field'),
                           maxLength: { value: 100, message: 'Max 100 Character' },
                         }}
                         toUpperCase={true}
@@ -1391,12 +1393,12 @@ function RefactorFormVendorPage() {
                         )
                       }
                       rules={{
-                        required: 'Please insert this field',
+                        required: t('Please insert this field'),
                         maxLength: { value: 100, message: 'Max 100 Character' },
-                        pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character ` },
+                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
                       }}
                       toUpperCase={true}
-                      helperText={`Please insert address without ',' (comma) character`}
+                      helperText={t(`Please fill without ',' (comma) character`)}
                     />
                   </Grid>
                   <Grid item xs={9}>
@@ -1413,7 +1415,45 @@ function RefactorFormVendorPage() {
                       }
                       rules={{
                         maxLength: { value: 160, message: 'Max 160 Character' },
-                        pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character ` },
+                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
+                      }}
+                      toUpperCase={true}
+                    />
+                  </Grid>
+                  <Grid item xs={9}>
+                    <TextFieldComp
+                      name="street3"
+                      label={t('Address') + ' 3'}
+                      control={control}
+                      readOnly={
+                        !(
+                          (UPDATE.INIT && ticketState === 'INIT') ||
+                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC') ||
+                          (UPDATE.FINA && ticketState === 'FINA')
+                        )
+                      }
+                      rules={{
+                        maxLength: { value: 160, message: 'Max 160 Character' },
+                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
+                      }}
+                      toUpperCase={true}
+                    />
+                  </Grid>
+                  <Grid item xs={9}>
+                    <TextFieldComp
+                      name="street4"
+                      label={t('Address') + ' 4'}
+                      control={control}
+                      readOnly={
+                        !(
+                          (UPDATE.INIT && ticketState === 'INIT') ||
+                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC') ||
+                          (UPDATE.FINA && ticketState === 'FINA')
+                        )
+                      }
+                      rules={{
+                        maxLength: { value: 160, message: 'Max 160 Character' },
+                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
                       }}
                       toUpperCase={true}
                     />
@@ -1433,7 +1473,7 @@ function RefactorFormVendorPage() {
                       options={countries.current}
                       onChangeovr={funChgCountry}
                       rules={{
-                        required: 'Please insert this field',
+                        required: t('Please insert this field'),
                       }}
                     />
                   </Grid>
@@ -1449,7 +1489,7 @@ function RefactorFormVendorPage() {
                         )
                       }
                       rules={{
-                        required: chgLocal === 'OVS' ? false : 'Please insert this field',
+                        required: chgLocal === 'OVS' ? false : t('Please insert this field'),
                       }}
                       format="################"
                       isNumString={false}
@@ -1468,7 +1508,7 @@ function RefactorFormVendorPage() {
                       }
                       options={cities}
                       rules={{
-                        required: 'Please insert this field',
+                        required: t('Please insert this field'),
                       }}
                       freeSolo={true}
                     />
@@ -1515,12 +1555,12 @@ function RefactorFormVendorPage() {
                         )
                       }
                       rules={{
-                        required: 'Please insert this field',
+                        required: t('Please insert this field'),
                         maxLength: { value: 100, message: 'Max 100 Character' },
-                        pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character ` },
+                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
                       }}
                       toUpperCase={true}
-                      helperText={`Please insert address without ',' (comma) character`}
+                      helperText={t(`Please fill without ',' (comma) character`)}
                     />
                   </Grid>
                   <Grid item xs={9}>
@@ -1537,7 +1577,45 @@ function RefactorFormVendorPage() {
                       }
                       rules={{
                         maxLength: { value: 160, message: 'Max 160 Character' },
-                        pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character ` },
+                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
+                      }}
+                      toUpperCase={true}
+                    />
+                  </Grid>
+                  <Grid item xs={9}>
+                    <TextFieldComp
+                      name="street3_npwp"
+                      label={t('Address') + ' 3'}
+                      control={control}
+                      readOnly={
+                        !(
+                          (UPDATE.INIT && ticketState === 'INIT') ||
+                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC') ||
+                          (UPDATE.FINA && ticketState === 'FINA')
+                        )
+                      }
+                      rules={{
+                        maxLength: { value: 160, message: 'Max 160 Character' },
+                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
+                      }}
+                      toUpperCase={true}
+                    />
+                  </Grid>
+                  <Grid item xs={9}>
+                    <TextFieldComp
+                      name="street4_npwp"
+                      label={t('Address') + ' 4'}
+                      control={control}
+                      readOnly={
+                        !(
+                          (UPDATE.INIT && ticketState === 'INIT') ||
+                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC') ||
+                          (UPDATE.FINA && ticketState === 'FINA')
+                        )
+                      }
+                      rules={{
+                        maxLength: { value: 160, message: 'Max 160 Character' },
+                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
                       }}
                       toUpperCase={true}
                     />
@@ -1557,7 +1635,7 @@ function RefactorFormVendorPage() {
                       options={countries.current}
                       onChangeovr={funChgCountry}
                       rules={{
-                        required: 'Please insert this field',
+                        required: t('Please insert this field'),
                       }}
                     />
                   </Grid>
@@ -1573,7 +1651,7 @@ function RefactorFormVendorPage() {
                         )
                       }
                       rules={{
-                        required: chgLocal === 'OVS' ? false : 'Please insert this field',
+                        required: chgLocal === 'OVS' ? false : t('Please insert this field'),
                       }}
                       format="################"
                       isNumString={false}
@@ -1592,7 +1670,7 @@ function RefactorFormVendorPage() {
                       }
                       options={cities}
                       rules={{
-                        required: 'Please insert this field',
+                        required: t('Please insert this field'),
                       }}
                       freeSolo={true}
                     />
@@ -1640,12 +1718,12 @@ function RefactorFormVendorPage() {
                         )
                       }
                       rules={{
-                        required: 'Please insert this field',
+                        required: t('Please insert this field'),
                         maxLength: { value: 100, message: 'Max 100 Character' },
-                        pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character ` },
+                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
                       }}
                       toUpperCase={true}
-                      helperText={`Please insert address without ',' (comma) character`}
+                      helperText={t(`Please fill without ',' (comma) character`)}
                     />
                   </Grid>
                   <Grid item xs={9}>
@@ -1662,7 +1740,45 @@ function RefactorFormVendorPage() {
                       }
                       rules={{
                         maxLength: { value: 160, message: 'Max 160 Character' },
-                        pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character ` },
+                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
+                      }}
+                      toUpperCase={true}
+                    />
+                  </Grid>
+                  <Grid item xs={9}>
+                    <TextFieldComp
+                      name="street3_sppkp"
+                      label={t('Address') + ' 3'}
+                      control={control}
+                      readOnly={
+                        !(
+                          (UPDATE.INIT && ticketState === 'INIT') ||
+                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC') ||
+                          (UPDATE.FINA && ticketState === 'FINA')
+                        )
+                      }
+                      rules={{
+                        maxLength: { value: 160, message: 'Max 160 Character' },
+                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
+                      }}
+                      toUpperCase={true}
+                    />
+                  </Grid>
+                  <Grid item xs={9}>
+                    <TextFieldComp
+                      name="street4_sppkp"
+                      label={t('Address') + ' 4'}
+                      control={control}
+                      readOnly={
+                        !(
+                          (UPDATE.INIT && ticketState === 'INIT') ||
+                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC') ||
+                          (UPDATE.FINA && ticketState === 'FINA')
+                        )
+                      }
+                      rules={{
+                        maxLength: { value: 160, message: 'Max 160 Character' },
+                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
                       }}
                       toUpperCase={true}
                     />
@@ -1682,7 +1798,7 @@ function RefactorFormVendorPage() {
                       options={countries.current}
                       onChangeovr={funChgCountry}
                       rules={{
-                        required: 'Please insert this field',
+                        required: t('Please insert this field'),
                       }}
                     />
                   </Grid>
@@ -1698,7 +1814,7 @@ function RefactorFormVendorPage() {
                         )
                       }
                       rules={{
-                        required: chgLocal === 'OVS' ? false : 'Please insert this field',
+                        required: chgLocal === 'OVS' ? false : t('Please insert this field'),
                       }}
                       format="################"
                       isNumString={false}
@@ -1717,7 +1833,7 @@ function RefactorFormVendorPage() {
                       }
                       options={cities}
                       rules={{
-                        required: 'Please insert this field',
+                        required: t('Please insert this field'),
                       }}
                       freeSolo={true}
                     />
@@ -1794,7 +1910,7 @@ function RefactorFormVendorPage() {
                         )
                       }
                       rules={{
-                        required: 'Please insert this field',
+                        required: t('Please insert this field'),
                       }}
                     />
                   </Grid>
@@ -1806,7 +1922,7 @@ function RefactorFormVendorPage() {
                       options={payterm.current}
                       readOnly={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
                       rules={{
-                        required: 'Please insert this field',
+                        required: t('Please insert this field'),
                       }}
                     />
                   </Grid>
@@ -1839,7 +1955,7 @@ function RefactorFormVendorPage() {
                         options={comps.current}
                         readOnly={!(ticketState === 'CREA' && UPDATE.CREA)}
                         rules={{
-                          required: 'Please insert this field',
+                          required: t('Please insert this field'),
                         }}
                       />
                     </Grid>
@@ -1850,7 +1966,7 @@ function RefactorFormVendorPage() {
                         control={control}
                         readOnly={!(ticketState === 'CREA' && UPDATE.CREA)}
                         rules={{
-                          required: 'Please insert this field',
+                          required: t('Please insert this field'),
                           maxLength: { value: 20, message: 'Max 20 Character' },
                         }}
                         toUpperCase={true}
@@ -1866,7 +1982,7 @@ function RefactorFormVendorPage() {
                         onChangeovr={funChgVgrp}
                         readOnly={!(ticketState === 'CREA' && UPDATE.CREA)}
                         rules={{
-                          required: 'Please insert this field',
+                          required: t('Please insert this field'),
                         }}
                       />
                     </Grid>
@@ -1882,7 +1998,7 @@ function RefactorFormVendorPage() {
                         onChangeovr={funChgVacc}
                         readOnly={!(ticketState === 'CREA' && UPDATE.CREA)}
                         rules={{
-                          required: 'Please insert this field',
+                          required: t('Please insert this field'),
                         }}
                       />
                     </Grid>
@@ -1900,7 +2016,7 @@ function RefactorFormVendorPage() {
                         }
                         readOnly={!(ticketState === 'CREA' && UPDATE.CREA)}
                         rules={{
-                          required: 'Please insert this field',
+                          required: t('Please insert this field'),
                         }}
                       />
                     </Grid>
@@ -1914,7 +2030,7 @@ function RefactorFormVendorPage() {
                         onChangeovr={funChgCurr}
                         disabled={chgVenacc === 'NON_TRADE'}
                         readOnly={!(ticketState === 'CREA' && UPDATE.CREA)}
-                        rules={{ required: chgVenacc === 'TRADE' ? 'Please insert this field' : false }}
+                        rules={{ required: chgVenacc === 'TRADE' ? t('Please insert this field') : false }}
                       />
                     </Grid>
                     <Grid item xs={4}>
@@ -1926,7 +2042,7 @@ function RefactorFormVendorPage() {
                         currency={chgCurr}
                         disabled={chgVenacc === 'NON_TRADE'}
                         readOnly={!(ticketState === 'CREA' && UPDATE.CREA)}
-                        rules={{ required: chgVenacc === 'TRADE' ? 'Please insert this field' : false }}
+                        rules={{ required: chgVenacc === 'TRADE' ? t('Please insert this field') : false }}
                       />
                     </Grid>
                     <Grid item xs={4}></Grid>
@@ -1936,7 +2052,7 @@ function RefactorFormVendorPage() {
                         label="Description"
                         control={control}
                         readOnly={!(ticketState === 'CREA' && UPDATE.CREA)}
-                        rules={{ required: isTender ? 'Please insert this field' : false }}
+                        rules={{ required: isTender ? t('Please insert this field') : false }}
                       />
                     </Grid>
                     <Grid item xs={5}>
@@ -2074,7 +2190,7 @@ function RefactorFormVendorPage() {
                       control={control}
                       readOnly={!(ticketState === 'FINA' && UPDATE.FINA)}
                       rules={{
-                        required: 'Please insert this field',
+                        required: t('Please insert this field'),
                         maxLength: {
                           value: 10,
                           message: 'Max character is 10',
