@@ -19,11 +19,10 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   TextField,
-  InputAdornment,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { useState, useRef, useEffect, useMemo, useContext, createContext } from 'react';
-import { VenBankTable } from 'src/components/FormVendor';
+import { useGridApiRef } from '@mui/x-data-grid';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import UploadButton from 'src/components/common/UploadButton';
 import { useLoaderData, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
@@ -32,15 +31,19 @@ import { TextFieldComp } from 'src/components/common/TextFieldComp';
 import SelectComp from 'src/components/common/SelectComp';
 import CheckboxComp from 'src/components/common/CheckboxComp';
 import NumericFieldComp from 'src/components/common/NumericFieldComp';
-import { useForm } from 'react-hook-form';
+import { useForm, useFormState, useFieldArray } from 'react-hook-form';
 import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
 import PatternFieldComp from 'src/components/common/PatternFieldComp';
 import AutoCompleteSelect from 'src/components/common/AutoCompleteSelect';
 import { LoadingButton } from '@mui/lab';
 import ConfirmComponent from 'src/components/common/ConfirmComponent';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from '@mui/material/styles';
+import AutoSelectPurOrg from 'src/components/common/AutoSelectPurOrg';
+import { v4 } from 'uuid';
 
 import RejectLog from 'src/components/common/RejectLog';
+import VenBankTableRefactor from 'src/components/FormVendor/VenBankTableRefactor';
 
 const ventypeList = {
   '3RD_PARTY': [
@@ -48,30 +51,31 @@ const ventypeList = {
     { value: 'CONTRACTOR', label: 'Contractor' },
     { value: 'INSURANCE', label: 'Insurance' },
     { value: 'ONE_TIME', label: 'One Time' },
-    { value: 'OTHER', label: 'Other' },
     { value: 'TRANSPORTER', label: 'Transporter' },
+    { value: 'OTHER', label: 'Other' },
   ],
   INTERCO: [
     { value: 'MATERIAL', label: 'Material' },
     { value: 'CONTRACTOR', label: 'Contractor' },
     { value: 'INSURANCE', label: 'Insurance' },
-    { value: 'OTHER', label: 'Other' },
     { value: 'TRANSPORTER', label: 'Transporter' },
   ],
-  RELATED: [
-    { value: 'MATERIAL', label: 'Material' },
-    { value: 'CONTRACTOR', label: 'Contractor' },
-    { value: 'INSURANCE', label: 'Insurance' },
-    { value: 'OTHER', label: 'Other' },
-    { value: 'TRANSPORTER', label: 'Transporter' },
-  ],
+  // RELATED: [
+  //   { value: 'MATERIAL', label: 'Material' },
+  //   { value: 'CONTRACTOR', label: 'Contractor' },
+  //   { value: 'INSURANCE', label: 'Insurance' },
+  //   { value: 'OTHER', label: 'Other' },
+  //   { value: 'TRANSPORTER', label: 'Transporter' },
+  // ],
   BANK: [{ value: 'X', label: 'X' }],
   SHAREHOLDERS: [{ value: 'X', label: 'X' }],
-  EMPLOYEE: [{ value: 'X', label: 'X' }],
-  INTERDIVISION: [{ value: 'X', label: 'X' }],
+  // EMPLOYEE: [{ value: 'X', label: 'X' }],
+  // INTERDIVISION: [{ value: 'X', label: 'X' }],
 };
 
 function RefactorFormVendorPage() {
+  const theme = useTheme();
+  const apiRef = useGridApiRef();
   const predata = useLoaderData();
   const axiosPrivate = useAxiosPrivate();
   const defaultValue = {
@@ -83,6 +87,8 @@ function RefactorFormVendorPage() {
     country: '',
     street: '',
     street2: '',
+    street3: '',
+    street4: '',
     postal: '',
     city: '',
     telf: '',
@@ -90,31 +96,44 @@ function RefactorFormVendorPage() {
     email: '',
     street_npwp: '',
     street2_npwp: '',
+    street3_npwp: '',
+    street4_npwp: '',
     postal_npwp: '',
     city_npwp: '',
     street_sppkp: '',
     street2_sppkp: '',
+    street3_sppkp: '',
+    street4_sppkp: '',
     postal_sppkp: '',
     city_sppkp: '',
-    country_npwp: '',
-    country_sppkp: '',
     ispkp: false,
     npwp: '',
     paymthd: '',
     payterm: '',
     company: '',
-    purchorg: '',
+    purchorg: null,
     vengroup: '',
     venacc: '',
     ventype: '',
     currency: '',
     description: '',
     is_tender: false,
+    is_priority: false,
     vendorcode: '',
     remarks_readOnly: '',
     limit: '',
     search_term: '',
+    website_url: '',
+    ig_link: '',
+    fb_link: '',
+    twt_link: '',
+    nama_direktur: '',
+    nama_pic: '',
+    no_telf_pic: '',
+    email_pic: '',
+    email_fin: '',
     file_atth: {},
+    bank: [],
   };
 
   const {
@@ -127,15 +146,29 @@ function RefactorFormVendorPage() {
     resetField,
     setFocus,
     setValue,
+    watch,
     formState: { errors, isSubmitting, isValid },
     clearErrors,
-  } = useForm({ defaultValues: defaultValue });
+  } = useForm({ defaultValues: defaultValue, mode: 'onChange' });
+
+  const { fields, append, remove } = useFieldArray({
+    control: control,
+    name: 'bank',
+    rules: { required: true },
+  });
+  // const { fields: fileFields, replace: replaceFile } = useFieldArray({
+  //   control,
+  //   name: 'file_atth.A001',
+  //   minLength: { value: fields.length },
+  // });
 
   const { handleSubmit: handleSubmit1, control: control1 } = useForm({
     defaultValues: {
       remarks: '',
     },
   });
+
+  const { dirtyFields } = useFormState({ control: control });
 
   const [loader_data, setLoaderdata] = useState({
     ticket_id: '',
@@ -145,19 +178,25 @@ function RefactorFormVendorPage() {
     data: '',
     permission: '',
     cur_pos: '',
+    logrej_counter: null,
   });
 
   useEffect(() => {
     const type = predata.type;
     const tokenform = predata.token;
+    const controller = new AbortController();
     async function formLoader(token) {
       // axios.defaults.headers.common.Authorization =
       //   'Bearer ' + (Cookies.get('accessToken') === undefined ? '' : Cookies.get('accessToken'));
-      const controller = new AbortController();
       const response = await axiosPrivate.get(`/ticket/form/${token}`, {
         signal: controller.signal,
       });
       const data = response.data.data;
+      const { data: bankInit } = await axiosPrivate.get(
+        `/vendor/bank/${data.ven_id === null ? data.ticket_ven_id : data.ven_id}`,
+        { signal: controller.signal }
+      );
+      const resultBank = bankInit.data.data;
       const valueForm = {
         emailRequestor: data.email_proc ? data.email_proc : '',
         deptRequestor: data.dep_proc ? data.dep_proc : '',
@@ -167,16 +206,20 @@ function RefactorFormVendorPage() {
         country: data.country ? data.country : '',
         street: data.street ? data.street : '',
         street2: data.street2 ? data.street2 : '',
+        street3: data.street3 ?? '',
+        street4: data.street4 ?? '',
         postal: data.postal ? data.postal : '',
         city: data.city ? data.city : '',
-        country_sppkp: data.country_sppkp ?? '',
         street_sppkp: data.street_sppkp ?? '',
         street2_sppkp: data.street2_sppkp ?? '',
+        street3_sppkp: data.street3_sppkp ?? '',
+        street4_sppkp: data.street4_sppkp ?? '',
         postal_sppkp: data.postal_sppkp ?? '',
         city_sppkp: data.city_sppkp ?? '',
-        country_npwp: data.country_npwp ?? '',
         street_npwp: data.street_npwp ?? '',
         street2_npwp: data.street2_npwp ?? '',
+        street3_npwp: data.street3_npwp ?? '',
+        street4_npwp: data.street4_npwp ?? '',
         postal_npwp: data.postal_npwp ?? '',
         city_npwp: data.city_npwp ?? '',
         telf: data.telf1 ? data.telf1 : '',
@@ -187,13 +230,14 @@ function RefactorFormVendorPage() {
         paymthd: data.pay_mthd ? data.pay_mthd : '',
         payterm: data.pay_term ? data.pay_term : 'I30',
         company: data.company ? data.company : '',
-        purchorg: data.purch_org ? data.purch_org : '',
+        purchorg: data.purch_org ? { value: data.purch_org, label: data.purch_org } : null,
         vengroup: data.ven_group ? data.ven_group : '',
         venacc: data.ven_acc ? data.ven_acc : '',
         ventype: data.ven_type ? data.ven_type : '',
         currency: data.lim_curr ? data.lim_curr : '',
         description: data.description ? data.description : '',
         is_tender: data.is_tender ? data.is_tender : false,
+        is_priority: data.is_priority ? data.is_priority : false,
         vendorcode: data.ven_code ? data.ven_code : data.header,
         remarks_readOnly: data.remarks ? data.remarks : '',
         remarks: '',
@@ -201,6 +245,33 @@ function RefactorFormVendorPage() {
         reject_by: data.reject_by ? data.reject_by : '',
         search_term: data.search_term ? data.search_term : '',
         is_active: data.ticket_stat,
+        website_url: data.website_url ?? '',
+        ig_link: data.ig_link ?? '',
+        fb_link: data.fb_link ?? '',
+        twt_link: data.twt_link ?? '',
+        nama_direktur: data.nama_direktur ?? '',
+        nama_pic: data.nama_pic ?? '',
+        no_telf_pic: data.no_telf_pic ?? '',
+        email_pic: data.email_pic ?? '',
+        email_fin: data.email_fin ?? '',
+        bank: resultBank.map((item) => ({
+          id: item.id,
+          bank_country: { value: item.country, label: item.country },
+          bank_id: item.bank_id
+            ? {
+                value: item.bank_id,
+                label: `${item.bank_name} (${item.bank_code})${item.source === 'form' ? ' - (new)' : ''}`,
+              }
+            : null,
+          bank_curr: item.bank_curr ? { value: item.bank_curr, label: item.bank_curr } : null,
+          bank_acc: item.bank_acc,
+          acc_hold: item.acc_hold,
+          account_statement_letter: item.account_statement_letter && {
+            file_name: item.account_statement_letter,
+            file_id: item.account_statement_letter_id,
+          },
+          passbook: item.passbook && { file_name: item.passbook, file_id: item.passbook_id },
+        })),
       };
 
       if (valueForm.name1 === '') {
@@ -216,6 +287,8 @@ function RefactorFormVendorPage() {
           panelFile: false,
           panelVendetail: false,
           panelApproval: false,
+          panelCompOrg: false,
+          panelInfoAcc: false,
           panelRejectLog: false,
         });
       } else {
@@ -231,6 +304,8 @@ function RefactorFormVendorPage() {
           panelFile: true,
           panelVendetail: true,
           panelApproval: true,
+          panelCompOrg: true,
+          panelInfoAcc: true,
           panelRejectLog: false,
         });
       }
@@ -243,19 +318,22 @@ function RefactorFormVendorPage() {
         ticket_type: data.t_type,
         data: valueForm,
         cur_pos: data.cur_pos,
+        logrej_counter: data.counter,
       });
 
-      return {
-        ticket_id: data.ticket_id,
-        ticket_num: data.ticket_num,
-        ven_id: data.ven_id === null ? data.ticket_ven_id : data.ven_id,
-        ticketState: data.ticket_state,
-        data: valueForm,
-      };
+      // return {
+      //   ticket_id: data.ticket_id,
+      //   ticket_num: data.ticket_num,
+      //   ven_id: data.ven_id === null ? data.ticket_ven_id : data.ven_id,
+      //   ticketState: data.ticket_state,
+      //   data: valueForm,
+      // };
     }
 
     async function newformLoader(token) {
-      const response = await axiosPrivate.get(`/ticket/newform/${token}`);
+      const response = await axiosPrivate.get(`/ticket/newform/${token}`, {
+        signal: controller.signal,
+      });
       setExpanded({
         panelReqDet: true,
         panelCompDet: true,
@@ -265,8 +343,16 @@ function RefactorFormVendorPage() {
         panelFile: true,
         panelVendetail: true,
         panelApproval: true,
+        panelCompOrg: true,
+        panelInfoAcc: true,
+        panelRejectLog: false,
       });
       const data = response.data.data;
+      const { data: bankInit } = await axiosPrivate.get(
+        `/vendor/bank/${data.ven_id === null ? data.ticket_ven_id : data.ven_id}`,
+        { signal: controller.signal }
+      );
+      const resultBank = bankInit.data.data;
       const valueForm = {
         emailRequestor: data.email_proc ? data.email_proc : '',
         deptRequestor: data.dep_proc ? data.dep_proc : '',
@@ -276,16 +362,20 @@ function RefactorFormVendorPage() {
         country: data.country ? data.country : '',
         street: data.street ? data.street : '',
         street2: data.street2 ? data.street2 : '',
+        street3: data.street3 ?? '',
+        street4: data.street4 ?? '',
         postal: data.postal ? data.postal : '',
         city: data.city ? data.city : '',
-        country_sppkp: data.country_sppkp ?? '',
         street_sppkp: data.street_sppkp ?? '',
         street2_sppkp: data.street2_sppkp ?? '',
+        street3_sppkp: data.street3_sppkp ?? '',
+        street4_sppkp: data.street4_sppkp ?? '',
         postal_sppkp: data.postal_sppkp ?? '',
         city_sppkp: data.city_sppkp ?? '',
-        country_npwp: data.country_npwp ?? '',
         street_npwp: data.street_npwp ?? '',
         street2_npwp: data.street2_npwp ?? '',
+        street3_npwp: data.street3_npwp ?? '',
+        street4_npwp: data.street4_npwp ?? '',
         postal_npwp: data.postal_npwp ?? '',
         city_npwp: data.city_npwp ?? '',
         telf: data.telf1 ? data.telf1 : '',
@@ -296,13 +386,14 @@ function RefactorFormVendorPage() {
         paymthd: data.pay_mthd ? data.pay_mthd : '',
         payterm: data.pay_term ? data.pay_term : 'I30',
         company: data.company ? data.company : '',
-        purchorg: data.purch_org ? data.purch_org : '',
+        purchorg: data.purch_org ? { value: data.purch_org, label: data.purch_org } : null,
         vengroup: data.ven_group ? data.ven_group : '',
         venacc: data.ven_acc ? data.ven_acc : '',
         ventype: data.ven_type ? data.ven_type : '',
         currency: data.lim_curr ? data.lim_curr : '',
         description: data.description ? data.description : '',
         is_tender: data.is_tender ? data.is_tender : false,
+        is_priority: data.is_priority ? data.is_priority : false,
         vendorcode: data.ven_code ? data.ven_code : data.header,
         remarks_readOnly: data.remarks ? data.remarks : '',
         remarks: '',
@@ -310,6 +401,28 @@ function RefactorFormVendorPage() {
         reject_by: data.reject_by ? data.reject_by : '',
         is_active: data.ticket_stat,
         search_term: data.search_term ? data.search_term : '',
+        website_url: data.website_url ?? '',
+        ig_link: data.ig_link ?? '',
+        fb_link: data.fb_link ?? '',
+        twt_link: data.twt_link ?? '',
+        nama_direktur: data.nama_direktur ?? '',
+        nama_pic: data.nama_pic ?? '',
+        no_telf_pic: data.no_telf_pic ?? '',
+        email_pic: data.email_pic ?? '',
+        email_fin: data.email_fin ?? '',
+        bank: resultBank.map((item) => ({
+          id: item.id,
+          bank_country: { value: item.country, label: item.country },
+          bank_id: item.bank_id ? { value: item.bank_id, label: `${item.bank_name} (${item.bank_code})` } : null,
+          bank_curr: item.bank_curr ? { value: item.bank_curr, label: item.bank_curr } : null,
+          bank_acc: item.bank_acc,
+          acc_hold: item.acc_hold,
+          account_statement_letter: item.account_statement_letter && {
+            file_name: item.account_statement_letter,
+            file_id: item.account_statement_letter_id,
+          },
+          passbook: item.passbook && { file_name: item.passbook, file_id: item.passbook_id },
+        })),
       };
 
       const perm = {
@@ -346,6 +459,8 @@ function RefactorFormVendorPage() {
           panelFile: false,
           panelVendetail: false,
           panelApproval: false,
+          panelCompOrg: false,
+          panelInfoAcc: false,
           panelRejectLog: false,
         });
       } else {
@@ -360,6 +475,8 @@ function RefactorFormVendorPage() {
           panelBank: true,
           panelFile: true,
           panelVendetail: true,
+          panelCompOrg: true,
+          panelInfoAcc: true,
           panelApproval: true,
           panelRejectLog: false,
         });
@@ -374,16 +491,17 @@ function RefactorFormVendorPage() {
         data: valueForm,
         permission: perm,
         cur_pos: data.cur_pos,
+        logrej_counter: data.counter,
       });
 
-      return {
-        ticket_id: data.ticket_id,
-        ticket_num: data.ticket_num,
-        ven_id: data.ven_id === null ? data.ticket_ven_id : data.ven_id,
-        ticketState: data.ticket_state,
-        data: valueForm,
-        permission: perm,
-      };
+      // return {
+      //   ticket_id: data.ticket_id,
+      //   ticket_num: data.ticket_num,
+      //   ven_id: data.ven_id === null ? data.ticket_ven_id : data.ven_id,
+      //   ticketState: data.ticket_state,
+      //   data: valueForm,
+      //   permission: perm,
+      // };
     }
 
     if (type === 'form') {
@@ -391,12 +509,18 @@ function RefactorFormVendorPage() {
     } else {
       newformLoader(tokenform);
     }
+    return () => {
+      controller.abort();
+    };
   }, []);
   const params = useParams();
+  const [chgComp, setChgComp] = useState();
   const [chgCountry, setChgCty] = useState(loader_data.data?.country);
   const [chgVengrp, setVengrp] = useState(loader_data.data?.vengroup);
   const [chgVenacc, setVenacc] = useState(loader_data.data?.venacc);
   const [chgCurr, setChgCurr] = useState(loader_data.data?.currency);
+  const [currentEdit, setCurrentEdit] = useState([]);
+  const [phoneNumber, setPhnNum] = useState('+XX');
   const [fileType, setFileType] = useState([]);
   const [chgIsPTKP, setIsPTKP] = useState(false);
   const [chgLocal, setLocal] = useState('');
@@ -409,9 +533,14 @@ function RefactorFormVendorPage() {
   const [modalRejectopen, setModalopen] = useState(false);
   const [modalConfirmopen, setConfOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState(false);
+  const [loadAddBank, setLoadAddBnk] = useState(false);
   const [langCode, setLang] = useState('id');
   const { t, i18n } = useTranslation('translation', { lng: langCode });
-
+  const [initDataFile, setInitDfile] = useState([]);
+  // const [required, setRequired] = useState(t('Please insert this field'));
+  const updateCurrentEdit = (rows) => {
+    setCurrentEdit(rows);
+  };
   const funChgCountry = (item) => {
     setChgCty(item);
     countrycode.current = item;
@@ -429,17 +558,25 @@ function RefactorFormVendorPage() {
   const funChgIsPTKP = (item) => {
     setIsPTKP(item);
   };
+  const funChgComp = (item) => {
+    setChgComp(item);
+    resetField('purchorg');
+  };
 
   const sameWithAddrComp = (fields) => {
     const country = getValues(`country`);
     const street = getValues(`street`);
     const street2 = getValues(`street2`);
+    const street3 = getValues(`street3`);
+    const street4 = getValues(`street4`);
     const postal = getValues(`postal`);
     const city = getValues(`city`);
 
     setValue(`country_${fields}`, country);
     setValue(`street_${fields}`, street);
     setValue(`street2_${fields}`, street2);
+    setValue(`street3_${fields}`, street3);
+    setValue(`street4_${fields}`, street4);
     setValue(`postal_${fields}`, postal);
     setValue(`city_${fields}`, city);
   };
@@ -450,6 +587,7 @@ function RefactorFormVendorPage() {
       const checkExt = await axiosPrivate.get(`/vendor/checkven?name=${item}`);
       // console.log(checkExt);
       setCheckex(false);
+      // console.log(expanded);
       setExpanded({
         panelReqDet: true,
         panelCompDet: true,
@@ -461,6 +599,8 @@ function RefactorFormVendorPage() {
         panelFile: true,
         panelVendetail: true,
         panelApproval: true,
+        panelCompOrg: true,
+        panelInfoAcc: true,
         panelRejectLog: false,
       });
       setLoadex(false);
@@ -479,6 +619,8 @@ function RefactorFormVendorPage() {
         panelFile: false,
         panelVendetail: false,
         panelApproval: false,
+        panelCompOrg: false,
+        panelInfoAcc: false,
         panelRejectLog: false,
       });
       setLoadex(false);
@@ -493,13 +635,12 @@ function RefactorFormVendorPage() {
     if (item === 'LOCAL') {
       setChgCty('ID');
       setValue('country', 'ID');
-      setValue('country_npwp', 'ID');
-      setValue('country_sppkp', 'ID');
     }
     setLocal(item);
   };
 
   const funChgTdr = (item) => {
+    onLoad.current = true;
     setTender(item);
     if (!item) {
       clearErrors('description');
@@ -523,9 +664,14 @@ function RefactorFormVendorPage() {
         panelVendetail: false,
         panelApproval: false,
         panelRejectLog: false,
+        panelAddrnpwp: false,
+        panelAddrsppkp: false,
+        panelCompOrg: false,
+        panelInfoAcc: false,
       });
       setBtnclick(true);
-    } else if (compName != '') {
+      setCompname(item);
+    } else if (item == compName && item !== '') {
       setCheckex(false);
       setExpanded({
         panelReqDet: true,
@@ -537,8 +683,31 @@ function RefactorFormVendorPage() {
         panelVendetail: true,
         panelApproval: true,
         panelRejectLog: false,
+        panelAddrnpwp: true,
+        panelAddrsppkp: true,
+        panelCompOrg: true,
+        panelInfoAcc: true,
       });
       setBtnclick(false);
+    } else {
+      setCheckex(true);
+      setExpanded({
+        panelReqDet: true,
+        panelCompDet: true,
+        panelAddr: false,
+        panelTax: false,
+        panelBank: false,
+        panelFile: false,
+        panelVendetail: false,
+        panelApproval: false,
+        panelRejectLog: false,
+        panelAddrnpwp: false,
+        panelAddrsppkp: false,
+        panelCompOrg: false,
+        panelInfoAcc: false,
+      });
+      setBtnclick(true);
+      setCompname(item);
     }
   };
 
@@ -569,32 +738,62 @@ function RefactorFormVendorPage() {
   }, [loader_data]);
 
   useEffect(() => {
+    const controller = new AbortController();
     if (compTitle !== '' && chgLocal !== '' && compTitle && chgLocal) {
       (async () => {
         try {
           unregister('file_atth');
           const { data } = await axiosPrivate.get(
-            `/master/filetype?title=${compTitle}&localovs=${chgLocal}&curpos=${ticketState}`
+            `/master/filetype?title=${compTitle}&localovs=${chgLocal}&curpos=${ticketState}`,
+            {
+              signal: controller.signal,
+            }
           );
           data.forEach((item) => {
-            register(
-              `file_atth.${item.file_code}`,
-              item.is_mandatory && {
+            if (isTender && item.file_code == 'A010') {
+              register(`file_atth.${item.file_code}`, {
                 required: item.file_type,
-              }
-            );
-            const fileInit = initDataFile.find((element) => element.file_type === item.file_code);
+              });
+            } else {
+              register(
+                `file_atth.${item.file_code}`,
+                item.is_mandatory && {
+                  required: item.file_type,
+                }
+              );
+            }
+            const fileInit = initDataFile
+              .filter((element) => element.file_type === item.file_code)
+              .map((item) => item.file_name);
             if (fileInit) {
-              setValue(`file_atth.${item.file_code}`, fileInit.file_name);
+              setValue(`file_atth.${item.file_code}`, fileInit[0]);
             }
           });
-          setFileType(data.map((item) => ({ key: item.file_code, value: t(item.file_type) })));
+          setFileType(
+            data.map((item) => {
+              if (isTender && item.file_code == 'A010') {
+                return {
+                  key: item.file_code,
+                  value: `${t(item.file_type)} * `,
+                  help: langCode === 'id' ? item.help : item.helpen,
+                };
+              }
+              return {
+                key: item.file_code,
+                value: `${t(item.file_type)} ${item.is_mandatory ? '*' : ''}`,
+                help: langCode === 'id' ? item.help : item.helpen,
+              };
+            })
+          );
         } catch (error) {
           console.error(error);
         }
       })();
     }
-  }, [compTitle, langCode, chgLocal, loader_data, t]);
+    return () => {
+      controller.abort();
+    };
+  }, [compTitle, langCode, chgLocal, loader_data, t, isTender, fields, initDataFile]);
 
   useEffect(() => {
     const firstError = Object.keys(errors).reduce((field, a) => {
@@ -613,6 +812,19 @@ function RefactorFormVendorPage() {
       setConfirmAction(false);
     }
   }, [confirmAction]);
+
+  useEffect(() => {
+    if (isTender && onLoad.current) {
+      setFocus('description');
+    }
+  }, [isTender]);
+
+  // useEffect(() => {
+  //   console.log(i18n.language);
+  //   console.log('Current language:', i18n.language);
+  //   console.log('Translation for required:', t('Please insert this field'));
+  //   setRequired(t('Please insert this field'));
+  // }, [t, i18n.language]);
 
   const navigate = useNavigate();
   const { session, getPermission } = useSession();
@@ -644,7 +856,8 @@ function RefactorFormVendorPage() {
   };
 
   const countries = useRef([{ value: '', label: '' }]);
-  const currencies = useRef([{ value: '', label: '' }]);
+  const [currencies, setCurr] = useState([]);
+  const allCurr = useRef([]);
   // const cities = useRef([{ value: '', label: '' }]);
   const banks = useRef([{ value: '', label: '' }]);
   const payterm = useRef([{ value: '', label: '' }]);
@@ -652,13 +865,8 @@ function RefactorFormVendorPage() {
   const bank_valid = useRef(false);
   const file_valid = useRef(false);
   const uploadButRef = useRef(null);
-  const rejectRef = useRef(null);
-  // const initDataBank = useRef([]);
-  // const initDataFile = useRef([]);
+  const onLoad = useRef(false);
   const [initDataBank, setInitDbank] = useState([]);
-  const [initDataFile, setInitDfile] = useState([]);
-  const [isFileload, setFileLoad] = useState(false);
-  const [isBankload, setBankLoad] = useState(false);
 
   const [cities, setCities] = useState([{ value: '', label: '' }]);
   const [loading, setLoading] = useState(false);
@@ -678,9 +886,9 @@ function RefactorFormVendorPage() {
     { value: '3RD_PARTY', label: '3RD Party' },
     { value: 'BANK', label: 'Bank' },
     { value: 'SHAREHOLDERS', label: 'Shareholders' },
-    { value: 'EMPLOYEE', label: 'Employee' },
-    { value: 'INTERDIVISION', label: 'Interdivision' },
-    { value: 'RELATED', label: 'Related' },
+    // { value: 'EMPLOYEE', label: 'Employee' },
+    // { value: 'INTERDIVISION', label: 'Interdivision' },
+    // { value: 'RELATED', label: 'Related' },
     { value: 'INTERCO', label: 'Interco' },
   ];
 
@@ -716,17 +924,39 @@ function RefactorFormVendorPage() {
     panelVendetail: true,
     panelApproval: true,
     panelRejectLog: false,
+    panelInfoAcc: true,
+    panelCompOrg: true,
   });
   useMemo(() => ({ cities, countries, currencies }), [cities, countries, currencies]);
-  //set active section
+
+  const getInitDataFile = async (controller) => {
+    setLoadInitFile(true);
+    try {
+      const fileInit = await axiosPrivate.get(`/vendor/file/${loader_data.ven_id}`, { signal: controller.signal });
+      const result = fileInit.data.data;
+      setInitDfile(result.data);
+      setLoadInitFile(false);
+    } catch (err) {
+      setLoadInitFile(false);
+      console.error(err);
+      // alert(err.stack);
+    }
+  };
 
   useEffect(() => {
+    const controller = new AbortController();
     const dynaCity = async () => {
       countrycode.current = loader_data.data?.country;
       try {
-        const getcities = await axiosPrivate.post(`/master/city`, {
-          countryId: chgCountry,
-        });
+        const getcities = await axiosPrivate.post(
+          `/master/city`,
+          {
+            countryId: chgCountry,
+          },
+          {
+            signal: controller.signal,
+          }
+        );
         const result = getcities.data.data;
         const convcity = result.data.map((item) => ({
           value: item.city,
@@ -734,18 +964,48 @@ function RefactorFormVendorPage() {
         }));
         setCities(convcity);
       } catch (err) {
-        alert(err.stack);
+        console.error(err);
+        // alert(err.stack);
       }
     };
-    dynaCity();
+
+    const getPhoneNum = async () => {
+      try {
+        const { data: phoneNum } = await axiosPrivate.get('/master/phonecode?id=' + chgCountry);
+        setPhnNum(`+${phoneNum.code}-################`);
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    if (chgCountry) {
+      dynaCity();
+      getPhoneNum();
+    }
+    return () => {
+      controller.abort();
+    };
   }, [chgCountry, loader_data]);
 
   useEffect(() => {
+    if (allCurr.current.length > 0) {
+      setCurr(allCurr.current.filter((item) => (chgLocal === 'LOCAL' && item.nation === 'ID') || chgLocal === 'OVS'));
+    }
+  }, [chgLocal, allCurr.current]);
+
+  useEffect(() => {
     setLoading(true);
+    const controller = new AbortController();
     const dynaCountry = async () => {
       setLoadCountry(true);
       try {
-        const country = await axiosPrivate.post(`/master/country`);
+        const country = await axiosPrivate.post(
+          `/master/country`,
+          {},
+          {
+            signal: controller.signal,
+          }
+        );
         const result = country.data.data;
         countries.current = result.data.map((item) => ({
           value: item.country_code,
@@ -754,7 +1014,8 @@ function RefactorFormVendorPage() {
         setLoadCountry(false);
       } catch (err) {
         setLoadCountry(false);
-        alert(err.stack);
+        console.error(err);
+        // alert(err.stack);
       }
     };
 
@@ -762,16 +1023,25 @@ function RefactorFormVendorPage() {
       setLoadCurr(true);
       try {
         setLoadCurr(false);
-        const curr = await axiosPrivate.get(`/master/curr`);
+        const curr = await axiosPrivate.get(`/master/curr`, { signal: controller.signal });
         const response = curr.data;
         const result = response.data;
-        currencies.current = result.data.map((item) => ({
+        setCurr(
+          result.data.map((item) => ({
+            value: item.code === null ? '' : item.code,
+            label: item.code === null ? '' : item.code,
+            nation: item.nation,
+          }))
+        );
+        allCurr.current = result.data.map((item) => ({
           value: item.code === null ? '' : item.code,
           label: item.code === null ? '' : item.code,
+          nation: item.nation,
         }));
       } catch (err) {
         setLoadCurr(false);
-        alert(err.stack);
+        console.error(err);
+        // alert(err.stack);
       }
     };
 
@@ -779,65 +1049,37 @@ function RefactorFormVendorPage() {
       setLoadBanks(true);
       try {
         setLoadBanks(false);
-        const banksData = await axiosPrivate.get(`/master/banksap`);
+        const banksData = await axiosPrivate.get(`/master/banksap`, { signal: controller.signal });
         const response = banksData.data;
         const result = response.data;
         banks.current = result;
       } catch (error) {
         setLoadBanks(false);
         console.log(error);
-        alert(error.stack);
-      }
-    };
-
-    const getInitDataBank = async () => {
-      setLoadInitBank(true);
-      try {
-        const bankInit = await axiosPrivate.get(`/vendor/bank/${loader_data.ven_id}`);
-        const result = bankInit.data.data;
-        setInitDbank(result.data);
-        setLoadInitBank(false);
-      } catch (err) {
-        setLoadInitBank(false);
-        console.log(err);
-        alert(err.stack);
-      }
-    };
-
-    const getInitDataFile = async () => {
-      setLoadInitFile(true);
-      try {
-        const fileInit = await axiosPrivate.get(`/vendor/file/${loader_data.ven_id}`);
-        const result = fileInit.data.data;
-        setInitDfile(result.data);
-        setLoadInitFile(false);
-      } catch (err) {
-        setLoadInitFile(false);
-        alert(err.stack);
+        // alert(error.stack);
       }
     };
 
     const getCompany = async () => {
       setLoadComp(true);
       try {
-        const compsData = await axiosPrivate.get(`/master/company`);
+        const compsData = await axiosPrivate.get(`/master/company`, { signal: controller.signal });
         const response = compsData.data;
         const result = response.data;
-        comps.current = result.data.map((item) => ({
-          value: item.comp_id,
-          label: item.code + ' - ' + item.name,
-        }));
+
+        comps.current = result.data;
         setLoadComp(false);
       } catch (error) {
         setLoadComp(false);
-        alert(error.stack);
+        console.error(error);
+        // alert(error.stack);
       }
     };
 
     const getPayterm = async () => {
       setLoadPayterm(true);
       try {
-        const paytermData = await axiosPrivate.get(`/master/payterm`);
+        const paytermData = await axiosPrivate.get(`/master/payterm`, { signal: controller.signal });
         const data = paytermData.data.data;
         payterm.current = data.map((item) => ({
           value: item.term_code,
@@ -846,25 +1088,27 @@ function RefactorFormVendorPage() {
         setLoadPayterm(false);
       } catch (error) {
         setLoadPayterm(false);
-        alert(error.stack);
+        console.error(error);
+        // alert(error.stack);
       }
     };
 
     if (loader_data.ven_id !== '') {
-      dynaCountry();
-      getCurr();
-      getBanks();
-      getInitDataBank();
-      getInitDataFile();
-      getCompany();
-      getPayterm();
-      setLoading(false);
+      (async () => {
+        await dynaCountry();
+        await getCurr();
+        await getBanks();
+        // await getInitDataBank(controller);
+        await getInitDataFile(controller);
+        await getCompany();
+        await getPayterm();
+        setLoading(false);
+      })();
     }
+    return () => {
+      controller.abort();
+    };
   }, [loader_data]);
-
-  const setVen_bankFromChild = (newItem) => {
-    setVen_bank(newItem);
-  };
 
   const setVen_fileFromChild = (newItem) => {
     if (newItem.length > 0) {
@@ -906,8 +1150,7 @@ function RefactorFormVendorPage() {
   };
 
   const handleReject = async (value) => {
-    const controller = new AbortController();
-    // console.log(value);
+    console.log(value);
     setLoading(true);
     // setTimeout(() => {
     //   setLoading(false);
@@ -926,83 +1169,113 @@ function RefactorFormVendorPage() {
       }, 2000);
     } catch (error) {
       setLoading(false);
+      console.error(error);
       alert(error);
     }
   };
 
-  const checkBankandFile = () => {
-    if (isBankload) {
-      let prebankData = {};
-      initDataBank.map((item) => {
-        prebankData[item.id] = item;
+  const handleAddNewBank = async () => {
+    setLoadAddBnk(true);
+    try {
+      const bankv_id = v4();
+      const { data } = await axiosPrivate.post(`/vendor/newbank`, {
+        bankv_id: bankv_id,
+        ven_id: loader_data.ven_id,
+        bank_country: chgLocal === 'LOCAL' ? 'ID' : null,
       });
-      if (ven_bank.length > 0) {
-        ven_bank.map((item) => {
-          prebankData[item.bankv_id] = { ...item, id: item.bankv_id };
-        });
-      }
-      let deletedIdBank = [];
-      // console.log(prefileData, prebankData);
-      Object.values(prebankData).map((item) => {
-        if (item?.method === 'delete') {
-          deletedIdBank.push(item.id);
-        }
+      append({
+        id: bankv_id,
+        bank_country: chgLocal === 'LOCAL' ? { value: 'ID', label: 'Indonesia' } : null,
+        bank_id: null,
+        bank_curr: null,
+        bank_acc: '',
+        acc_hold: '',
       });
-      // console.log(deletedIdBank, deletedIdFile);
-      let bankData = Object.values(prebankData).filter((bank) => !deletedIdBank.includes(bank.id));
-      //check if file or banks is already submitted
-      if (bankData.length === 0) {
-        // console.log('bankempty');
-        setFormStat({ stat: true, type: 'error', message: 'Banks not filled yet | Bank belum dilengkapi' });
-        bank_valid.current = false;
-      } else {
-        bank_valid.current = true;
-      }
-      let isFalse = false;
-      bankData.forEach((item) => {
-        // console.log(item);
-        delete item.acc_name;
-        delete item.source;
-        delete item.swift_code;
-        if (ticketState !== 'FINA') {
-          delete item.bank_key;
-        }
-        Object.keys(item).map((key) => {
-          if (item[key] === '' || item[key] === null || item[key] === undefined) {
-            // console.log('field bank empty');
-            if (key === 'bank_key') {
-              setFormStat({ stat: true, type: 'error', message: 'Please complete bank key data on master bank menu' });
-            } else {
-              setFormStat({ stat: true, type: 'error', message: `${key} field not filled yet` });
-            }
-            bank_valid.current = false;
-            isFalse = true;
-          } else {
-            if (!isFalse) {
-              bank_valid.current = true;
-            }
-          }
-        });
+    } catch (error) {
+      console.error(error);
+      setFormStat({
+        stat: true,
+        type: 'error',
+        message: error.response?.data?.message ?? error?.message,
       });
-    } else {
-      setBankLoad(true);
+    } finally {
+      setLoadAddBnk(false);
     }
+  };
+
+  const checkBankandFile = async () => {
+    console.log('checking bank');
+    let prebankData = {};
+    initDataBank.map((item) => {
+      prebankData[item.id] = item;
+    });
+    console.log(prebankData);
+    if (ven_bank.length > 0) {
+      ven_bank.map((item) => {
+        prebankData[item.bankv_id] = { ...item, id: item.bankv_id };
+      });
+    }
+    let deletedIdBank = [];
+    // console.log(prefileData, prebankData);
+    Object.values(prebankData).map((item) => {
+      if (item?.method === 'delete') {
+        deletedIdBank.push(item.id);
+      }
+    });
+    // console.log(deletedIdBank, deletedIdFile);
+    let bankData = Object.values(prebankData).filter((bank) => !deletedIdBank.includes(bank.id));
+    //check if file or banks is already submitted
+    if (bankData.length === 0) {
+      // console.log('bankempty');
+      setFormStat({ stat: true, type: 'error', message: 'Banks not filled yet | Bank belum dilengkapi' });
+      bank_valid.current = false;
+    } else {
+      bank_valid.current = true;
+    }
+    let isFalse = false;
+    bankData.forEach((item) => {
+      // console.log(item);
+      delete item.acc_name;
+      delete item.source;
+      delete item.swift_code;
+      if (ticketState !== 'FINA') {
+        delete item.bank_key;
+      }
+      Object.keys(item).map((key) => {
+        if (item[key] === '' || item[key] === null || item[key] === undefined) {
+          // console.log('field bank empty');
+          if (key === 'bank_key') {
+            setFormStat({ stat: true, type: 'error', message: 'Please complete bank key data on master bank menu' });
+          } else {
+            setFormStat({ stat: true, type: 'error', message: `${key} field not filled yet` });
+          }
+          bank_valid.current = false;
+          isFalse = true;
+        } else {
+          if (!isFalse) {
+            bank_valid.current = true;
+          }
+        }
+      });
+    });
+
     // console.log(
     //   'check : file => ' + file_valid.current + ' ; bank => ' + bank_valid.current + 'submitting : ' + isSubmitting
     // );
+    console.log(bank_valid.current);
     setBtnclick(false);
   };
 
   useEffect(() => {
-    checkBankandFile();
-  }, [isSubmitting]);
+    console.log(currentEdit);
+    Object.keys(currentEdit).map((item) => {
+      console.log(apiRef.current.getCellElement(item, 'action').children[0].firstElementChild.getAttribute('id'));
+    });
+  }, [currentEdit]);
 
-  const submitForm = async (value) => {
-    setBtnclick(true);
-    if (is_reject === true) {
-      await handleReject(value);
-      return;
-    }
+  const testSubmitForm = () => {
+    const value = getValues();
+    // console.log(value);
     const filteredVenFile = ven_file.filter((item) => item.method !== '');
     const ven_detail = {
       ven_id: loader_data.ven_id,
@@ -1010,23 +1283,27 @@ function RefactorFormVendorPage() {
       title: value.titlecomp,
       name_1: value.name1,
       local_ovs: value.localovs,
-      postal: value.postal,
+      postal: value.postal.trim(),
       country: value.country,
       city: typeof value.city === 'object' ? value.city.value : value.city,
       street: value.street,
       street2: value.street2,
-      postal_npwp: value.postal_npwp,
-      country_npwp: value.country_npwp,
+      street3: value.street3,
+      street4: value.street4,
+      postal_npwp: value.postal_npwp.trim(),
       city_npwp: typeof value.city_npwp === 'object' ? value.city_npwp.value : value.city_npwp,
       street_npwp: value.street_npwp,
       street2_npwp: value.street2_npwp,
-      postal_sppkp: value.postal_sppkp,
-      country_sppkp: value.country_sppkp,
+      street3_npwp: value.street3_npwp,
+      street4_npwp: value.street4_npwp,
+      postal_sppkp: value.postal_sppkp.trim(),
       city_sppkp: typeof value.city_sppkp === 'object' ? value.city_sppkp.value : value.city_sppkp,
       street_sppkp: value.street_sppkp,
       street2_sppkp: value.street2_sppkp,
-      telf1: value.telf,
-      fax: value.fax,
+      street3_sppkp: value.street3_sppkp,
+      street4_sppkp: value.street4_sppkp,
+      telf1: value.fax.trim().split(/-/)[1],
+      fax: value.fax.trim().split(/-/)[1],
       email: value.email,
       is_pkp: value.ispkp,
       is_tender: value.is_tender,
@@ -1034,16 +1311,48 @@ function RefactorFormVendorPage() {
       pay_mthd: value.paymthd,
       pay_term: value.payterm,
       company: value.company,
-      purch_org: value.purchorg,
+      purch_org: value.purchorg?.value,
       ven_acc: value.venacc,
       ven_group: value.vengroup,
       ven_type: value.ventype,
       description: value.description,
       limit_vendor: value.limit.toString().match(/\d+/g)?.join(''),
       lim_curr: value.currency,
-      ven_code: value.vendorcode,
+      ven_code: loader_data.cur_pos !== 'FINA' ? '' : value.vendorcode,
       search_term: value.search_term,
+      website_url: value.website_url.trim(),
+      ig_link: value.ig_link.trim(),
+      fb_link: value.fb_link.trim(),
+      twt_link: value.twt_link.trim(),
+      nama_direktur: value.nama_direktur.trim(),
+      nama_pic: value.nama_pic.trim(),
+      no_telf_pic: value.no_telf_pic.trim(),
+      email_pic: value.email_pic.trim(),
+      email_fin: value.email_fin.trim(),
     };
+    let tempBanks = [];
+    let ven_bank;
+    if (dirtyFields.bank) {
+      dirtyFields?.bank.map((item, index) => {
+        let changed = false;
+        Object.keys(item).map((keys) => {
+          if (item[keys]?.value === true) {
+            changed = true;
+          } else if (item[keys] === true) {
+            changed = true;
+          }
+        });
+        if (changed) {
+          tempBanks.push(value.bank[index]);
+        }
+      });
+      ven_bank = tempBanks.map((item) => ({
+        ...item,
+        method: 'update',
+      }));
+    } else {
+      ven_bank = [];
+    }
     const jsonSend = {
       role: session.role === undefined ? 'VENDOR' : session.role,
       is_draft: is_draft.current,
@@ -1055,24 +1364,129 @@ function RefactorFormVendorPage() {
       ven_files: filteredVenFile,
       cur_pos: loader_data.cur_pos,
     };
-    console.log(jsonSend);
-    if (loader_data.data.reject_by !== '') {
-      jsonSend.remarks = '';
+    // console.log(jsonSend);
+  };
+
+  const submitForm = async (value) => {
+    // setBtnclick(true);
+    const controller = new AbortController();
+    if (is_reject === true) {
+      await handleReject(value);
+      return;
     }
-    if (UPDATE.FINA) {
-      jsonSend.mdm_id = session.user_id;
-    }
-    checkBankandFile();
-    // console.log(bank_valid.current, file_valid.current, is_draft.current, isSubmitting);
-    // if (bank_valid.current && file_valid.current) {
-    //   console.log('submitting');
-    // }
-    try {
-      if (!is_draft.current) {
-        if (!bank_valid.current) {
-          return;
+    const filteredVenFile = ven_file.filter((item) => item.method !== '');
+    const ven_detail = {
+      ven_id: loader_data.ven_id,
+      ticket_num: loader_data.ticket_num,
+      title: value.titlecomp,
+      name_1: value.name1,
+      local_ovs: value.localovs,
+      postal: value.postal.trim(),
+      country: value.country,
+      city: typeof value.city === 'object' ? value.city.value : value.city,
+      street: value.street,
+      street2: value.street2,
+      street3: value.street3,
+      street4: value.street4,
+      postal_npwp: value.postal_npwp.trim(),
+      city_npwp: typeof value.city_npwp === 'object' ? value.city_npwp.value : value.city_npwp,
+      street_npwp: value.street_npwp,
+      street2_npwp: value.street2_npwp,
+      street3_npwp: value.street3_npwp,
+      street4_npwp: value.street4_npwp,
+      postal_sppkp: value.postal_sppkp.trim(),
+      city_sppkp: typeof value.city_sppkp === 'object' ? value.city_sppkp.value : value.city_sppkp,
+      street_sppkp: value.street_sppkp,
+      street2_sppkp: value.street2_sppkp,
+      street3_sppkp: value.street3_sppkp,
+      street4_sppkp: value.street4_sppkp,
+      telf1: value.fax.trim().split(/-/)[1],
+      fax: value.fax.trim().split(/-/)[1],
+      email: value.email,
+      is_pkp: value.ispkp,
+      is_tender: value.is_tender,
+      is_priority: value.is_priority,
+      npwp: value.npwp.trim(),
+      pay_mthd: value.paymthd,
+      pay_term: value.payterm,
+      company: value.company,
+      purch_org: value.purchorg?.value,
+      ven_acc: value.venacc,
+      ven_group: value.vengroup,
+      ven_type: value.ventype,
+      description: value.description,
+      limit_vendor: value.limit.toString().match(/\d+/g)?.join(''),
+      lim_curr: value.currency,
+      ven_code: loader_data.cur_pos !== 'FINA' ? '' : value.vendorcode,
+      search_term: value.search_term,
+      website_url: value.website_url.trim(),
+      ig_link: value.ig_link.trim(),
+      fb_link: value.fb_link.trim(),
+      twt_link: value.twt_link.trim(),
+      nama_direktur: value.nama_direktur.trim(),
+      nama_pic: value.nama_pic.trim(),
+      no_telf_pic: value.no_telf_pic.trim().split(/-/)[1],
+      email_pic: value.email_pic.trim(),
+      email_fin: value.email_fin.trim(),
+    };
+    let tempBanks = [];
+    let ven_bank;
+    if (dirtyFields.bank) {
+      dirtyFields?.bank.map((item, index) => {
+        let changed = false;
+        Object.keys(item).map((keys) => {
+          if (item[keys]?.value === true) {
+            changed = true;
+          } else if (item[keys] === true) {
+            changed = true;
+          }
+        });
+        if (changed) {
+          let bk = value.bank[index];
+          const payload = {
+            ...bk,
+            bank_country: bk.bank_country?.value,
+            bank_curr: bk.bank_curr?.value,
+            bank_id: bk.bank_id?.value,
+          };
+          tempBanks.push(payload);
         }
-      }
+      });
+      ven_bank = tempBanks.map((item) => ({
+        ...item,
+        method: 'update',
+      }));
+    } else {
+      ven_bank = [];
+    }
+
+    const jsonSend = {
+      role: session.role === undefined ? 'VENDOR' : session.role,
+      is_draft: is_draft.current,
+      ticket_id: loader_data.ticket_id,
+      remarks: value.remarks,
+      ticket_state: ticketState,
+      ven_detail: ven_detail,
+      ven_banks: ven_bank,
+      ven_files: filteredVenFile,
+      cur_pos: loader_data.cur_pos,
+    };
+    // console.log(jsonSend);
+    // console.log(dirtyFields);
+    // if (loader_data.data.reject_by !== '') {
+    //   jsonSend.remarks = '';
+    // }
+    // if (UPDATE.FINA) {
+    //   jsonSend.mdm_id = session.user_id;
+    // }
+    // if (!is_draft.current) {
+    //   await checkBankandFile();
+    // }
+    // console.log(bank_valid.current, file_valid.current, is_draft.current, isSubmitting);
+    // // if (bank_valid.current && file_valid.current) {
+    // //   console.log('submitting');
+    // // }
+    try {
       setLoading(true);
       let submit;
       if (session.role === undefined || predata.type !== 'form') {
@@ -1083,9 +1497,10 @@ function RefactorFormVendorPage() {
         // console.log('submitting...');
       }
       setVen_bank((prev) => prev.map((item) => ({ ...item, method: 'update' })));
-      const response = await submit.data;
-      setFormStat({ stat: true, type: 'success', message: response.message });
+      const response = submit.data;
       setLoading(false);
+      console.log('done');
+      setFormStat({ stat: true, type: 'success', message: response.message });
       setBtnclick(false);
       if (!is_draft.current) {
         setTimeout(() => {
@@ -1096,6 +1511,9 @@ function RefactorFormVendorPage() {
           }
         }, 3000);
         // console.log('reloading...');
+      } else {
+        // getInitDataBank(controller);
+        getInitDataFile(controller);
       }
     } catch (err) {
       setBtnclick(false);
@@ -1105,6 +1523,49 @@ function RefactorFormVendorPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    resetField('limit');
+    resetField('currency');
+  }, [chgVenacc]);
+
+  useEffect(() => {
+    if (loadingCountry) {
+      console.log('Country loading');
+    }
+    if (loadingCurr) {
+      console.log('Curr loading');
+    }
+    if (loadingBanks) {
+      console.log('Banks loading');
+    }
+    if (loadingInitBank) {
+      console.log('Init Bank loading');
+    }
+    if (loadingInitFile) {
+      console.log('Init File loading');
+    }
+    if (loadingComp) {
+      console.log('Company loading');
+    }
+    if (loadingPayterm) {
+      console.log('Payterm loading');
+    }
+    if (loading) {
+      console.log('loading');
+    }
+  }, [
+    loadingCountry,
+    loadingCurr,
+    loadingBanks,
+    loadingInitBank,
+    loadingInitFile,
+    loadingComp,
+    loadingPayterm,
+    loading,
+  ]);
+
+  console.log(errors);
 
   return (
     <>
@@ -1122,6 +1583,7 @@ function RefactorFormVendorPage() {
                 <ToggleButton value="en">EN</ToggleButton>
               </ToggleButtonGroup>
             </Box>
+
             {loader_data.data?.reject_by && (
               <Alert
                 severity="error"
@@ -1147,31 +1609,13 @@ function RefactorFormVendorPage() {
                       boxSizing: 'border-box',
                     }}
                   >
-                    {loader_data.data?.remarks_readOnly}
+                    <TextField value={loader_data.data?.remarks_readOnly} multiline disabled fullWidth />
+                    {/* {loader_data.data?.remarks_readOnly} */}
                   </div>
                 </Box>
               </Alert>
             )}
-            <Alert severity="warning" variant="filled" sx={{ width: '45rem', mt: '1rem', mb: '1rem' }}>
-              <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                {t('Please Download')}
-                <Link
-                  href={`${process.env.REACT_APP_URL_LOC}/master/file/Kode_Etik_Supplier_Vendor_dan_Kontraktor.doc`}
-                >
-                  Link Download File Pakta Integritas
-                </Link>
-              </Box>
-            </Alert>
-            {ticketState === 'CREA' && (
-              <Alert severity="warning" variant="filled" sx={{ width: '45rem', mt: '1rem', mb: '1rem' }}>
-                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                  {t('Please Download Justifikasi')}
-                  <Link href={`${process.env.REACT_APP_URL_LOC}/master/file/Form VENDOR LOCAL JUSTIFIKASI.docx`}>
-                    Link Download File Form Justifikasi
-                  </Link>
-                </Box>
-              </Alert>
-            )}
+
             <Accordion expanded={expanded.panelReqDet} onChange={handleExpanded('panelReqDet')}>
               <AccordionSummary
                 sx={{
@@ -1195,11 +1639,11 @@ function RefactorFormVendorPage() {
                       name="emailRequestor"
                       label={t('Email Requestor')}
                       control={control}
-                      readOnly={true}
+                      disabled={true}
                     />
                   </Grid>
                   <Grid item xs>
-                    <TextFieldComp name="deptRequestor" label={t('Departement')} control={control} readOnly={true} />
+                    <TextFieldComp name="deptRequestor" label={t('Departement')} control={control} disabled={true} />
                   </Grid>
                 </Grid>
               </AccordionDetails>
@@ -1225,9 +1669,10 @@ function RefactorFormVendorPage() {
                   <Grid item xs={3}>
                     <SelectComp
                       name="titlecomp"
-                      label={t('Title')}
+                      label={t('Title') + ' *'}
                       control={control}
-                      readOnly={
+                      t={t}
+                      disabled={
                         !(
                           (UPDATE.INIT && ticketState === 'INIT') ||
                           (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
@@ -1235,38 +1680,59 @@ function RefactorFormVendorPage() {
                       }
                       onChangeovr={funChgTitle}
                       options={title}
-                      rules={{ required: t(t('Please insert this field')) }}
+                      rules={{ required: 'Please insert this field' }}
                     />
                   </Grid>
                   <Grid item xs={3}>
                     <SelectComp
                       name="localovs"
-                      label={t('Local/Overseas')}
+                      label={t('Local/Overseas') + ' *'}
+                      t={t}
                       control={control}
-                      readOnly={
+                      disabled={
                         !(
                           (UPDATE.INIT && ticketState === 'INIT') ||
                           (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
                         )
                       }
                       options={localoverseas}
-                      rules={{ required: t('Please insert this field') }}
+                      rules={{ required: 'Please insert this field' }}
                       onChangeovr={funChgLoc}
+                    />
+                  </Grid>
+                  <Grid item xs={4}>
+                    <SelectComp
+                      name="country"
+                      label={t('Country') + ' *'}
+                      t={t}
+                      control={control}
+                      disabled={
+                        !(
+                          (UPDATE.INIT && ticketState === 'INIT') ||
+                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
+                        ) || chgLocal === 'LOCAL'
+                      }
+                      options={countries.current}
+                      onChangeovr={funChgCountry}
+                      rules={{
+                        required: 'Please insert this field',
+                      }}
                     />
                   </Grid>
                   <Grid item xs={4}>
                     <TextFieldComp
                       name="name1"
-                      label={t('Company Name')}
+                      label={t('Company Name') + ' *'}
                       control={control}
-                      readOnly={
+                      disabled={
                         !(
                           (UPDATE.INIT && ticketState === 'INIT') ||
                           (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
                         )
                       }
+                      t={t}
                       rules={{
-                        required: t('Please insert this field'),
+                        required: 'Please insert this field',
                         maxLength: { value: 300, message: 'Max 300 Character' },
                       }}
                       onChangeovr={funChgname}
@@ -1274,78 +1740,81 @@ function RefactorFormVendorPage() {
                     />
                   </Grid>
                   {checkIsExist && (
-                    <Grid item xs={2}>
-                      <LoadingButton
-                        onClick={() => checkExist(getValues('name1'))}
-                        sx={{ width: '4rem', height: '3.5rem' }}
-                        loading={loadingEx}
-                      >
-                        {t('Verify')}
-                      </LoadingButton>
-                    </Grid>
+                    <>
+                      <Grid item xs={2}>
+                        <LoadingButton
+                          onClick={() => checkExist(getValues('name1'))}
+                          sx={{ width: '4rem', height: '3.5rem' }}
+                          loading={loadingEx}
+                        >
+                          {t('Verify')}
+                        </LoadingButton>
+                      </Grid>
+                      <Grid item xs={4}>
+                        <Alert variant="filled" severity="warning">
+                          {t('Untuk melanjutkan, mohon klik verifikasi apakah nama vendor yang diisi sudah terdaftar')}
+                        </Alert>
+                      </Grid>
+                    </>
                   )}
+                  {!checkIsExist && <Grid item xs={6}></Grid>}
+
                   <Grid item xs={3}>
                     <PatternFieldComp
                       name="telf"
                       label={t('Telephone Number')}
+                      useplaceholder
                       control={control}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
-                        )
-                      }
-                      format="################"
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
+                      format={phoneNumber}
                       isNumString={false}
                     />
                   </Grid>
                   <Grid item xs={3}>
-                    <TextFieldComp
+                    <PatternFieldComp
                       name="fax"
-                      label={t('Fax')}
+                      label={t('Handphone Number')}
+                      useplaceholder
                       control={control}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
-                        )
-                      }
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
+                      format={phoneNumber}
+                      isNumString={false}
+                      tooltip={t('Gunakan format kode telfon internasional')}
                     />
                   </Grid>
-                  <Grid item xs={3}>
+                  <Grid item xs={6}>
                     <TextFieldComp
                       name="email"
-                      label="Email"
+                      label="Email *"
                       control={control}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
-                        )
-                      }
+                      t={t}
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
                       rules={{
-                        required: t('Please insert this field'),
+                        required: 'Please insert this field',
                         pattern: {
                           value: /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/g,
                           message: 'invalid email address',
                         },
                       }}
                       toLowerCase={true}
+                      tooltip={t('Diisikan email perusahaan atau email pribadi jika vendor perorangan')}
                     />
                   </Grid>
 
-                  {(ticketState === 'CREA' || ticketState === 'FINA') && UPDATE[ticketState] && (
+                  {ticketState === 'FINA' && UPDATE[ticketState] && (
                     <Grid item xs={6}>
                       <TextFieldComp
                         name="search_term"
-                        label={t('Search Term')}
+                        label={t('Search Term') + ' *'}
                         control={control}
-                        readOnly={!(UPDATE.CREA && ticketState === 'CREA')}
+                        disabled={!(UPDATE.FINA && ticketState === 'FINA')}
+                        t={t}
                         rules={{
-                          required: t('Please insert this field'),
+                          required: 'Please insert this field',
                           maxLength: { value: 100, message: 'Max 100 Character' },
                         }}
                         toUpperCase={true}
+                        tooltip={t('Akronim atau istilah pencarian yang akan digunakan di SAP')}
                       />
                     </Grid>
                   )}
@@ -1357,6 +1826,171 @@ function RefactorFormVendorPage() {
                 {t('Already Exist')}
               </Alert>
             )}
+            <Accordion expanded={expanded.panelInfoAcc} onChange={handleExpanded('panelInfoAcc')}>
+              <AccordionSummary
+                sx={{
+                  pointerEvents: 'none',
+                }}
+                expandIcon={
+                  <ExpandMoreIcon
+                    sx={{
+                      pointerEvents: 'auto',
+                    }}
+                  />
+                }
+                id="panelCompDet"
+              >
+                <Typography>{t('Website and Social Media Vendor Information')}</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <TextFieldComp
+                      name="website_url"
+                      t={t}
+                      label={t('URL Website')}
+                      control={control}
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
+                      rules={{ maxLength: { value: 500, message: 'Max 500 Character' } }}
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    <TextFieldComp
+                      name="ig_link"
+                      t={t}
+                      label={t('Instagram')}
+                      control={control}
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
+                      rules={{ maxLength: { value: 500, message: 'Max 500 Character' } }}
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    <TextFieldComp
+                      name="fb_link"
+                      t={t}
+                      label={t('Facebook')}
+                      control={control}
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
+                      rules={{ maxLength: { value: 500, message: 'Max 500 Character' } }}
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    <TextFieldComp
+                      name="twt_link"
+                      t={t}
+                      label={t('Twitter')}
+                      control={control}
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
+                      rules={{ maxLength: { value: 500, message: 'Max 500 Character' } }}
+                    />
+                  </Grid>
+                </Grid>
+              </AccordionDetails>
+            </Accordion>
+            <Accordion expanded={expanded.panelCompOrg} onChange={handleExpanded('panelCompOrg')}>
+              <AccordionSummary
+                sx={{
+                  pointerEvents: 'none',
+                }}
+                expandIcon={
+                  <ExpandMoreIcon
+                    sx={{
+                      pointerEvents: 'auto',
+                    }}
+                  />
+                }
+                id="panelCompDet"
+              >
+                <Typography>{t('Company Organization')}</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <TextFieldComp
+                      name="nama_direktur"
+                      t={t}
+                      label={t('Director Name') + ' *'}
+                      control={control}
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
+                      toUpperCase={true}
+                      rules={{
+                        required: 'Please insert this field',
+                        maxLength: { value: 300, message: 'Max 300 Character' },
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    <TextFieldComp
+                      name="nama_pic"
+                      t={t}
+                      label={t('PIC Name') + ' *'}
+                      control={control}
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
+                      toUpperCase={true}
+                      rules={{
+                        required: 'Please insert this field',
+                        maxLength: { value: 300, message: 'Max 300 Character' },
+                      }}
+                      tooltip={t('Nama dari pihak vendor yang mengisi form')}
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    <PatternFieldComp
+                      name="no_telf_pic"
+                      label={t('Handphone Number PIC')}
+                      useplaceholder
+                      control={control}
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
+                      format={phoneNumber}
+                      isNumString={false}
+                      tooltip={
+                        t('Nomor handphone pihak vendor yang berhubungan dengan KPN') +
+                        '. ' +
+                        t('Gunakan format kode telfon internasional')
+                      }
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    <TextFieldComp
+                      name="email_pic"
+                      t={t}
+                      label={t('Email PIC') + ' *'}
+                      control={control}
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
+                      toLowerCase={true}
+                      rules={{
+                        required: 'Please insert this field',
+                        pattern: {
+                          value: /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/g,
+                          message: 'invalid email address',
+                        },
+                        maxLength: { value: 500, message: 'Max 500 Character' },
+                      }}
+                      tooltip={t('Alamat email pihak vendor yang berhubungan dengan KPN')}
+                    />
+                  </Grid>
+                  <Grid item xs={6}>
+                    <TextFieldComp
+                      name="email_fin"
+                      t={t}
+                      label={t('Email Finance') + ' *'}
+                      control={control}
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
+                      toLowerCase={true}
+                      rules={{
+                        required: 'Please insert this field',
+                        pattern: {
+                          value: /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/g,
+                          message: 'invalid email address',
+                        },
+                        maxLength: { value: 500, message: 'Max 500 Character' },
+                      }}
+                      tooltip={t('Email finance dari pihak vendor')}
+                    />
+                  </Grid>
+                </Grid>
+              </AccordionDetails>
+            </Accordion>
             <Accordion expanded={expanded.panelAddr} onChange={handleExpanded('panelAddr')}>
               <AccordionSummary
                 sx={{
@@ -1378,139 +2012,138 @@ function RefactorFormVendorPage() {
               <AccordionDetails>
                 <Grid container spacing={2}>
                   <Grid item xs={9}>
-                    <TextFieldComp
-                      name="street"
-                      label={t('Address')}
-                      control={control}
-                      readOnly={
-                        !(
-                          (
+                    <Box
+                      sx={{
+                        position: 'relative',
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 1,
+                        borderStyle: 'solid',
+                        borderWidth: '1px',
+                        borderColor: theme.palette.grey[400],
+                        borderRadius: '20px',
+                        padding: 3,
+                      }}
+                    >
+                      <p
+                        style={{
+                          position: 'absolute',
+                          top: '-13px',
+                          padding: '0 10px 0 10px',
+                          margin: '0',
+                          backgroundColor: 'white',
+                          color: theme.palette.grey[600],
+                        }}
+                      >
+                        {t('Alamat') + ' *'}
+                      </p>
+                      <p style={{ fontSize: '8pt', margin: '0', color: theme.palette.grey[600] }}>
+                        {`Max 50 ${t('Karakter')} ${t(`Please fill without ',' (comma) character`)} ${t(
+                          `Mohon dilanjutkan ke kolom berikutnya jika tidak cukup`
+                        )}`}
+                      </p>
+                      <TextFieldComp
+                        name="street"
+                        t={t}
+                        control={control}
+                        maxLength={35}
+                        disabled={
+                          !(
+                            (
+                              (UPDATE.INIT && ticketState === 'INIT') ||
+                              (UPDATE.CREA && ticketState === 'CREA') ||
+                              (UPDATE.FINA && ticketState === 'FINA')
+                            )
+                            // || (UPDATE.FINA && ticketState === 'FINA')
+                          )
+                        }
+                        rules={{
+                          required: 'Please insert this field',
+                          maxLength: { value: 35, message: 'Max 35 Character, continue to field below if not enough' },
+                          pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
+                        }}
+                        toUpperCase={true}
+                      />
+                      <TextFieldComp
+                        name="street2"
+                        t={t}
+                        control={control}
+                        disabled={
+                          !(
                             (UPDATE.INIT && ticketState === 'INIT') ||
-                            (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC') ||
+                            (UPDATE.CREA && ticketState === 'CREA') ||
                             (UPDATE.FINA && ticketState === 'FINA')
                           )
-                          // || (UPDATE.FINA && ticketState === 'FINA')
-                        )
-                      }
-                      rules={{
-                        required: t('Please insert this field'),
-                        maxLength: { value: 100, message: 'Max 100 Character' },
-                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
-                      }}
-                      toUpperCase={true}
-                      helperText={t(`Please fill without ',' (comma) character`)}
-                    />
-                  </Grid>
-                  <Grid item xs={9}>
-                    <TextFieldComp
-                      name="street2"
-                      label={t('Address') + ' 2'}
-                      control={control}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC') ||
-                          (UPDATE.FINA && ticketState === 'FINA')
-                        )
-                      }
-                      rules={{
-                        maxLength: { value: 160, message: 'Max 160 Character' },
-                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
-                      }}
-                      toUpperCase={true}
-                    />
-                  </Grid>
-                  <Grid item xs={9}>
-                    <TextFieldComp
-                      name="street3"
-                      label={t('Address') + ' 3'}
-                      control={control}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC') ||
-                          (UPDATE.FINA && ticketState === 'FINA')
-                        )
-                      }
-                      rules={{
-                        maxLength: { value: 160, message: 'Max 160 Character' },
-                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
-                      }}
-                      toUpperCase={true}
-                    />
-                  </Grid>
-                  <Grid item xs={9}>
-                    <TextFieldComp
-                      name="street4"
-                      label={t('Address') + ' 4'}
-                      control={control}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC') ||
-                          (UPDATE.FINA && ticketState === 'FINA')
-                        )
-                      }
-                      rules={{
-                        maxLength: { value: 160, message: 'Max 160 Character' },
-                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
-                      }}
-                      toUpperCase={true}
-                    />
+                        }
+                        rules={{
+                          maxLength: { value: 35, message: 'Max 35 Character, continue to field below if not enough' },
+                          pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character` },
+                        }}
+                        toUpperCase={true}
+                      />
+                      <TextFieldComp
+                        name="street3"
+                        t={t}
+                        control={control}
+                        disabled={
+                          !(
+                            (UPDATE.INIT && ticketState === 'INIT') ||
+                            (UPDATE.CREA && ticketState === 'CREA') ||
+                            (UPDATE.FINA && ticketState === 'FINA')
+                          )
+                        }
+                        rules={{
+                          maxLength: { value: 35, message: 'Max 35 Character, continue to field below if not enough' },
+                          pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character` },
+                        }}
+                        toUpperCase={true}
+                      />
+                      <TextFieldComp
+                        name="street4"
+                        t={t}
+                        control={control}
+                        disabled={
+                          !(
+                            (UPDATE.INIT && ticketState === 'INIT') ||
+                            (UPDATE.CREA && ticketState === 'CREA') ||
+                            (UPDATE.FINA && ticketState === 'FINA')
+                          )
+                        }
+                        rules={{
+                          maxLength: { value: 35, message: 'Max 35 Character' },
+                          pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character` },
+                        }}
+                        toUpperCase={true}
+                      />
+                    </Box>
                   </Grid>
                   <Grid item xs={3}></Grid>
-                  <Grid item xs={3}>
-                    <SelectComp
-                      name="country"
-                      label={t('Country')}
+                  <Grid item xs={5}>
+                    <AutoCompleteSelect
+                      name="city"
+                      label={t('City') + ' *'}
+                      t={t}
                       control={control}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
-                        ) || chgLocal === 'LOCAL'
-                      }
-                      options={countries.current}
-                      onChangeovr={funChgCountry}
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
+                      options={cities}
                       rules={{
-                        required: t('Please insert this field'),
+                        required: 'Please insert this field',
                       }}
+                      freeSolo={true}
                     />
                   </Grid>
                   <Grid item xs={3}>
                     <PatternFieldComp
                       name="postal"
-                      label={t('Postal Code')}
+                      label={t('Postal Code') + ' *'}
+                      t={t}
                       control={control}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
-                        )
-                      }
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
                       rules={{
                         required: chgLocal === 'OVS' ? false : t('Please insert this field'),
                       }}
                       format="################"
                       isNumString={false}
-                    />
-                  </Grid>
-                  <Grid item xs={3}>
-                    <AutoCompleteSelect
-                      name="city"
-                      label={t('City')}
-                      control={control}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
-                        )
-                      }
-                      options={cities}
-                      rules={{
-                        required: t('Please insert this field'),
-                      }}
-                      freeSolo={true}
                     />
                   </Grid>
                 </Grid>
@@ -1535,144 +2168,145 @@ function RefactorFormVendorPage() {
                 </div>
               </AccordionSummary>
               <AccordionDetails>
-                {(ticketState === 'INIT' || (ticketState === 'CREA' && loader_data.ticket_type === 'PROC')) && (
+                {(ticketState === 'INIT' || ticketState === 'CREA') && (
                   <Button onClick={(e) => sameWithAddrComp('npwp')}>{t('Same as Company Address')}</Button>
                 )}
+                <h4>
+                  <em>{t('Isi bagian ini jika berbeda dengan alamat domisili perusahaan')}</em>
+                </h4>
                 <Grid container spacing={2}>
                   <Grid item xs={9}>
-                    <TextFieldComp
-                      name="street_npwp"
-                      label={t('Address')}
-                      control={control}
-                      readOnly={
-                        !(
-                          (
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        position: 'relative',
+                        flexWrap: 'wrap',
+                        gap: 1,
+                        borderStyle: 'solid',
+                        borderWidth: '1px',
+                        borderColor: theme.palette.grey[400],
+                        borderRadius: '20px',
+                        padding: 3,
+                      }}
+                    >
+                      <p
+                        style={{
+                          position: 'absolute',
+                          top: '-13px',
+                          padding: '0 10px 0 10px',
+                          margin: '0',
+                          backgroundColor: 'white',
+                          color: theme.palette.grey[600],
+                        }}
+                      >
+                        {t('Alamat') + ' *'}
+                      </p>
+                      <p style={{ fontSize: '8pt', margin: '0', color: theme.palette.grey[600] }}>
+                        {`Max 50 ${t('Karakter')} ${t(`Please fill without ',' (comma) character`)} ${t(
+                          `Mohon dilanjutkan ke kolom berikutnya jika tidak cukup`
+                        )}`}
+                      </p>
+                      <TextFieldComp
+                        name="street_npwp"
+                        t={t}
+                        control={control}
+                        disabled={
+                          !(
+                            (
+                              (UPDATE.INIT && ticketState === 'INIT') ||
+                              (UPDATE.CREA && ticketState === 'CREA') ||
+                              (UPDATE.FINA && ticketState === 'FINA')
+                            )
+                            // || (UPDATE.FINA && ticketState === 'FINA')
+                          )
+                        }
+                        rules={{
+                          required: 'Please insert this field',
+                          maxLength: { value: 35, message: 'Max 35 Character, continue to field below if not enough' },
+                          pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character` },
+                        }}
+                        toUpperCase={true}
+                      />
+                      <TextFieldComp
+                        name="street2_npwp"
+                        t={t}
+                        control={control}
+                        disabled={
+                          !(
                             (UPDATE.INIT && ticketState === 'INIT') ||
-                            (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC') ||
+                            (UPDATE.CREA && ticketState === 'CREA') ||
                             (UPDATE.FINA && ticketState === 'FINA')
                           )
-                          // || (UPDATE.FINA && ticketState === 'FINA')
-                        )
-                      }
-                      rules={{
-                        required: t('Please insert this field'),
-                        maxLength: { value: 100, message: 'Max 100 Character' },
-                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
-                      }}
-                      toUpperCase={true}
-                      helperText={t(`Please fill without ',' (comma) character`)}
-                    />
-                  </Grid>
-                  <Grid item xs={9}>
-                    <TextFieldComp
-                      name="street2_npwp"
-                      label={t('Address') + ' 2'}
-                      control={control}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC') ||
-                          (UPDATE.FINA && ticketState === 'FINA')
-                        )
-                      }
-                      rules={{
-                        maxLength: { value: 160, message: 'Max 160 Character' },
-                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
-                      }}
-                      toUpperCase={true}
-                    />
-                  </Grid>
-                  <Grid item xs={9}>
-                    <TextFieldComp
-                      name="street3_npwp"
-                      label={t('Address') + ' 3'}
-                      control={control}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC') ||
-                          (UPDATE.FINA && ticketState === 'FINA')
-                        )
-                      }
-                      rules={{
-                        maxLength: { value: 160, message: 'Max 160 Character' },
-                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
-                      }}
-                      toUpperCase={true}
-                    />
-                  </Grid>
-                  <Grid item xs={9}>
-                    <TextFieldComp
-                      name="street4_npwp"
-                      label={t('Address') + ' 4'}
-                      control={control}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC') ||
-                          (UPDATE.FINA && ticketState === 'FINA')
-                        )
-                      }
-                      rules={{
-                        maxLength: { value: 160, message: 'Max 160 Character' },
-                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
-                      }}
-                      toUpperCase={true}
-                    />
+                        }
+                        rules={{
+                          maxLength: { value: 35, message: 'Max 35 Character, continue to field below if not enough' },
+                          pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character` },
+                        }}
+                        toUpperCase={true}
+                      />
+                      <TextFieldComp
+                        name="street3_npwp"
+                        t={t}
+                        control={control}
+                        disabled={
+                          !(
+                            (UPDATE.INIT && ticketState === 'INIT') ||
+                            (UPDATE.CREA && ticketState === 'CREA') ||
+                            (UPDATE.FINA && ticketState === 'FINA')
+                          )
+                        }
+                        rules={{
+                          maxLength: { value: 35, message: 'Max 35 Character, continue to field below if not enough' },
+                          pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character` },
+                        }}
+                        toUpperCase={true}
+                      />
+                      <TextFieldComp
+                        name="street4_npwp"
+                        t={t}
+                        control={control}
+                        disabled={
+                          !(
+                            (UPDATE.INIT && ticketState === 'INIT') ||
+                            (UPDATE.CREA && ticketState === 'CREA') ||
+                            (UPDATE.FINA && ticketState === 'FINA')
+                          )
+                        }
+                        rules={{
+                          maxLength: { value: 35, message: 'Max 35 Character' },
+                          pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character` },
+                        }}
+                        toUpperCase={true}
+                      />
+                    </Box>
                   </Grid>
                   <Grid item xs={3}></Grid>
-                  <Grid item xs={3}>
-                    <SelectComp
-                      name="country_npwp"
-                      label={t('Country')}
+                  <Grid item xs={5}>
+                    <AutoCompleteSelect
+                      name="city_npwp"
+                      t={t}
+                      label={t('City') + ' *'}
                       control={control}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
-                        ) || chgLocal === 'LOCAL'
-                      }
-                      options={countries.current}
-                      onChangeovr={funChgCountry}
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
+                      options={cities}
                       rules={{
-                        required: t('Please insert this field'),
+                        required: 'Please insert this field',
                       }}
+                      freeSolo={true}
                     />
                   </Grid>
                   <Grid item xs={3}>
                     <PatternFieldComp
                       name="postal_npwp"
-                      label={t('Postal Code')}
+                      t={t}
+                      label={t('Postal Code') + ' *'}
                       control={control}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
-                        )
-                      }
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
                       rules={{
-                        required: chgLocal === 'OVS' ? false : t('Please insert this field'),
+                        required: chgLocal === 'OVS' ? false : 'Please insert this field',
                       }}
                       format="################"
                       isNumString={false}
-                    />
-                  </Grid>
-                  <Grid item xs={3}>
-                    <AutoCompleteSelect
-                      name="city_npwp"
-                      label={t('City')}
-                      control={control}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
-                        )
-                      }
-                      options={cities}
-                      rules={{
-                        required: t('Please insert this field'),
-                      }}
-                      freeSolo={true}
                     />
                   </Grid>
                 </Grid>
@@ -1697,145 +2331,146 @@ function RefactorFormVendorPage() {
                 </div>
               </AccordionSummary>
               <AccordionDetails>
-                {(ticketState === 'INIT' || (ticketState === 'CREA' && loader_data.ticket_type === 'PROC')) && (
+                {(ticketState === 'INIT' || ticketState === 'CREA') && (
                   <Button onClick={(e) => sameWithAddrComp('sppkp')}>{t('Same as Company Address')}</Button>
                 )}
+                <h4>
+                  <em>{t('Isi bagian ini jika berbeda dengan alamat domisili perusahaan')}</em>
+                </h4>
 
                 <Grid container spacing={2}>
                   <Grid item xs={9}>
-                    <TextFieldComp
-                      name="street_sppkp"
-                      label={t('Address')}
-                      control={control}
-                      readOnly={
-                        !(
-                          (
+                    <Box
+                      sx={{
+                        position: 'relative',
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 1,
+                        borderStyle: 'solid',
+                        borderWidth: '1px',
+                        borderColor: theme.palette.grey[400],
+                        borderRadius: '20px',
+                        padding: 3,
+                      }}
+                    >
+                      <p
+                        style={{
+                          position: 'absolute',
+                          top: '-13px',
+                          padding: '0 10px 0 10px',
+                          margin: '0',
+                          backgroundColor: 'white',
+                          color: theme.palette.grey[600],
+                        }}
+                      >
+                        {t('Alamat') + ' *'}
+                      </p>
+                      <p style={{ position: 'relative', fontSize: '8pt', margin: '0', color: theme.palette.grey[600] }}>
+                        {`Max 50 ${t('Karakter')} ${t(`Please fill without ',' (comma) character`)} ${t(
+                          `Mohon dilanjutkan ke kolom berikutnya jika tidak cukup`
+                        )}`}
+                      </p>
+                      <TextFieldComp
+                        name="street_sppkp"
+                        t={t}
+                        control={control}
+                        disabled={
+                          !(
+                            (
+                              (UPDATE.INIT && ticketState === 'INIT') ||
+                              (UPDATE.CREA && ticketState === 'CREA') ||
+                              (UPDATE.FINA && ticketState === 'FINA')
+                            )
+                            // || (UPDATE.FINA && ticketState === 'FINA')
+                          )
+                        }
+                        rules={{
+                          required: 'Please insert this field',
+                          maxLength: { value: 35, message: 'Max 35 Character, continue to field below if not enough' },
+                          pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character` },
+                        }}
+                        toUpperCase={true}
+                      />
+                      <TextFieldComp
+                        name="street2_sppkp"
+                        t={t}
+                        control={control}
+                        disabled={
+                          !(
                             (UPDATE.INIT && ticketState === 'INIT') ||
-                            (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC') ||
+                            (UPDATE.CREA && ticketState === 'CREA') ||
                             (UPDATE.FINA && ticketState === 'FINA')
                           )
-                          // || (UPDATE.FINA && ticketState === 'FINA')
-                        )
-                      }
-                      rules={{
-                        required: t('Please insert this field'),
-                        maxLength: { value: 100, message: 'Max 100 Character' },
-                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
-                      }}
-                      toUpperCase={true}
-                      helperText={t(`Please fill without ',' (comma) character`)}
-                    />
-                  </Grid>
-                  <Grid item xs={9}>
-                    <TextFieldComp
-                      name="street2_sppkp"
-                      label={t('Address') + ' 2'}
-                      control={control}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC') ||
-                          (UPDATE.FINA && ticketState === 'FINA')
-                        )
-                      }
-                      rules={{
-                        maxLength: { value: 160, message: 'Max 160 Character' },
-                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
-                      }}
-                      toUpperCase={true}
-                    />
-                  </Grid>
-                  <Grid item xs={9}>
-                    <TextFieldComp
-                      name="street3_sppkp"
-                      label={t('Address') + ' 3'}
-                      control={control}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC') ||
-                          (UPDATE.FINA && ticketState === 'FINA')
-                        )
-                      }
-                      rules={{
-                        maxLength: { value: 160, message: 'Max 160 Character' },
-                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
-                      }}
-                      toUpperCase={true}
-                    />
-                  </Grid>
-                  <Grid item xs={9}>
-                    <TextFieldComp
-                      name="street4_sppkp"
-                      label={t('Address') + ' 4'}
-                      control={control}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC') ||
-                          (UPDATE.FINA && ticketState === 'FINA')
-                        )
-                      }
-                      rules={{
-                        maxLength: { value: 160, message: 'Max 160 Character' },
-                        pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
-                      }}
-                      toUpperCase={true}
-                    />
+                        }
+                        rules={{
+                          maxLength: { value: 35, message: 'Max 35 Character, continue to field below if not enough' },
+                          pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character` },
+                        }}
+                        toUpperCase={true}
+                      />
+                      <TextFieldComp
+                        name="street3_sppkp"
+                        t={t}
+                        control={control}
+                        disabled={
+                          !(
+                            (UPDATE.INIT && ticketState === 'INIT') ||
+                            (UPDATE.CREA && ticketState === 'CREA') ||
+                            (UPDATE.FINA && ticketState === 'FINA')
+                          )
+                        }
+                        rules={{
+                          maxLength: { value: 35, message: 'Max 35 Character, continue to field below if not enough' },
+                          pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character` },
+                        }}
+                        toUpperCase={true}
+                      />
+                      <TextFieldComp
+                        name="street4_sppkp"
+                        t={t}
+                        control={control}
+                        disabled={
+                          !(
+                            (UPDATE.INIT && ticketState === 'INIT') ||
+                            (UPDATE.CREA && ticketState === 'CREA') ||
+                            (UPDATE.FINA && ticketState === 'FINA')
+                          )
+                        }
+                        rules={{
+                          maxLength: { value: 35, message: 'Max 35 Character' },
+                          pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character` },
+                        }}
+                        toUpperCase={true}
+                      />
+                    </Box>
                   </Grid>
                   <Grid item xs={3}></Grid>
-                  <Grid item xs={3}>
-                    <SelectComp
-                      name="country_sppkp"
-                      label={t('Country')}
+                  <Grid item xs={5}>
+                    <AutoCompleteSelect
+                      name="city_sppkp"
+                      t={t}
+                      label={t('City')}
                       control={control}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
-                        ) || chgLocal === 'LOCAL'
-                      }
-                      options={countries.current}
-                      onChangeovr={funChgCountry}
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
+                      options={cities}
                       rules={{
-                        required: t('Please insert this field'),
+                        required: 'Please insert this field',
                       }}
+                      freeSolo={true}
                     />
                   </Grid>
                   <Grid item xs={3}>
                     <PatternFieldComp
                       name="postal_sppkp"
+                      t={t}
                       label={t('Postal Code')}
                       control={control}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
-                        )
-                      }
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
                       rules={{
-                        required: chgLocal === 'OVS' ? false : t('Please insert this field'),
+                        required: chgLocal === 'OVS' ? false : 'Please insert this field',
                       }}
                       format="################"
                       isNumString={false}
-                    />
-                  </Grid>
-                  <Grid item xs={3}>
-                    <AutoCompleteSelect
-                      name="city_sppkp"
-                      label={t('City')}
-                      control={control}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
-                        )
-                      }
-                      options={cities}
-                      rules={{
-                        required: t('Please insert this field'),
-                      }}
-                      freeSolo={true}
                     />
                   </Grid>
                 </Grid>
@@ -1863,7 +2498,7 @@ function RefactorFormVendorPage() {
                       name="ispkp"
                       label="Pengusaha Kena Pajak (PKP)"
                       control={control}
-                      readOnly={
+                      disabled={
                         !(
                           (UPDATE.INIT && ticketState === 'INIT') ||
                           (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
@@ -1874,11 +2509,16 @@ function RefactorFormVendorPage() {
                   </Grid>
                   <Grid item xs={9}></Grid>
                   <Grid item xs={4}>
-                    <TextFieldComp
+                    <PatternFieldComp
                       name="npwp"
-                      label={t('Tax Number')}
+                      t={t}
+                      helperText={'Mohon input hanya nominal tanpa karakter spesial'}
+                      label={t('Tax Number') + ' *'}
+                      useplaceholder
+                      format="##.###.###.#-###.###"
+                      mask={'_'}
                       control={control}
-                      readOnly={
+                      disabled={
                         !(
                           (UPDATE.INIT && ticketState === 'INIT') ||
                           (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
@@ -1889,41 +2529,47 @@ function RefactorFormVendorPage() {
                           value: /^[0-9.-]+$/,
                           message: 'format not matched. only numbers (0-9), point (.), and hyphen (-)',
                         },
-                        required: chgIsPTKP ? 'this field is required' : false,
+                        minLength: {
+                          required: chgIsPTKP ? 'Please insert this field' : false,
+                          value: 20,
+                          message: 'Karakter tidak cukup',
+                        },
+                        maxLength: {
+                          value: 21,
+                          message: 'Mohon isi dengan lengkap',
+                        },
                       }}
                     />
                   </Grid>
                   <Grid item xs={3}>
                     <SelectComp
                       name="paymthd"
-                      label={t('Payment Method')}
+                      t={t}
+                      label={t('Payment Method') + ' *'}
                       control={control}
                       options={[
                         { value: 'bank', label: 'Bank' },
                         { value: 'cash', label: 'Cash' },
                         { value: 'Giro', label: 'Giro' },
                       ]}
-                      readOnly={
-                        !(
-                          (UPDATE.INIT && ticketState === 'INIT') ||
-                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
-                        )
-                      }
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
                       rules={{
-                        required: t('Please insert this field'),
+                        required: 'Please insert this field',
                       }}
                     />
                   </Grid>
                   <Grid item xs={4}>
                     <SelectComp
                       name="payterm"
-                      label={t('Payment Term')}
+                      t={t}
+                      label={t('Payment Term') + ' *'}
                       control={control}
                       options={payterm.current}
-                      readOnly={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
                       rules={{
-                        required: t('Please insert this field'),
+                        required: 'Please insert this field',
                       }}
+                      tooltip={t('Jangka waktu pembayaran')}
                     />
                   </Grid>
                 </Grid>
@@ -1946,66 +2592,84 @@ function RefactorFormVendorPage() {
                   <Typography>{t('Vendor Details')}</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
+                  <Alert variant="outlined" severity="warning" sx={{ mb: 1 }}>
+                    {t('Perlu diisi oleh Procurement')}
+                  </Alert>
                   <Grid container spacing={2}>
                     <Grid item xs={5}>
                       <SelectComp
                         name="company"
-                        label={t('Company')}
+                        t={t}
+                        label={t('Company') + ' *'}
                         control={control}
                         options={comps.current}
-                        readOnly={!(ticketState === 'CREA' && UPDATE.CREA)}
+                        disabled={!(ticketState === 'CREA' && UPDATE.CREA)}
                         rules={{
-                          required: t('Please insert this field'),
+                          required: 'Please insert this field',
                         }}
+                        onChangeovr={funChgComp}
                       />
                     </Grid>
                     <Grid item xs={3}>
-                      <TextFieldComp
+                      {/* <TextFieldComp
                         name="purchorg"
                         label="Purchasing Organization"
                         control={control}
-                        readOnly={!(ticketState === 'CREA' && UPDATE.CREA)}
+                        disabled={!(ticketState === 'CREA' && UPDATE.CREA)}
                         rules={{
                           required: t('Please insert this field'),
                           maxLength: { value: 20, message: 'Max 20 Character' },
                         }}
                         toUpperCase={true}
+                      /> */}
+                      <AutoSelectPurOrg
+                        name="purchorg"
+                        label="Purchasing Organization *"
+                        control={control}
+                        disabled={!(ticketState === 'CREA' && UPDATE.CREA)}
+                        rules={{
+                          required: 'Please insert this field',
+                        }}
+                        company={chgComp}
                       />
                     </Grid>
                     <Grid item xs={3}></Grid>
                     <Grid item xs={3}>
                       <SelectComp
                         name="vengroup"
-                        label="Vendor Group"
+                        t={t}
+                        label="Vendor Group *"
                         control={control}
                         options={vengroups}
                         onChangeovr={funChgVgrp}
-                        readOnly={!(ticketState === 'CREA' && UPDATE.CREA)}
+                        disabled={!(ticketState === 'CREA' && UPDATE.CREA)}
                         rules={{
-                          required: t('Please insert this field'),
+                          required: 'Please insert this field',
                         }}
                       />
                     </Grid>
                     <Grid item xs={3}>
                       <SelectComp
                         name="venacc"
-                        label="Vendor Account"
+                        t={t}
+                        label="Vendor Account *"
                         control={control}
                         options={[
                           { value: 'TRADE', label: 'Trade' },
                           { value: 'NON_TRADE', label: 'Non Trade' },
                         ]}
                         onChangeovr={funChgVacc}
-                        readOnly={!(ticketState === 'CREA' && UPDATE.CREA)}
+                        disabled={!(ticketState === 'CREA' && UPDATE.CREA)}
                         rules={{
-                          required: t('Please insert this field'),
+                          required: 'Please insert this field',
                         }}
                       />
                     </Grid>
                     <Grid item xs={3}>
                       <SelectComp
                         name="ventype"
-                        label="Vendor Type"
+                        t={t}
+                        label="Vendor Type *"
                         control={control}
                         options={
                           chgVenacc !== 'NON_TRADE'
@@ -2014,9 +2678,9 @@ function RefactorFormVendorPage() {
                             ? ventypeList[chgVengrp]
                             : [{ value: 'X', label: 'X' }]
                         }
-                        readOnly={!(ticketState === 'CREA' && UPDATE.CREA)}
+                        disabled={!(ticketState === 'CREA' && UPDATE.CREA)}
                         rules={{
-                          required: t('Please insert this field'),
+                          required: 'Please insert this field',
                         }}
                       />
                     </Grid>
@@ -2024,46 +2688,56 @@ function RefactorFormVendorPage() {
                     <Grid item xs={3}>
                       <SelectComp
                         name="currency"
-                        label="Limit Currency"
+                        t={t}
+                        label={t('Limit Currency') + `${chgVenacc === 'TRADE' ? ' *' : ''}`}
                         control={control}
-                        options={currencies.current}
+                        options={currencies}
                         onChangeovr={funChgCurr}
-                        disabled={chgVenacc === 'NON_TRADE'}
-                        readOnly={!(ticketState === 'CREA' && UPDATE.CREA)}
-                        rules={{ required: chgVenacc === 'TRADE' ? t('Please insert this field') : false }}
+                        disabled={chgVenacc === 'NON_TRADE' || !(ticketState === 'CREA' && UPDATE.CREA)}
+                        rules={{ required: chgVenacc === 'TRADE' ? 'Please insert this field' : false }}
                       />
                     </Grid>
                     <Grid item xs={4}>
                       <NumericFieldComp
+                        t={t}
                         name="limit"
-                        label="Limit"
+                        label={t('Limit') + `${chgVenacc === 'TRADE' ? ' *' : ''}`}
                         control={control}
                         format={['thousandSeparator']}
                         currency={chgCurr}
-                        disabled={chgVenacc === 'NON_TRADE'}
-                        readOnly={!(ticketState === 'CREA' && UPDATE.CREA)}
+                        disabled={chgVenacc === 'NON_TRADE' || !(ticketState === 'CREA' && UPDATE.CREA)}
                         rules={{ required: chgVenacc === 'TRADE' ? t('Please insert this field') : false }}
                       />
                     </Grid>
                     <Grid item xs={4}></Grid>
-                    <Grid item xs={12}>
-                      <TextFieldComp
-                        name="description"
-                        label="Description"
-                        control={control}
-                        readOnly={!(ticketState === 'CREA' && UPDATE.CREA)}
-                        rules={{ required: isTender ? t('Please insert this field') : false }}
-                      />
-                    </Grid>
                     <Grid item xs={5}>
                       <CheckboxComp
                         name="is_tender"
                         label={t('Vendor Tender Participant')}
                         control={control}
-                        readOnly={!(ticketState === 'CREA' && UPDATE.CREA)}
+                        disabled={!(ticketState === 'CREA' && UPDATE.CREA)}
                         onChangeovr={funChgTdr}
                       />
+                      <CheckboxComp
+                        name="is_priority"
+                        label={t('Vendor Priority')}
+                        control={control}
+                        disabled={!(ticketState === 'CREA' && UPDATE.CREA)}
+                      />
                     </Grid>
+                    {isTender && (
+                      <Grid item xs={12}>
+                        <TextFieldComp
+                          t={t}
+                          name="description"
+                          label="Description *"
+                          helperText={t('Wajib diisi jika vendor mengikuti tender')}
+                          control={control}
+                          disabled={!(ticketState === 'CREA' && UPDATE.CREA)}
+                          rules={{ required: isTender ? 'Please insert this field' : false }}
+                        />
+                      </Grid>
+                    )}
                   </Grid>
                 </AccordionDetails>
               </Accordion>
@@ -2077,9 +2751,7 @@ function RefactorFormVendorPage() {
               sx={{ zIndex: (theme) => theme.zIndex.drawer - 2 }}
             >
               <DialogTitle>{t('Reject Form')}</DialogTitle>
-              <Box
-                sx={{ width: '40rem', height: '12rem', display: 'flex', flexDirection: 'column', gap: 5, p: 2, mb: 3 }}
-              >
+              <Box sx={{ width: '40rem', display: 'flex', flexDirection: 'column', gap: 5, p: 2, mb: 3 }}>
                 <Alert severity="warning">
                   <AlertTitle>{t('Please provide rejection reasons')}</AlertTitle>{' '}
                   {t('Your current works will not be saved when rejecting form')}
@@ -2091,6 +2763,7 @@ function RefactorFormVendorPage() {
                   rules={{
                     required: 'Please provide rejection reason',
                   }}
+                  multiline
                 />
               </Box>
               <DialogActions>
@@ -2124,13 +2797,45 @@ function RefactorFormVendorPage() {
               <Typography>{t('Bank Information')}</Typography>
             </AccordionSummary>
             <AccordionDetails>
-              <VenBankTable
+              {(UPDATE.INIT || UPDATE.CREA) &&
+                (ticketState === 'INIT' || (ticketState === 'CREA' && loader_data.ticket_type === 'PROC')) && (
+                  <LoadingButton
+                    onClick={(e) => {
+                      handleAddNewBank();
+                    }}
+                    loading={loadAddBank}
+                  >
+                    + Add Bank
+                  </LoadingButton>
+                )}
+              {errors.bank && <p style={{ color: 'red' }}>{t('Please insert this field')}</p>}
+              <VenBankTableRefactor
+                control={control}
+                fields={fields}
+                append={append}
+                remove={remove}
+                getValues={getValues}
+                countries={countries.current}
+                currencies={currencies}
+                watch={watch}
+                is_local={chgLocal === 'LOCAL'}
+                is_allow={
+                  (UPDATE.INIT || UPDATE.CREA) &&
+                  (ticketState === 'INIT' || (ticketState === 'CREA' && loader_data.ticket_type === 'PROC'))
+                }
+                t={t}
+                ven_id={loader_data.ven_id}
+                clearField={resetField}
+                setValue={setValue}
+              />
+              {/* <VenBankTable
                 onChildDataChange={setVen_bankFromChild}
                 initData={initDataBank}
                 idParent={loader_data.ven_id}
                 banks={banks.current}
-                currencies={currencies.current}
+                currencies={currencies}
                 countries={countries.current}
+                formfield={{ fields: fields, append: append, remove: remove, isValid: isValid, errors: errors }}
                 isallow={
                   (UPDATE.INIT || UPDATE.CREA) &&
                   (ticketState === 'INIT' || (ticketState === 'CREA' && loader_data.ticket_type === 'PROC'))
@@ -2139,7 +2844,9 @@ function RefactorFormVendorPage() {
                 isLoad={loadingInitBank}
                 isLocal={chgLocal === 'LOCAL'}
                 t={t}
-              />
+                apiTable={apiRef}
+                setCurrentEdit={updateCurrentEdit}
+              /> */}
             </AccordionDetails>
           </Accordion>
           <Accordion expanded={expanded.panelFile} onChange={handleExpanded('panelFile')}>
@@ -2158,6 +2865,30 @@ function RefactorFormVendorPage() {
               <Typography>{t('File Upload')}</Typography>
             </AccordionSummary>
             <AccordionDetails>
+              <Alert severity="warning" variant="filled" sx={{ minWidth: '20rem', mt: '1rem', mb: '1rem' }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                  {t('Please Download')}
+                  <Link
+                    href={
+                      langCode === 'id'
+                        ? `${process.env.REACT_APP_URL_LOC}/master/file/Kode_Etik_Supplier_Vendor_dan_Kontraktor.doc`
+                        : `${process.env.REACT_APP_URL_LOC}/master/file/Integrity_Pact_Supplier_Vendor_and_Contractor.docx`
+                    }
+                  >
+                    Link Download File Pakta Integritas
+                  </Link>
+                </Box>
+              </Alert>
+              {ticketState === 'CREA' && (
+                <Alert severity="warning" variant="filled" sx={{ minWidth: '20rem', mt: '1rem', mb: '1rem' }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    {t('Please Download Justifikasi')}
+                    <Link href={`${process.env.REACT_APP_URL_LOC}/master/file/Form_VENDOR_LOCAL_JUSTIFIKASI.docx`}>
+                      Link Download File Form Justifikasi
+                    </Link>
+                  </Box>
+                </Alert>
+              )}
               <UploadButton
                 inputTypes={fileType}
                 iniData={initDataFile}
@@ -2170,6 +2901,8 @@ function RefactorFormVendorPage() {
                 ref={uploadButRef}
                 fileCheck={getValues('file_atth')}
                 t={t}
+                langCode={langCode}
+                ticketState={ticketState}
               />
             </AccordionDetails>
           </Accordion>
@@ -2188,16 +2921,13 @@ function RefactorFormVendorPage() {
                       name="vendorcode"
                       label="Vendor Code"
                       control={control}
-                      readOnly={!(ticketState === 'FINA' && UPDATE.FINA)}
+                      disabled={!(ticketState === 'FINA' && UPDATE.FINA)}
                       rules={{
                         required: t('Please insert this field'),
                         maxLength: {
                           value: 10,
                           message: 'Max character is 10',
-                        },
-                        minLength: {
-                          value: 10,
-                          message: 'Min character is 10',
+                          minLength: {},
                         },
                       }}
                     />
@@ -2206,21 +2936,22 @@ function RefactorFormVendorPage() {
               </AccordionDetails>
             </Accordion>
           )}
-
-          <Accordion expanded={expanded.panelRejectLog} onChange={handleExpanded('panelRejectLog')}>
-            <AccordionSummary
-              sx={{ pointerEvents: 'none' }}
-              expandIcon={<ExpandMoreIcon sx={{ pointerEvents: 'auto' }} />}
-            >
-              <Typography>{t('Rejection Log')}</Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Box sx={{ my: 5, backgroundColor: 'white', borderRadius: '12px' }}>
-                {/* <TextFieldComp name="remarks_readOnly" label="Rejection Remarks" control={control} readOnly={true} /> */}
-                <RejectLog ticket_id={loader_data.ticket_id} ticket_state={ticketState} />
-              </Box>
-            </AccordionDetails>
-          </Accordion>
+          {loader_data.logrej_counter !== null && (
+            <Accordion expanded={expanded.panelRejectLog} onChange={handleExpanded('panelRejectLog')}>
+              <AccordionSummary
+                sx={{ pointerEvents: 'none' }}
+                expandIcon={<ExpandMoreIcon sx={{ pointerEvents: 'auto' }} />}
+              >
+                <Typography>{t('Rejection Log')}</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Box sx={{ my: 5, backgroundColor: 'white', borderRadius: '12px' }}>
+                  {/* <TextFieldComp name="remarks_disabled" label="Rejection Remarks" control={control} disabled={true} /> */}
+                  <RejectLog ticket_id={loader_data.ticket_id} ticket_state={ticketState} />
+                </Box>
+              </AccordionDetails>
+            </Accordion>
+          )}
 
           <Box sx={{ width: '100%', display: 'flex', justifyContent: 'space-between' }}>
             <Box>
@@ -2238,19 +2969,6 @@ function RefactorFormVendorPage() {
               )}
             </Box>
             <Box>
-              {((ticketState === 'CREA' && UPDATE.CREA && loader_data.ticket_type !== 'PROC') ||
-                (ticketState === 'FINA' && UPDATE.FINA && loader_data.cur_pos !== 'MGR')) && (
-                <Button
-                  sx={{ height: 50, width: 100, margin: 2 }}
-                  color="error"
-                  variant="contained"
-                  onClick={() => {
-                    setModalopen(true);
-                  }}
-                >
-                  {t('Reject')}
-                </Button>
-              )}
               {UPDATE[ticketState] && loader_data.cur_pos !== 'MGR' && (
                 <Button
                   sx={{ height: 50, width: 120, margin: 2 }}
@@ -2267,20 +2985,38 @@ function RefactorFormVendorPage() {
                   {t('Save Draft')}
                 </Button>
               )}
+              {((ticketState === 'CREA' && UPDATE.CREA && loader_data.ticket_type !== 'PROC') ||
+                (ticketState === 'CREA' && UPDATE.CREA && loader_data.cur_pos === 'MGRPRC') ||
+                (ticketState === 'FINA' && UPDATE.FINA && loader_data.cur_pos !== 'MGR')) && (
+                <Button
+                  sx={{ height: 50, width: 100, margin: 2 }}
+                  color="error"
+                  variant="contained"
+                  onClick={() => {
+                    setModalopen(true);
+                  }}
+                >
+                  {t('Reject')}
+                </Button>
+              )}
               {UPDATE[ticketState] && loader_data.cur_pos !== 'MGR' && (
                 <Button
                   sx={{ height: 50, width: 100, margin: 2 }}
                   variant="contained"
                   type="submit"
-                  onClick={handleSubmit((value) => {
-                    // console.log(value);
-                    is_draft.current = false;
-                    if (isTender && ticketState === 'CREA' && isValid && bank_valid.current && file_valid.current) {
-                      setConfOpen(true);
-                    } else {
-                      submitForm(value);
-                    }
-                  })}
+                  onClick={() => {
+                    console.log(testSubmitForm());
+                    handleSubmit((value) => {
+                      // console.log(value);
+                      is_draft.current = false;
+                      if (isTender && ticketState === 'CREA' && isValid && bank_valid.current) {
+                        setConfOpen(true);
+                      } else {
+                        getValues;
+                        submitForm(value);
+                      }
+                    })();
+                  }}
                   disabled={btnClicked}
                 >
                   {t('Submit')}
@@ -2311,17 +3047,10 @@ function RefactorFormVendorPage() {
         <Backdrop
           sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1 }}
           open={
-            loading ||
-            (loadingCountry &&
-              loadingCurr &&
-              loadingBanks &&
-              loadingInitBank &&
-              loadingInitFile &&
-              loadingComp &&
-              loadingPayterm)
+            loading || loadingCountry || loadingCurr || loadingBanks || loadingInitFile || loadingComp || loadingPayterm
           }
         >
-          <CircularProgress color="inherit" />
+          <CircularProgress color="inherit" disableShrink />
         </Backdrop>
         <Dialog open={formStat.stat && formStat.type === 'success' && is_draft.current == false}>
           <Box
