@@ -60,7 +60,7 @@ function renderEditName(params) {
 }
 
 function EditToolbar(props) {
-  const { setVen_bank, setRowModesModel, idParent, isallow, isLocal } = props;
+  const { setVen_bank, setRowModesModel, idParent, isallow, isLocal, t } = props;
   const handleClick = () => {
     const id = randomId();
     setVen_bank((oldRows) => [
@@ -84,7 +84,7 @@ function EditToolbar(props) {
     isallow && (
       <GridToolbarContainer>
         <Button color="primary" startIcon={<AddIcon />} onClick={handleClick}>
-          Add
+          {t('Add')}
         </Button>
       </GridToolbarContainer>
     )
@@ -102,10 +102,14 @@ export default function VenBankTable({
   ticketState,
   isLoad,
   isLocal,
+  formfield,
+  apiTable,
+  setCurrentEdit,
   ...props
 }) {
   let covtData = [];
   const [ven_bank, setVen_bank] = useState([]);
+  const [rowModesModel, setRowModesModel] = useState({});
   const countriesData = countries?.map((item) => ({ value: item.value, label: item.value }));
   const DataGridBank = styled(DataGrid, { shouldForwardProp: (prop) => prop !== 'sx' })(() => ({
     '& .row-idle': {
@@ -135,9 +139,7 @@ export default function VenBankTable({
           bank_acc: item.bank_acc,
           bank_id: {
             value: item.bank_id,
-            label: `${ticketState === 'FINA' ? item.bank_key : item.bank_code} - ${item.bank_name} ${
-              item.source != null ? '(new)' : ''
-            }`,
+            label: `${item.bank_name} - ${item.bank_code}  ${item.source != null ? '(new)' : ''}`,
           },
           bank_curr: { value: item.bank_curr, label: item.bank_curr },
           country: { value: item.country, label: item.country },
@@ -173,7 +175,6 @@ export default function VenBankTable({
     sendDataParent(ven_bank);
   }, [ven_bank]);
 
-  const [rowModesModel, setRowModesModel] = useState({});
   const handleRowEditStop = (params, event) => {
     if (params.reason === GridRowEditStopReasons.rowFocusOut || params.reason === GridRowEditStopReasons.enterKeyDown) {
       event.defaultMuiPrevented = true;
@@ -181,9 +182,11 @@ export default function VenBankTable({
   };
   const handleEditClick = (row) => () => {
     setRowModesModel({ ...rowModesModel, [row.id]: { mode: GridRowModes.Edit } });
+    setCurrentEdit({ ...rowModesModel, [row.id]: { mode: GridRowModes.Edit } });
   };
   const handleSaveClick = (row) => () => {
     setRowModesModel({ ...rowModesModel, [row.id]: { mode: GridRowModes.View } });
+    setCurrentEdit({ ...rowModesModel, [row.id]: { mode: GridRowModes.View } });
   };
   const handleDeleteClick = (id) => () => {
     let prevData = [];
@@ -201,6 +204,13 @@ export default function VenBankTable({
   };
   const handleCancelClick = (id) => () => {
     setRowModesModel({
+      ...rowModesModel,
+      [id]: {
+        mode: GridRowModes.View,
+        ignoreModifications: true,
+      },
+    });
+    setCurrentEdit({
       ...rowModesModel,
       [id]: {
         mode: GridRowModes.View,
@@ -231,7 +241,13 @@ export default function VenBankTable({
     ven_bank.map((row) => {
       if (row.id === newRow.id) {
         if (row.isDb === true) {
-          prevData.push({ ...updatedRow, method: 'update' });
+          let updatedValue = [];
+          Object.keys(row).map((keys) => {
+            if (row[keys] !== newRow[keys]) {
+              updatedValue.push({ key: keys, value: newRow[keys] });
+            }
+          });
+          prevData.push({ ...updatedRow, method: 'update', updated: updatedValue });
         } else {
           prevData.push(updatedRow);
         }
@@ -288,7 +304,7 @@ export default function VenBankTable({
       preProcessEditCellProps: (params) => {
         let isError = false;
         if (params.props.value.match(/[a-zA-Z!@#$%^&*(),.?":{}|<>-]/g) !== null) {
-          isError = 'Field only accept numbers';
+          isError = props.t('Field only accept numbers');
         }
         return { ...params.props, error: isError };
       },
@@ -356,7 +372,7 @@ export default function VenBankTable({
             toolbar: EditToolbar,
           }}
           slotProps={{
-            toolbar: { setVen_bank, setRowModesModel, idParent, isallow, isLocal },
+            toolbar: { setVen_bank, setRowModesModel, idParent, isallow, isLocal, ...props },
           }}
           getRowClassName={(params) => {
             if (params.row.method == 'delete') {
@@ -369,6 +385,7 @@ export default function VenBankTable({
           getEstimatedRowHeight={() => 100}
           getRowHeight={() => 'auto'}
           sx={{ fontSize: '11pt' }}
+          apiRef={apiTable}
         />
       )}
     </>
