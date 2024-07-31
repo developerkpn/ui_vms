@@ -1,5 +1,6 @@
-import { FormControl, InputLabel, MenuItem, Select, FormHelperText } from '@mui/material';
+import { FormControl, InputLabel, MenuItem, Select, FormHelperText, Tooltip, ListSubheader } from '@mui/material';
 import { Controller } from 'react-hook-form';
+import { useEffect, useRef, useState } from 'react';
 
 export default function SelectComp({
   name,
@@ -11,46 +12,100 @@ export default function SelectComp({
   disabled,
   readOnly,
   valueovr,
+  tooltip,
+  t,
+  helperText,
 }) {
   const generateSingleOptions = () => {
-    return options.map((item) => {
-      return (
+    if (!Array.isArray(options)) {
+      let optionsHTML = [];
+      Object.keys(options).map((keys) => {
+        optionsHTML.push(<ListSubheader>{keys}</ListSubheader>);
+        options[keys].map((item) => {
+          optionsHTML.push(
+            <MenuItem key={item.comp_id} value={item.comp_id}>
+              {item.name} {`(${item.code})`}
+            </MenuItem>
+          );
+        });
+      });
+      return optionsHTML;
+    } else {
+      return options.map((item) => (
         <MenuItem key={item.value} value={item.value}>
           {item.label}
         </MenuItem>
-      );
-    });
+      ));
+    }
   };
+
+  const [openTooltip, setOpenTooltip] = useState(false);
+  const [runTimeout, setRunTimeout] = useState(false);
+  const timeoutId = useRef();
+
+  useEffect(() => {
+    if (runTimeout) {
+      timeoutId.current = setTimeout(() => {
+        console.log('tooltip opened');
+        setOpenTooltip(true);
+      }, 1000);
+      setRunTimeout(false);
+    }
+  }, [runTimeout]);
+
   return (
     <FormControl fullWidth disabled={disabled}>
       <Controller
         render={({ field: { onChange, value, ref }, fieldState: { error } }) => {
-          if (disabled) {
-            value = '';
+          // if (disabled) {
+          //   value = '';
+          // }
+          let helpertext;
+          if (t) {
+            helpertext = error ? t(error.message) : t(helperText);
+          } else {
+            helpertext = error ? error.message : helperText;
           }
           return (
             <>
               <InputLabel error={!!error}>{label}</InputLabel>
-              <Select
-                fullWidth
-                error={!!error}
-                label={label}
-                value={value}
-                inputRef={ref}
-                inputProps={{
-                  readOnly: readOnly,
-                  disabled: disabled,
-                }}
-                onChange={(e) => {
-                  onChange(e);
-                  if (onChangeovr != undefined) {
-                    onChangeovr(e.target.value);
-                  }
-                }}
+              <Tooltip
+                title={tooltip}
+                disableHoverListener={!tooltip}
+                followCursor
+                enterDelay={1000}
+                open={openTooltip}
               >
-                {generateSingleOptions()}
-              </Select>
-              <FormHelperText error={!!error}>{error?.message}</FormHelperText>
+                <div>
+                  <Select
+                    fullWidth
+                    error={!!error}
+                    label={label}
+                    value={value}
+                    inputRef={ref}
+                    onChange={(e) => {
+                      onChange(e);
+                      if (onChangeovr != undefined) {
+                        onChangeovr(e.target.value);
+                      }
+                    }}
+                    onMouseEnter={() => {
+                      setRunTimeout(true);
+                    }}
+                    onMouseLeave={() => {
+                      clearTimeout(timeoutId.current);
+                      setOpenTooltip(false);
+                    }}
+                    onOpen={() => {
+                      clearTimeout(timeoutId.current);
+                      setOpenTooltip(false);
+                    }}
+                  >
+                    {generateSingleOptions()}
+                  </Select>
+                </div>
+              </Tooltip>
+              <FormHelperText error={!!error}>{helpertext}</FormHelperText>
             </>
           );
         }}

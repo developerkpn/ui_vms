@@ -1,7 +1,7 @@
 import { FormControlLabel, Checkbox } from '@mui/material';
 import { Controller } from 'react-hook-form';
 
-export default function CheckboxComp({ name, control, label, readOnly, onChangeovr }) {
+export default function CheckboxComp({ name, control, label, readOnly, disabled, onChangeovr }) {
   return (
     <>
       <FormControlLabel
@@ -13,7 +13,7 @@ export default function CheckboxComp({ name, control, label, readOnly, onChangeo
               <Checkbox
                 {...props}
                 checked={props.value}
-                disabled={readOnly}
+                disabled={readOnly || disabled}
                 onChange={(e) => {
                   if (onChangeovr !== undefined) {
                     onChangeovr(e.target.checked);
