@@ -25,15 +25,30 @@ const Alert = forwardRef(function Alert(props, ref) {
 });
 
 const UploadButton = forwardRef(function UploadButton(
-  { inputTypes, onChildDataChange, iniData, idParent, allow, loadData, deleteFile, requiredFiles, fileCheck, t },
+  {
+    inputTypes,
+    onChildDataChange,
+    iniData,
+    idParent,
+    allow,
+    loadData,
+    deleteFile,
+    requiredFiles,
+    fileCheck,
+    langCode,
+    t,
+    ...props
+  },
   ref
 ) {
   const { session } = useSession();
   const [typeFile, setTypeFile] = useState(0);
+  const [openTooltip, setOpenTooltip] = useState(false);
   const [statUpload, setStatUpload] = useState({ stat: false, type: '', message: '' });
   const [fileStaged, setFileStaged] = useState([]);
   const inTypes = [{ key: 'pleaseSelect', value: 'Please Select Item' }, ...inputTypes];
   const [btnClicked, setBtnclick] = useState(false);
+  const [titleTooltip, setTooltip] = useState({ index: 0, value: '' });
   const theme = useTheme();
 
   const sendDataParent = (file_ven) => {
@@ -65,7 +80,11 @@ const UploadButton = forwardRef(function UploadButton(
       setFileStaged(covtData);
       sendDataParent(covtData);
     }
-  }, [iniData, t]);
+    setTooltip((prev) => ({
+      index: prev.index,
+      value: inTypes[prev.index].help,
+    }));
+  }, [iniData, t, inputTypes, langCode]);
 
   const handleClose = (event, reason) => {
     if (reason === 'clickaway') {
@@ -81,7 +100,11 @@ const UploadButton = forwardRef(function UploadButton(
   };
 
   const openFileGuide = () => {
-    window.open(`${process.env.REACT_APP_URL_BE}static/ATTACHMENT GUIDE VENDOR WEB.pdf`);
+    window.open(
+      props.ticketState === 'INIT'
+        ? `${process.env.REACT_APP_URL_BE}static/ATTACHMENT_GUIDE_VENDOR_WEB_(VENDOR).pdf`
+        : `${process.env.REACT_APP_URL_BE}static/ATTACHMENT_GUIDE_VENDOR_WEB_(USER).pdf`
+    );
   };
 
   const handleValidate = (event) => {
@@ -131,6 +154,12 @@ const UploadButton = forwardRef(function UploadButton(
   };
 
   const handleChangeType = (e) => {
+    if (inTypes[e.target.value].help && inTypes[e.target.value].help !== '') {
+      setTooltip({ index: e.target.value, value: inTypes[e.target.value].help });
+      setOpenTooltip(true);
+    } else {
+      setOpenTooltip(false);
+    }
     setTypeFile(e.target.value);
   };
   return (
@@ -139,7 +168,7 @@ const UploadButton = forwardRef(function UploadButton(
         <Box style={{ display: 'flex', gap: 3, alignContent: 'center' }}>
           <p style={{ margin: '0 0 0 0', color: 'red' }}>Maximal File Size : 10 Mb</p>
         </Box>
-        <Box sx={{ display: 'flex', gap: 3, alignContent: 'center' }}>
+        <Box sx={{ display: 'flex', gap: 3, alignContent: 'center', pb: 2 }}>
           <p>{t('Attachment File Guide')} :</p>
           <Tooltip title={<h4>Attachment File Guide</h4>}>
             <IconButton color="primary" onClick={openFileGuide}>
@@ -147,38 +176,49 @@ const UploadButton = forwardRef(function UploadButton(
             </IconButton>
           </Tooltip>
         </Box>
-        <Box sx={{ width: 500, height: 50, display: 'flex', alignItems: 'center' }}>
-          <FormControl fullWidth>
-            <InputLabel htmlFor="fileType" id="fileType-label">
-              <Typography>Type File</Typography>
-            </InputLabel>
-            <Select
-              label="Type File *"
-              id="fileType"
-              labelId="fileType-label"
-              onChange={handleChangeType}
-              value={typeFile}
+        <Box sx={{ height: 50, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', width: '100%', boxSizing: 'border-box' }}>
+            <FormControl sx={{ width: '20rem' }}>
+              <InputLabel htmlFor="fileType" id="fileType-label">
+                <Typography>Type File</Typography>
+              </InputLabel>
+              <Select
+                label="Type File *"
+                id="fileType"
+                labelId="fileType-label"
+                onChange={handleChangeType}
+                value={typeFile}
+                disabled={!allow}
+              >
+                {inTypes.map((item, idx) => (
+                  <MenuItem value={idx} key={item.key}>
+                    {item.value}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Tooltip
+              title={<p style={{ fontSize: '10pt' }}>{`${titleTooltip.value}`}</p>}
+              open={openTooltip}
+              placement="right"
             >
-              {inTypes.map((item, idx) => (
-                <MenuItem value={idx} key={item.key}>
-                  {item.value}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <LoadingButton
-            component="label"
-            startIcon={<UploadFileIcon />}
-            variant="outlined"
-            sx={{ height: 50, width: 300, margin: 2 }}
-            onClick={handleValidate}
-            disabled={!allow || (fileCheck && fileCheck[inTypes[typeFile].key] !== undefined)}
-            loading={btnClicked}
-            ref={ref}
-          >
-            Upload
-            <input type="file" id="fileUpload" name="fileUpload" multiple hidden onChange={handleUpload} />
-          </LoadingButton>
+              <span>
+                <LoadingButton
+                  component="label"
+                  startIcon={<UploadFileIcon />}
+                  variant="outlined"
+                  sx={{ height: 50, width: 300 }}
+                  onClick={handleValidate}
+                  disabled={!allow || (fileCheck && fileCheck[inTypes[typeFile].key] !== undefined)}
+                  loading={btnClicked}
+                  ref={ref}
+                >
+                  Upload
+                  <input type="file" id="fileUpload" name="fileUpload" multiple hidden onChange={handleUpload} />
+                </LoadingButton>
+              </span>
+            </Tooltip>
+          </div>
         </Box>
         <Snackbar
           open={statUpload.stat}
