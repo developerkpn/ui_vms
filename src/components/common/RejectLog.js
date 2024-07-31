@@ -1,4 +1,4 @@
-import { Box, Fade, IconButton, Popper, Tooltip } from '@mui/material';
+import { Box, Fade, IconButton, Popper, Tooltip, TextField } from '@mui/material';
 import { useState, useEffect, useRef, forwardRef } from 'react';
 import useAxiosPrivate from '../../hooks/useAxiosPrivate';
 import axios from 'axios';
@@ -17,7 +17,9 @@ const LogCard = forwardRef(({ remark, date, is_field, who }, ref) => {
       >
         <div>{who}</div> {date}
       </div>
-      <Box sx={{ overflowWrap: 'break-word', p: 3 }}>{remark}</Box>
+      <Box sx={{ overflowWrap: 'break-word', p: 3 }}>
+        <TextField value={remark} fullWidth disabled multiline />
+      </Box>
     </Box>
   );
 });
@@ -34,12 +36,14 @@ const RejectLog = ({ ticket_id, ticket_state }) => {
   });
 
   useEffect(() => {
+    const controller = new AbortController();
     (async () => {
       try {
         const { data } = await axiosPrivate.get(
           `/ticket/rejectlog?ticket_id=${ticket_id}&ticket_state=${ticket_state}`,
           {
             withCredentials: true,
+            signal: controller.signal,
           }
         );
         if (data.length > 0) {
@@ -50,6 +54,9 @@ const RejectLog = ({ ticket_id, ticket_state }) => {
         console.error(error);
       }
     })();
+    return () => {
+      controller.abort();
+    };
   }, [ticket_id, ticket_state]);
 
   return (
