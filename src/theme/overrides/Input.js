@@ -8,13 +8,20 @@ export default function Input(theme) {
       styleOverrides: {
         root: {
           '&.Mui-disabled': {
-            '& svg': { color: theme.palette.text.disabled },
+            '& svg': { color: theme.palette.text.primary },
+            color: theme.palette.text.primary,
           },
         },
         input: {
           '&::placeholder': {
             opacity: 1,
             color: theme.palette.text.disabled,
+          },
+          '&.MuiOutlinedInput-input': {
+            '&.Mui-disabled': {
+              color: theme.palette.grey[600],
+              WebkitTextFillColor: theme.palette.grey[600],
+            },
           },
         },
       },
@@ -38,9 +45,6 @@ export default function Input(theme) {
           '&.Mui-focused': {
             backgroundColor: theme.palette.action.focus,
           },
-          '&.Mui-disabled': {
-            backgroundColor: theme.palette.action.disabledBackground,
-          },
         },
         underline: {
           '&:before': {
@@ -61,6 +65,24 @@ export default function Input(theme) {
             },
           },
         },
+      },
+    },
+    MuiInputLabel: {
+      styleOverrides: {
+        root: {
+          color: theme.palette.grey[800],
+          '&.Mui-disabled': {
+            color: theme.palette.text.primary,
+          },
+        },
+        shrink: {
+          fontSize: '12pt',
+        },
+      },
+    },
+    input: {
+      '&.Mui-disabled': {
+        color: theme.palette.text.primary,
       },
     },
   };

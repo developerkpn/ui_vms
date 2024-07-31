@@ -38,8 +38,9 @@ export default function ListUserGroup() {
   };
 
   useEffect(() => {
+    const controller = new AbortController();
     const getSecurityGroup = async () => {
-      const dataSec = await axiosPrivate.get(`/user/lssecmtx`);
+      const dataSec = await axiosPrivate.get(`/user/lssecmtx`, { signal: controller.signal });
       const dataView = dataSec.data.data.map((item) => ({
         id: item.user_group_id,
         user_group: item.user_group_name,
@@ -48,6 +49,9 @@ export default function ListUserGroup() {
       setSec(dataView);
     };
     getSecurityGroup();
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   const buttonNewGroup = () => {

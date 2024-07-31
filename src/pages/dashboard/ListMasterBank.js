@@ -193,29 +193,47 @@ export default function ListMasterBank() {
   };
 
   useEffect(() => {
+    const controller = new AbortController();
     setRows({ ...rows, isLoading: true });
     const getBankdt = async () => {
-      const getBankdata = await axiosPrivate.post(`/master/ssrbank`, params);
-      setRows({ isLoading: false, rows: getBankdata.data.data });
-      setTotal((prev) => (getBankdata.data.allrow !== undefined ? getBankdata.data.allrow : prev));
+      try {
+        const getBankdata = await axiosPrivate.post(`/master/ssrbank`, params, {
+          signal: controller.signal,
+        });
+        setRows({ isLoading: false, rows: getBankdata.data.data });
+        setTotal((prev) => (getBankdata.data.allrow !== undefined ? getBankdata.data.allrow : prev));
+      } catch (err) {
+        console.error(err);
+      }
     };
     getBankdt();
+    return () => {
+      controller.abort();
+    };
   }, [params, btnClicked]);
 
   useEffect(() => {
+    const controller = new AbortController();
     const dynaCountry = async () => {
       try {
-        const country = await axios.post(`${process.env.REACT_APP_URL_LOC}/master/country`);
+        const country = await axios.post(
+          `${process.env.REACT_APP_URL_LOC}/master/country`,
+          {},
+          { signal: controller.signal }
+        );
         const result = country.data.data;
         countries.current = result.data.map((item) => ({
           value: item.country_code,
           label: `${item.country_code} - ${item.country_name}`,
         }));
       } catch (err) {
-        alert(err.stack);
+        console.error(err);
       }
     };
     dynaCountry();
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   return (

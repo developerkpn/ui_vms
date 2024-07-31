@@ -79,9 +79,10 @@ export default function FormUserPage() {
   const [isMgr, setisMgr] = useState(false);
 
   useEffect(() => {
+    const controller = new AbortController();
     const getUsergrp = async () => {
       try {
-        const getUsrgrp = await axiosPrivate.get(`/user/lssecmtx`);
+        const getUsrgrp = await axiosPrivate.get(`/user/lssecmtx`, { signal: controller.signal });
         const dataUsrgrp = getUsrgrp.data.data.map((data) => {
           return { value: data.user_group_id, label: data.user_group_name };
         });
@@ -91,12 +92,18 @@ export default function FormUserPage() {
       }
     };
     getUsergrp();
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
     const getRole = async () => {
       try {
-        const getRole = await axiosPrivate.get(`/user/roles`);
+        const getRole = await axiosPrivate.get(`/user/roles`, {
+          signal: controller.signal,
+        });
         const dataRole = getRole.data.data.map((data) => {
           return { value: data.id_role, label: data.role };
         });
@@ -106,9 +113,13 @@ export default function FormUserPage() {
       }
     };
     getRole();
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
     const getMgr = async () => {
       try {
         const getManager = await axiosPrivate.get(`/user/mgrs`);
@@ -121,6 +132,9 @@ export default function FormUserPage() {
       }
     };
     getMgr();
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   useEffect(() => {

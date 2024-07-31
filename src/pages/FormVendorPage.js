@@ -185,10 +185,15 @@ export default function FormVendorPage() {
 
   useEffect(() => {
     setChangectry(true);
+    const controller = new AbortController();
     const getTimeout = setTimeout(() => {
       const dynaCity = async () => {
         try {
-          const cities = await axios.post(`${process.env.REACT_APP_URL_LOC}/master/city`, { countryId: country_ven });
+          const cities = await axios.post(
+            `${process.env.REACT_APP_URL_LOC}/master/city`,
+            { countryId: country_ven },
+            { signal: controller.signal }
+          );
           const result = cities.data.data;
           setCities(result.data);
           setChangectry(false);
@@ -198,13 +203,21 @@ export default function FormVendorPage() {
       };
       dynaCity();
     }, 500);
-    return () => clearTimeout(getTimeout);
+    return () => {
+      clearTimeout(getTimeout);
+      controller.abort();
+    };
   }, [country_ven]);
 
   useEffect(() => {
+    const controller = new AbortController();
     const dynaCountry = async () => {
       try {
-        const country = await axios.post(`${process.env.REACT_APP_URL_LOC}/master/country`);
+        const country = await axios.post(
+          `${process.env.REACT_APP_URL_LOC}/master/country`,
+          {},
+          { signal: controller.signal }
+        );
         const result = country.data.data;
         setCountries(result.data);
         setCountryLoad(true);

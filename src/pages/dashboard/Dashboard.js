@@ -97,12 +97,17 @@ export default function MiniDrawer() {
   const [navMenu, setNavmenu] = useState('');
 
   useEffect(() => {
+    const controller = new AbortController();
     if (Cookies.get('accessToken')) {
       const getAuthorization = async () => {
         try {
-          const getAuth = await axiosPrivate.post(`/user/authorization`, {
-            group_id: session.groupid,
-          });
+          const getAuth = await axiosPrivate.post(
+            `/user/authorization`,
+            {
+              group_id: session.groupid,
+            },
+            { signal: controller.signal }
+          );
           setSession({ ...session, ['permission']: getAuth.data });
         } catch (error) {
           console.error(error);
@@ -110,6 +115,9 @@ export default function MiniDrawer() {
       };
       getAuthorization();
     }
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   const handleDrawerOpen = () => {
@@ -178,7 +186,10 @@ export default function MiniDrawer() {
           onUpNavMenu={updateNavmenu}
         />
       </Drawer>
-      <Box component="main" sx={{ flexGrow: 1, p: 3, height: 600 }}>
+      <Box
+        component="main"
+        sx={{ flexGrow: 1, p: 3, height: 530, width: open ? `calc(94% - ${drawerWidth}px)` : '94%' }}
+      >
         <DrawerHeader />
         <Outlet />
       </Box>

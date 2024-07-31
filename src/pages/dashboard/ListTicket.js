@@ -25,6 +25,7 @@ import { useSession } from 'src/provider/sessionProvider';
 import { useNavigate } from 'react-router-dom';
 import ProgressStat from 'src/components/common/ProgressStat';
 import { LoadingButton } from '@mui/lab';
+import moment from 'moment';
 
 // function loaderTicket(filterAct) {
 //   axios.defaults.headers.common.Authorization =
@@ -34,10 +35,7 @@ import { LoadingButton } from '@mui/lab';
 // }
 
 const overrides = {
-  '& .MuiDataGrid-main': {
-    width: 0,
-    minWidth: '95%',
-  },
+  '& .MuiDataGrid-main': {},
 };
 
 function RefreshTable(props) {
@@ -106,7 +104,9 @@ export default function ListTicket() {
         id: item.token,
         is_active: item.is_active,
         ticket_num: item.ticket_id,
-        date_ticket: new Date(item.created_at),
+        updated_at: moment(item.updated_at).format('DD/MM/YYYY T HH:mm:ss'),
+        updated_by: item.updated_by,
+        date_ticket: moment(item.created_at).format('DD/MM/YYYY T HH:mm:ss'),
         assignee: item.email,
         cur_pos: item.cur_pos,
         status_ticket: item.status_ticket,
@@ -129,6 +129,9 @@ export default function ListTicket() {
     if (refreshBtn) {
       tickets(controller);
     }
+    return () => {
+      controller.abort();
+    };
   }, [url, filterAct, deleted, refreshBtn]);
 
   useEffect(() => {
@@ -241,43 +244,55 @@ export default function ListTicket() {
       field: 'ticket_num',
       type: 'string',
       headerName: 'Ticket Number',
-      flex: 0.124,
+      width: 150,
+    },
+    {
+      field: 'updated_at',
+      type: 'string',
+      headerName: 'Updated Date',
+      width: 180,
+    },
+    {
+      field: 'updated_by',
+      type: 'string',
+      headerName: 'Updated By',
+      width: 150,
     },
     {
       field: 'date_ticket',
-      type: 'date',
-      flex: 0.1,
-      headerName: 'Date',
+      type: 'string',
+      headerName: 'Created Date',
+      width: 180,
     },
     {
       field: 'assignee',
       type: 'string',
-      flex: 0.18,
       headerName: 'Assignee',
+      width: 250,
     },
     {
       field: 'vendor_name',
       type: 'string',
-      flex: 0.2,
       headerName: 'Vendor Name',
+      width: 250,
     },
     {
       field: 'vendor_code',
       type: 'string',
-      flex: 0.15,
       headerName: 'Vendor Code',
+      width: 150,
     },
     {
       field: 'cur_pos',
       type: 'string',
-      flex: 0.1,
       headerName: 'Position',
+      width: 150,
     },
     {
       field: 'status_ticket',
       type: 'string',
-      flex: 0.123,
       headerName: 'Status',
+      width: 150,
       renderCell: (item) => {
         let status = item.row.status_ticket;
         let severity;
@@ -305,8 +320,8 @@ export default function ListTicket() {
     },
     {
       field: 'action',
-      flex: 0.1,
       type: 'actions',
+      width: 150,
       renderCell: (item) => {
         let Buttons = [];
         if (item.row.is_active == true) {
@@ -409,11 +424,11 @@ export default function ListTicket() {
   ];
 
   return (
-    <>
+    <Box sx={{ height: '100%', width: '100%' }}>
       {ticket !== undefined ? (
         <>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+            <Box sx={{ display: 'flex', gap: 2, width: '100%' }}>
               <FormControl>
                 <Select
                   sx={{ width: '10em' }}
@@ -442,14 +457,17 @@ export default function ListTicket() {
               </Button>
             )}
           </Box>
-          <DataGrid
-            sx={overrides}
-            rows={ticket}
-            columns={columnTable}
-            disableColumnFilter
-            disableColumnSelector
-            disableDensitySelector
-          />
+          <Box sx={{ width: '100%', height: '100%' }}>
+            <DataGrid
+              sx={overrides}
+              rows={ticket}
+              columns={columnTable}
+              disableColumnFilter
+              disableColumnSelector
+              disableDensitySelector
+              hideFooterPagination
+            />
+          </Box>
         </>
       ) : (
         <Box>
@@ -481,6 +499,6 @@ export default function ListTicket() {
       <Backdrop sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer - 2 }} open={loader}>
         <CircularProgress color="inherit" />
       </Backdrop>
-    </>
+    </Box>
   );
 }

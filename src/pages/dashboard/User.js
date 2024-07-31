@@ -38,13 +38,19 @@ export default function User() {
   };
 
   useEffect(() => {
+    const controller = new AbortController();
     const getAllDataUser = async () => {
-      const getUser = await axiosPrivate.get(`/user/`);
+      const getUser = await axiosPrivate.get(`/user/`, {
+        signal: controller.signal,
+      });
       // console.log(getUser.data.data);
       setAllUsr(getUser.data.data);
       setCollen(Object.entries(getUser.data.data[0]).length);
     };
     getAllDataUser();
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   const buttonAction = (action, id) => {

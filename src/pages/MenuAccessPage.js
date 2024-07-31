@@ -49,12 +49,20 @@ export default function MenuAccessPage() {
   const dataMenu = dtMenu;
   const groupid = searchParams.get('idgroup');
   useEffect(() => {
+    const controller = new AbortController();
     const getSecMtx = async () => {
-      const secMtx = await axiosPrivate.post(`/user/secmtx`, {
-        groupid: groupid ? groupid : '',
-      });
+      const secMtx = await axiosPrivate.post(
+        `/user/secmtx`,
+        {
+          groupid: groupid ? groupid : '',
+        },
+        { signal: controller.signal }
+      );
       reset({ groupname: secMtx.data.name });
       setdtMenu(secMtx.data.data);
+      return () => {
+        controller.abort();
+      };
     };
     getSecMtx();
   }, []);

@@ -23,7 +23,7 @@ export default function ListReqStat() {
   const [btnClicked, setBtnclicked] = useState();
   const columns = ['Ticket Number', 'Date', 'Requestor', 'Request', 'Vendor Code', 'Vendor Name'];
   const { session } = useSession();
-  const [btnState, setBtn] = useState(['accept', 'reject']);
+  const [btnState, setBtn] = useState(['accept']);
   const [refreshBtn, setRefresh] = useState(true);
   const [reload, setReload] = useState(true);
   const [openValid, setOpenval] = useState(false);
@@ -37,6 +37,22 @@ export default function ListReqStat() {
     type: 'success',
     message: '',
   });
+
+  const getTicket = async (controller) => {
+    try {
+      const fetchTicket = await axiosPrivate.get(`/reqstat/show?is_active=${filterAct}`, {
+        signal: controller.signal,
+      });
+      setTicket(fetchTicket.data.data);
+    } catch (error) {
+      console.log(error);
+      // alert(error);
+    } finally {
+      if (refreshBtn) {
+        setRefresh(false);
+      }
+    }
+  };
 
   const handleSnackClose = (e, reason) => {
     if (reason === 'clickaway') {
@@ -57,6 +73,7 @@ export default function ListReqStat() {
 
   const handleProcessReq = async (action, id) => {
     setBtnclicked(true);
+    const controller = new AbortController();
     try {
       const jsonSend = {
         ticketid: id,
@@ -64,13 +81,14 @@ export default function ListReqStat() {
         action: action,
       };
       const processReq = await axiosPrivate.post(`/reqstat/process`, jsonSend);
+      // await getTicket(controller);
+      setRefresh(true);
       setFormstat({
         stat: true,
         type: 'success',
         message: processReq.data.message,
       });
       setOpenval(false);
-      setReload(!reload);
       setBtnclicked(false);
     } catch (error) {
       setBtnclicked(false);
@@ -83,26 +101,20 @@ export default function ListReqStat() {
   };
 
   useEffect(() => {
-    const getTicket = async () => {
-      try {
-        const fetchTicket = await axiosPrivate.get(`/reqstat/show?is_active=${filterAct}`);
-        setTicket(fetchTicket.data.data);
-        setRefresh(false);
-      } catch (error) {
-        console.log(error);
-        alert(error);
-        setRefresh(false);
-      }
-    };
+    console.log(refreshBtn);
+    const controller = new AbortController();
     if (filterAct === false) {
       setBtn([]);
     } else {
-      setBtn(['accept', 'reject']);
+      setBtn(['accept']);
     }
-    if (refreshBtn) {
-      getTicket();
-    }
-  }, [reload, filterAct, refreshBtn]);
+
+    getTicket(controller);
+
+    return () => {
+      controller.abort();
+    };
+  }, [filterAct, refreshBtn]);
 
   useEffect(() => {
     setColLength(columns.length + 1);
