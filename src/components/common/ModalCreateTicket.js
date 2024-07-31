@@ -9,6 +9,8 @@ import {
   FormControl,
   InputAdornment,
   Box,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import { Link } from '@mui/icons-material';
 import axios from 'axios';
@@ -24,6 +26,19 @@ export default function ModalCreateTicket({ open, onClose, linkUrl, urlSet, popU
   const navigate = useNavigate();
   const [links, setLinks] = useState(linkUrl);
   const [btnClicked, setBtnclicked] = useState(false);
+  const [formStat, setFormStat] = useState({
+    stat: false,
+    message: '',
+    type: 'success',
+  });
+
+  const handleSnackClose = () => {
+    setFormStat({
+      stat: false,
+      message: '',
+      type: 'success',
+    });
+  };
 
   useEffect(() => {
     setLinks(linkUrl);
@@ -47,12 +62,15 @@ export default function ModalCreateTicket({ open, onClose, linkUrl, urlSet, popU
       const createdTicket = response.data;
       if (param === 'VENDOR') {
         urlSet(`${location.protocol}/${location.host}/${createdTicket.data.link}`);
+        setFormStat({
+          stat: true,
+          message: 'Success generate ticket',
+          type: 'success',
+        });
+        setBtnclicked(false);
       } else {
-        onClose();
         navigate(`../form/${createdTicket.data.token}`);
       }
-      alert('success');
-      setBtnclicked(false);
     } catch (err) {
       setBtnclicked(false);
       alert(err);
@@ -68,44 +86,60 @@ export default function ModalCreateTicket({ open, onClose, linkUrl, urlSet, popU
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xl">
-      <Box
-        sx={{
-          width: 800,
-          height: 500,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
+    <>
+      <Snackbar
+        open={formStat.stat}
+        onClose={handleSnackClose}
+        autoHideDuration={3000}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
       >
-        <Typography sx={{ mb: 7 }} variant="h5">
-          Create New Form Request Ticket
-        </Typography>
-        <LoadingButton sx={{ height: 80, width: 400, mb: 2 }} onClick={handlegenticket('VENDOR')} loading={btnClicked}>
-          By Vendor
-        </LoadingButton>
-        <LoadingButton sx={{ height: 80, width: 400, my: 2 }} onClick={handlegenticket('PROC')} loading={btnClicked}>
-          By User
-        </LoadingButton>
-        <FormControl sx={{ mt: 5, mb: 1, width: 780 }} variant="outlined">
-          <InputLabel htmlFor="link-url-form-label">Link Form</InputLabel>
-          <OutlinedInput
-            id="link-url-form"
-            endAdornment={
-              <InputAdornment position="end">
-                <IconButton>
-                  <Link />
-                </IconButton>
-              </InputAdornment>
-            }
-            label="Password"
-            value={links}
-            readOnly={true}
-            onClick={handleClickLink}
-          />
-        </FormControl>
-      </Box>
-    </Dialog>
+        <Alert severity={formStat.type} onClose={handleSnackClose} variant="filled">
+          {formStat.message}
+        </Alert>
+      </Snackbar>
+      <Dialog open={open} onClose={onClose} maxWidth="xl">
+        <Box
+          sx={{
+            width: 800,
+            height: 500,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Typography sx={{ mb: 7 }} variant="h5">
+            Create New Form Request Ticket
+          </Typography>
+          <LoadingButton
+            sx={{ height: 80, width: 400, mb: 2 }}
+            onClick={handlegenticket('VENDOR')}
+            loading={btnClicked}
+          >
+            By Vendor
+          </LoadingButton>
+          <LoadingButton sx={{ height: 80, width: 400, my: 2 }} onClick={handlegenticket('PROC')} loading={btnClicked}>
+            By User
+          </LoadingButton>
+          <FormControl sx={{ mt: 5, mb: 1, width: 780 }} variant="outlined">
+            <InputLabel htmlFor="link-url-form-label">Link Form</InputLabel>
+            <OutlinedInput
+              id="link-url-form"
+              endAdornment={
+                <InputAdornment position="end">
+                  <IconButton>
+                    <Link />
+                  </IconButton>
+                </InputAdornment>
+              }
+              label="Password"
+              value={links}
+              readOnly={true}
+              onClick={handleClickLink}
+            />
+          </FormControl>
+        </Box>
+      </Dialog>
+    </>
   );
 }
