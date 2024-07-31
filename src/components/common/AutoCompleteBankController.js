@@ -55,7 +55,9 @@ export default function AutoCompleteBankController(params) {
         setModalopen={modalAccess}
         typepost={'insert'}
         bankname={bankName}
-        country_code={country}
+        country_code={country?.value}
+        setValue={params?.setValue}
+        fieldName={`bank.${params.index}.bank_id`}
         limited={true}
         params={params}
       />

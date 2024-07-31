@@ -5,7 +5,6 @@ import AutoCompleteSelect from './AutoCompleteSelect';
 import { useEffect, useRef, useState } from 'react';
 import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
 import axios from 'axios';
-import { useGridApiContext } from '@mui/x-data-grid';
 import { useSession } from 'src/provider/sessionProvider';
 import { LoadingButton } from '@mui/lab';
 
@@ -22,8 +21,9 @@ export default function ModalCreateBank({
   setModalopen,
   typepost,
   params,
+  setValue,
+  fieldName,
 }) {
-  const apiRef = useGridApiContext();
   const { session } = useSession();
   const axiosPrivate = useAxiosPrivate();
   const defaultvalue = {
@@ -39,6 +39,7 @@ export default function ModalCreateBank({
   const [btnClicked, setBtnclicked] = useState(false);
 
   useEffect(() => {
+    const controller = new AbortController();
     const dynaCountry = async () => {
       try {
         const country = await axiosPrivate.post(`/master/country`);
@@ -72,10 +73,10 @@ export default function ModalCreateBank({
       });
       const newValue = {
         value: submitForm.data.id,
-        label: `${submitForm.data.swiftcode} - ${submitForm.data.name} (new)`,
+        label: `${submitForm.data.name} (${submitForm.data.swiftcode}) -  (new)`,
       };
+      setValue(fieldName, newValue);
       const { id, row, field } = params;
-      apiRef.current.setEditCellValue({ id, field, value: newValue });
       setModalopen(false);
       setBtnclicked(false);
     } catch (error) {
