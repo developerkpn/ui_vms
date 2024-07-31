@@ -17,9 +17,22 @@ export default function VenFileTable({ initData, upTable, isallow, isLoad, delFi
   const [loaderOpen, setLoaderopen] = useState(false);
   const [fetchStat, setFetchStat] = useState({});
   const axiosPrivate = useAxiosPrivate();
+  // console.log(isallow);
 
   useEffect(() => {
-    setFile_ven(initData.map((item) => ({ ...item, desc_file: props.t(item.desc_file) })));
+    setFile_ven(
+      initData
+        .map((item) => ({ ...item, desc_file: props.t(item.desc_file) }))
+        .sort((a, b) => {
+          if (a.file_type < b.file_type) {
+            return -1;
+          }
+          if (a.file_type > b.file_type) {
+            return 1;
+          }
+          return 0;
+        })
+    );
   }, [initData, props.t]);
 
   // console.log(file_ven);
@@ -53,51 +66,67 @@ export default function VenFileTable({ initData, upTable, isallow, isLoad, delFi
     setSbarOpen(false);
   };
 
-  const handleDeleteClick = (id) => {
+  const handleDeleteClick = async ({ id, row }) => {
     let prevData = [];
-    file_ven.map(async (item) => {
+    console.log;
+    if (confirm(`Are you sure want to delete ${row.file_name}`)) {
       try {
-        if (item.id === id) {
-          if (item.source == 'ven_file_atth') {
-            prevData.push({ ...item, method: 'delete' });
-            // setFetchStat({
-            //   stat: 'success',
-            //   message: `file ${item.file_name} staged to be deleted`,
-            // });
-            // onDeleteSBar();
-          } else {
-            const deletedFile = await fetch(`${process.env.REACT_APP_URL_LOC}/vendor/file`, {
-              method: 'DELETE',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ id: id }),
-            });
-            const response = await deletedFile.json();
-            if (response.status == 200) {
-              setFetchStat({
-                stat: 'success',
-                message: `temporary file ${response.data.file_name} deleted`,
+        for (const item of file_ven) {
+          if (item.id === id) {
+            if (item.source == 'ven_file_atth') {
+              const deletedFile = await fetch(`${process.env.REACT_APP_URL_LOC}/vendor/delfile`, {
+                method: 'DELETE',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ id: id }),
               });
-              onDeleteSBar();
+              const response = await deletedFile.json();
+              if (response.status == 200) {
+                setFetchStat({
+                  stat: 'success',
+                  message: `file ${response.data.file_name} deleted`,
+                });
+                onDeleteSBar();
+              } else {
+                throw new Error(response.message);
+              }
             } else {
-              throw Error(response.message);
+              const deletedFile = await fetch(`${process.env.REACT_APP_URL_LOC}/vendor/file`, {
+                method: 'DELETE',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ id: id }),
+              });
+              const response = await deletedFile.json();
+              if (response.status == 200) {
+                setFetchStat({
+                  stat: 'success',
+                  message: `temporary file ${response.data.file_name} deleted`,
+                });
+                onDeleteSBar();
+              } else {
+                throw new Error(response.message);
+              }
             }
+            delFile(item);
+          } else {
+            prevData.push(item);
           }
-          delFile(item);
-        } else {
-          prevData.push(item);
         }
-      } catch (err) {
+        setFile_ven(prevData);
+        upTable(prevData);
+      } catch (error) {
+        console.error(error);
         setFetchStat({
           stat: 'error',
           message: 'error deleting item',
         });
         onDeleteSBar();
       }
-    });
-    setFile_ven(prevData);
-    upTable(prevData);
+    }
+
     // console.log(file_ven);
   };
 
@@ -183,7 +212,7 @@ export default function VenFileTable({ initData, upTable, isallow, isLoad, delFi
                     key={`delete-${item.id}`}
                     icon={<DeleteIcon />}
                     label={props.t('Delete')}
-                    onClick={() => handleDeleteClick(item.id)}
+                    onClick={() => handleDeleteClick(item)}
                   />
                 </Tooltip>,
                 <Tooltip title={props.t('Download')} placement="top">
@@ -227,7 +256,7 @@ export default function VenFileTable({ initData, upTable, isallow, isLoad, delFi
         },
       },
     ],
-    [props.t]
+    [props.t, isallow, file_ven]
   );
 
   return (
