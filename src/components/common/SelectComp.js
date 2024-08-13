@@ -20,7 +20,7 @@ export default function SelectComp({
     if (!Array.isArray(options)) {
       let optionsHTML = [];
       Object.keys(options).map((keys) => {
-        optionsHTML.push(<ListSubheader>{keys}</ListSubheader>);
+        optionsHTML.push(<ListSubheader key={keys}>{keys}</ListSubheader>);
         options[keys].map((item) => {
           optionsHTML.push(
             <MenuItem key={item.comp_id} value={item.comp_id}>

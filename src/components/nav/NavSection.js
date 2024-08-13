@@ -4,8 +4,9 @@ import { List } from '@mui/material';
 import Collapse from '@mui/material/Collapse';
 import NavCollapse from './NavCollapse';
 import { useSession } from 'src/provider/sessionProvider';
+import React from 'react';
 
-export default function NavSection({ menu, collapsemen, navmen, onUpNavCol, onUpNavMenu }) {
+function NavSection({ menu, collapsemen, navmen, onUpNavCol, onUpNavMenu }) {
   const onClickNavHead = (item) => {
     onUpNavCol(item);
   };
@@ -60,3 +61,5 @@ export default function NavSection({ menu, collapsemen, navmen, onUpNavCol, onUp
     </List>
   );
 }
+
+export default React.memo(NavSection);

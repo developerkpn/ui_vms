@@ -1,15 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { styled, useTheme } from '@mui/material/styles';
 import SvgIcon from '@mui/material/SvgIcon';
 import Box from '@mui/material/Box';
 import MuiDrawer from '@mui/material/Drawer';
 import MuiAppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
-import CssBaseline from '@mui/material/CssBaseline';
 import Typography from '@mui/material/Typography';
 import Divider from '@mui/material/Divider';
 import IconButton from '@mui/material/IconButton';
-import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import AvatarComp from 'src/components/common/AvatarComp';
@@ -129,7 +127,7 @@ export default function MiniDrawer() {
     setNavcol({ ...navCol, state: false });
   };
 
-  const updateNavcol = (menu) => {
+  const updateNavcol = useCallback((menu) => {
     setNavcol((prevNav) => {
       setOpen(prevNav.head != menu ? true : !prevNav.state);
       return {
@@ -137,11 +135,11 @@ export default function MiniDrawer() {
         state: prevNav.head != menu ? true : !prevNav.state,
       };
     });
-  };
+  }, []);
 
-  const updateNavmenu = (menu) => {
+  const updateNavmenu = useCallback((menu) => {
     setNavmenu(menu);
-  };
+  }, []);
 
   if (Cookies.get('accessToken') === undefined || Cookies.get('accessToken') === '') {
     return <Navigate to="/login" />;
@@ -149,7 +147,6 @@ export default function MiniDrawer() {
 
   return (
     <Box sx={{ display: 'flex' }}>
-      <CssBaseline />
       <AppBar position="fixed" open={open}>
         <Toolbar>
           <IconButton

@@ -1,32 +1,22 @@
 import axios from 'axios';
-import { useContext, createContext, useState, useEffect, useMemo } from 'react';
+import { useContext, createContext, useState, useEffect, useMemo, useCallback } from 'react';
 import Cookies from 'js-cookie';
 
 const SessionContext = createContext();
 
 const SessionProvider = ({ children }) => {
   const [session, setSession_] = useState({
-    fullname:
-      Cookies.get('fullname') === undefined || Cookies.get('fullname') === 'undefined' ? '' : Cookies.get('fullname'),
-    username:
-      Cookies.get('username') === undefined || Cookies.get('username') === 'undefined' ? '' : Cookies.get('username'),
-    email: Cookies.get('email') === undefined || Cookies.get('email') === 'undefined' ? '' : Cookies.get('email'),
-    accessToken:
-      Cookies.get('accessToken') === undefined || Cookies.get('accessToken') === 'undefined'
-        ? ''
-        : Cookies.get('accessToken'),
-    user_id:
-      Cookies.get('user_id') === undefined || Cookies.get('user_id') === 'undefined' ? '' : Cookies.get('user_id'),
-    role: Cookies.get('role') === undefined || Cookies.get('role') === 'undefined' ? '' : Cookies.get('role'),
-    permission:
-      localStorage.getItem('permission') === undefined || localStorage.getItem('permission') === undefined
-        ? {}
-        : JSON.parse(localStorage.getItem('permission')),
-    groupid:
-      Cookies.get('groupid') === undefined || Cookies.get('groupid') === 'undefined' ? '' : Cookies.get('groupid'),
+    fullname: Cookies.get('fullname') ?? '',
+    username: Cookies.get('username') ?? '',
+    email: Cookies.get('email') ?? '',
+    accessToken: Cookies.get('accessToken') ?? '',
+    user_id: Cookies.get('user_id') ?? '',
+    role: Cookies.get('role') ?? '',
+    permission: JSON.parse(localStorage.getItem('permission')) ?? {},
+    groupid: Cookies.get('groupid') ?? '',
   });
 
-  const setSession = (data) => {
+  const setSession = useCallback((data) => {
     Cookies.set('accessToken', data.accessToken);
     Cookies.set('fullname', data.fullname);
     Cookies.set('email', data.email);
@@ -46,9 +36,9 @@ const SessionProvider = ({ children }) => {
       permission: data.permission,
       groupid: data.groupid,
     });
-  };
+  }, []);
 
-  const setAccessToken = (act) => {
+  const setAccessToken = useCallback((act) => {
     setSession_({
       fullname: Cookies.get('fullname'),
       username: Cookies.get('username'),
@@ -59,8 +49,8 @@ const SessionProvider = ({ children }) => {
       permission: JSON.parse(localStorage.getItem('permission')),
       groupid: Cookies.get('groupid'),
     });
-  };
-  const logOut = () => {
+  }, []);
+  const logOut = useCallback(() => {
     localStorage.clear();
     Cookies.remove('fullname');
     Cookies.remove('email');
@@ -69,16 +59,16 @@ const SessionProvider = ({ children }) => {
     Cookies.remove('role');
     Cookies.remove('accessToken');
     Cookies.remove('groupid');
-  };
+  }, []);
 
-  const getPermission = (page) => {
+  const getPermission = useCallback((page) => {
     if (localStorage.getItem('permission') === null) {
       return '';
     }
     const permissions = JSON.parse(localStorage.getItem('permission'));
     const curPermission = permissions[page];
     return curPermission;
-  };
+  }, []);
 
   useEffect(() => {
     // console.log(Cookies.get('accessToken'));

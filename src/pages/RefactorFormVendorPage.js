@@ -22,7 +22,7 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useGridApiRef } from '@mui/x-data-grid';
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import UploadButton from 'src/components/common/UploadButton';
 import { useLoaderData, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
@@ -1011,11 +1011,11 @@ function RefactorFormVendorPage() {
           value: item.country_code,
           label: item.country_name,
         }));
-        setLoadCountry(false);
       } catch (err) {
-        setLoadCountry(false);
         console.error(err);
         // alert(err.stack);
+      } finally {
+        setLoadCountry(false);
       }
     };
 
@@ -1110,14 +1110,14 @@ function RefactorFormVendorPage() {
     };
   }, [loader_data]);
 
-  const setVen_fileFromChild = (newItem) => {
+  const setVen_fileFromChild = useCallback((newItem) => {
     if (newItem.length > 0) {
       newItem.forEach((item) => {
         setValue(`file_atth.${item.file_type}`, item.file_name);
       });
       setVen_file(newItem);
     }
-  };
+  }, []);
 
   const deleteVenFile = (deletedFile) => {
     resetField(`file_atth.${deletedFile?.file_type}`);
@@ -1203,169 +1203,12 @@ function RefactorFormVendorPage() {
     }
   };
 
-  const checkBankandFile = async () => {
-    console.log('checking bank');
-    let prebankData = {};
-    initDataBank.map((item) => {
-      prebankData[item.id] = item;
-    });
-    console.log(prebankData);
-    if (ven_bank.length > 0) {
-      ven_bank.map((item) => {
-        prebankData[item.bankv_id] = { ...item, id: item.bankv_id };
-      });
-    }
-    let deletedIdBank = [];
-    // console.log(prefileData, prebankData);
-    Object.values(prebankData).map((item) => {
-      if (item?.method === 'delete') {
-        deletedIdBank.push(item.id);
-      }
-    });
-    // console.log(deletedIdBank, deletedIdFile);
-    let bankData = Object.values(prebankData).filter((bank) => !deletedIdBank.includes(bank.id));
-    //check if file or banks is already submitted
-    if (bankData.length === 0) {
-      // console.log('bankempty');
-      setFormStat({ stat: true, type: 'error', message: 'Banks not filled yet | Bank belum dilengkapi' });
-      bank_valid.current = false;
-    } else {
-      bank_valid.current = true;
-    }
-    let isFalse = false;
-    bankData.forEach((item) => {
-      // console.log(item);
-      delete item.acc_name;
-      delete item.source;
-      delete item.swift_code;
-      if (ticketState !== 'FINA') {
-        delete item.bank_key;
-      }
-      Object.keys(item).map((key) => {
-        if (item[key] === '' || item[key] === null || item[key] === undefined) {
-          // console.log('field bank empty');
-          if (key === 'bank_key') {
-            setFormStat({ stat: true, type: 'error', message: 'Please complete bank key data on master bank menu' });
-          } else {
-            setFormStat({ stat: true, type: 'error', message: `${key} field not filled yet` });
-          }
-          bank_valid.current = false;
-          isFalse = true;
-        } else {
-          if (!isFalse) {
-            bank_valid.current = true;
-          }
-        }
-      });
-    });
-
-    // console.log(
-    //   'check : file => ' + file_valid.current + ' ; bank => ' + bank_valid.current + 'submitting : ' + isSubmitting
-    // );
-    console.log(bank_valid.current);
-    setBtnclick(false);
-  };
-
   useEffect(() => {
     console.log(currentEdit);
     Object.keys(currentEdit).map((item) => {
       console.log(apiRef.current.getCellElement(item, 'action').children[0].firstElementChild.getAttribute('id'));
     });
   }, [currentEdit]);
-
-  const testSubmitForm = () => {
-    const value = getValues();
-    // console.log(value);
-    const filteredVenFile = ven_file.filter((item) => item.method !== '');
-    const ven_detail = {
-      ven_id: loader_data.ven_id,
-      ticket_num: loader_data.ticket_num,
-      title: value.titlecomp,
-      name_1: value.name1,
-      local_ovs: value.localovs,
-      postal: value.postal.trim(),
-      country: value.country,
-      city: typeof value.city === 'object' ? value.city.value : value.city,
-      street: value.street,
-      street2: value.street2,
-      street3: value.street3,
-      street4: value.street4,
-      postal_npwp: value.postal_npwp.trim(),
-      city_npwp: typeof value.city_npwp === 'object' ? value.city_npwp.value : value.city_npwp,
-      street_npwp: value.street_npwp,
-      street2_npwp: value.street2_npwp,
-      street3_npwp: value.street3_npwp,
-      street4_npwp: value.street4_npwp,
-      postal_sppkp: value.postal_sppkp.trim(),
-      city_sppkp: typeof value.city_sppkp === 'object' ? value.city_sppkp.value : value.city_sppkp,
-      street_sppkp: value.street_sppkp,
-      street2_sppkp: value.street2_sppkp,
-      street3_sppkp: value.street3_sppkp,
-      street4_sppkp: value.street4_sppkp,
-      telf1: value.fax.trim().split(/-/)[1],
-      fax: value.fax.trim().split(/-/)[1],
-      email: value.email,
-      is_pkp: value.ispkp,
-      is_tender: value.is_tender,
-      npwp: value.npwp.trim(),
-      pay_mthd: value.paymthd,
-      pay_term: value.payterm,
-      company: value.company,
-      purch_org: value.purchorg?.value,
-      ven_acc: value.venacc,
-      ven_group: value.vengroup,
-      ven_type: value.ventype,
-      description: value.description,
-      limit_vendor: value.limit.toString().match(/\d+/g)?.join(''),
-      lim_curr: value.currency,
-      ven_code: loader_data.cur_pos !== 'FINA' ? '' : value.vendorcode,
-      search_term: value.search_term,
-      website_url: value.website_url.trim(),
-      ig_link: value.ig_link.trim(),
-      fb_link: value.fb_link.trim(),
-      twt_link: value.twt_link.trim(),
-      nama_direktur: value.nama_direktur.trim(),
-      nama_pic: value.nama_pic.trim(),
-      no_telf_pic: value.no_telf_pic.trim(),
-      email_pic: value.email_pic.trim(),
-      email_fin: value.email_fin.trim(),
-    };
-    let tempBanks = [];
-    let ven_bank;
-    if (dirtyFields.bank) {
-      dirtyFields?.bank.map((item, index) => {
-        let changed = false;
-        Object.keys(item).map((keys) => {
-          if (item[keys]?.value === true) {
-            changed = true;
-          } else if (item[keys] === true) {
-            changed = true;
-          }
-        });
-        if (changed) {
-          tempBanks.push(value.bank[index]);
-        }
-      });
-      ven_bank = tempBanks.map((item) => ({
-        ...item,
-        method: 'update',
-      }));
-    } else {
-      ven_bank = [];
-    }
-    const jsonSend = {
-      role: session.role === undefined ? 'VENDOR' : session.role,
-      is_draft: is_draft.current,
-      ticket_id: loader_data.ticket_id,
-      remarks: value.remarks,
-      ticket_state: ticketState,
-      ven_detail: ven_detail,
-      ven_banks: ven_bank,
-      ven_files: filteredVenFile,
-      cur_pos: loader_data.cur_pos,
-    };
-    // console.log(jsonSend);
-  };
 
   const submitForm = async (value) => {
     // setBtnclick(true);
@@ -1471,21 +1314,7 @@ function RefactorFormVendorPage() {
       ven_files: filteredVenFile,
       cur_pos: loader_data.cur_pos,
     };
-    // console.log(jsonSend);
-    // console.log(dirtyFields);
-    // if (loader_data.data.reject_by !== '') {
-    //   jsonSend.remarks = '';
-    // }
-    // if (UPDATE.FINA) {
-    //   jsonSend.mdm_id = session.user_id;
-    // }
-    // if (!is_draft.current) {
-    //   await checkBankandFile();
-    // }
-    // console.log(bank_valid.current, file_valid.current, is_draft.current, isSubmitting);
-    // // if (bank_valid.current && file_valid.current) {
-    // //   console.log('submitting');
-    // // }
+
     try {
       setLoading(true);
       let submit;
@@ -1496,12 +1325,9 @@ function RefactorFormVendorPage() {
         submit = await axiosPrivate.post(`/ticket/form/submit`, jsonSend);
         // console.log('submitting...');
       }
-      setVen_bank((prev) => prev.map((item) => ({ ...item, method: 'update' })));
       const response = submit.data;
-      setLoading(false);
-      console.log('done');
       setFormStat({ stat: true, type: 'success', message: response.message });
-      setBtnclick(false);
+      console.log('done');
       if (!is_draft.current) {
         setTimeout(() => {
           if (UPDATE.INIT) {
@@ -1516,11 +1342,12 @@ function RefactorFormVendorPage() {
         getInitDataFile(controller);
       }
     } catch (err) {
-      setBtnclick(false);
       console.log(err.stack);
       // alert(err.stack);
       setFormStat({ stat: true, type: 'error', message: 'error submitting' });
+    } finally {
       setLoading(false);
+      setBtnclick(false);
     }
   };
 
@@ -1564,8 +1391,6 @@ function RefactorFormVendorPage() {
     loadingPayterm,
     loading,
   ]);
-
-  console.log(errors);
 
   return (
     <>
@@ -3005,14 +2830,13 @@ function RefactorFormVendorPage() {
                   variant="contained"
                   type="submit"
                   onClick={() => {
-                    console.log(testSubmitForm());
+                    // console.log(testSubmitForm());
                     handleSubmit((value) => {
                       // console.log(value);
                       is_draft.current = false;
                       if (isTender && ticketState === 'CREA' && isValid && bank_valid.current) {
                         setConfOpen(true);
                       } else {
-                        getValues;
                         submitForm(value);
                       }
                     })();

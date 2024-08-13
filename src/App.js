@@ -9,6 +9,7 @@ import { Suspense } from 'react';
 import LoadingSuspense from './components/loadingscreen/Loading';
 import { ErrorBoundary } from 'react-error-boundary';
 import { ErrorFallback } from './ErrorFallback';
+import { CssBaseline } from '@mui/material';
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
       <Suspense fallback={<LoadingSuspense />}>
         <HelmetProvider>
           <ThemeProvider>
+            <CssBaseline/>
             <AuthProvider>
               <RouterProvider router={routes} />
             </AuthProvider>

@@ -142,25 +142,3 @@ export const routes = createBrowserRouter([
     errorElement: <ErrorPage />,
   },
 ]);
-
-// export default function Router() {
-// const routes = useRoutes([
-//   {
-//     path: 'frm/newform/:token',
-//     element: <FormVendorPage />,
-//     loader: async (params) => {
-//       await formLoader(params);
-//     },
-//     errorElement: <ErrorPage />,
-//   },
-//   {
-//     path: '/',
-//     children: [{ path: '404', element: <Error404 /> }],
-//   },
-//   {
-//     path: '*',
-//     element: <Navigate to="/404" />,
-//   },
-// ]);
-// return routes;
-// }
