@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Box, Paper, SvgIcon, Typography, Button, Snackbar, Alert, Link, CircularProgress } from '@mui/material';
 import imgbg from '../images/gama-tower.jpg';
-import { PasswordWithEyes } from 'src/components/common/PasswordWithEyes';
+import { PasswordWithEyes } from 'src/components/common/2';
 import { ReactComponent as KpnNav } from '../images/kpn-logo.svg';
 import { LoadingButton } from '@mui/lab';
 import useMediaQuery from '@mui/material/useMediaQuery';
@@ -47,7 +47,7 @@ export default function ResetPassword() {
     try {
       setBtnclicked(true);
       setResendload(true);
-      const send_otp = await axios.post(`${process.env.REACT_APP_URL_LOC}/otp/sendotp`, {
+      const send_otp = await axios.post(`${import.meta.env.VITE_URL_LOC}/otp/sendotp`, {
         username: values.username === undefined ? userName : values.username,
       });
       Cookies.set('user_id', send_otp.data.user_id);
@@ -77,7 +77,7 @@ export default function ResetPassword() {
     setBtnclicked(true);
     try {
       const verif_otp = await axios.post(
-        `${process.env.REACT_APP_URL_LOC}/otp/validateotp`,
+        `${import.meta.env.VITE_URL_LOC}/otp/validateotp`,
         {
           OTP: values.OTP,
         },
@@ -108,7 +108,7 @@ export default function ResetPassword() {
     try {
       setBtnclicked(true);
       const verif_otp = await axios.post(
-        `${process.env.REACT_APP_URL_LOC}/user/resetpwd`,
+        `${import.meta.env.VITE_URL_LOC}/user/resetpwd`,
         {
           newpwd: values.newpwd,
         },

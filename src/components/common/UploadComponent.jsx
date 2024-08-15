@@ -7,7 +7,7 @@ import useAxiosPrivate from '../../hooks/useAxiosPrivate';
 
 const LinkFile = ({ file }) => {
   const handleOnClick = async (file) => {
-    window.open(`${process.env.REACT_APP_URL_BE}static/${file.file_name}`);
+    window.open(`${import.meta.env.VITE_URL_BE}static/${file.file_name}`);
   };
 
   return (

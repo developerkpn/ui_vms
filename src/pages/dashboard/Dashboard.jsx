@@ -17,8 +17,8 @@ import { Menu } from 'src/_mock/Menu';
 import { useSession } from 'src/provider/sessionProvider';
 import Cookies from 'js-cookie';
 import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
-import { ReactComponent as KpnLogo } from '../../images/kpn-logo-3.svg';
-import { ReactComponent as KpnNav } from '../../images/kpn-logo.svg';
+import KpnLogo from '../../images/kpn-logo-3.svg?react';
+import KpnNav from '../../images/kpn-logo.svg?react';
 
 const drawerWidth = 240;
 

@@ -190,7 +190,7 @@ export default function FormVendorPage() {
       const dynaCity = async () => {
         try {
           const cities = await axios.post(
-            `${process.env.REACT_APP_URL_LOC}/master/city`,
+            `${import.meta.env.VITE_URL_LOC}/master/city`,
             { countryId: country_ven },
             { signal: controller.signal }
           );
@@ -214,7 +214,7 @@ export default function FormVendorPage() {
     const dynaCountry = async () => {
       try {
         const country = await axios.post(
-          `${process.env.REACT_APP_URL_LOC}/master/country`,
+          `${import.meta.env.VITE_URL_LOC}/master/country`,
           {},
           { signal: controller.signal }
         );
@@ -228,7 +228,7 @@ export default function FormVendorPage() {
 
     const getCurr = async () => {
       try {
-        const curr = await axios.get(`${process.env.REACT_APP_URL_LOC}/master/curr`);
+        const curr = await axios.get(`${import.meta.env.VITE_URL_LOC}/master/curr`);
         const response = curr.data;
         const result = response.data;
         let currobj = {};
@@ -244,7 +244,7 @@ export default function FormVendorPage() {
 
     const getBanks = async () => {
       try {
-        const banksData = await axios.get(`${process.env.REACT_APP_URL_LOC}/master/bank`);
+        const banksData = await axios.get(`${import.meta.env.VITE_URL_LOC}/master/bank`);
         const response = banksData.data;
         const result = response.data;
         banks.current = result.data;
@@ -256,7 +256,7 @@ export default function FormVendorPage() {
 
     const getInitDataBank = async () => {
       try {
-        const bankInit = await axios.get(`${process.env.REACT_APP_URL_LOC}/vendor/bank/${loader_data.data.ven_id}`);
+        const bankInit = await axios.get(`${import.meta.env.VITE_URL_LOC}/vendor/bank/${loader_data.data.ven_id}`);
         const result = bankInit.data.data;
         initDataBank.current = result.data;
         setBankLoad(true);
@@ -267,7 +267,7 @@ export default function FormVendorPage() {
 
     const getInitDataFile = async () => {
       try {
-        const fileInit = await axios.get(`${process.env.REACT_APP_URL_LOC}/vendor/file/${loader_data.data.ven_id}`);
+        const fileInit = await axios.get(`${import.meta.env.VITE_URL_LOC}/vendor/file/${loader_data.data.ven_id}`);
         const result = fileInit.data.data;
         initDataFile.current = result.data;
         setFileLoad(true);
@@ -278,7 +278,7 @@ export default function FormVendorPage() {
 
     const getCompany = async () => {
       try {
-        const compsData = await axios.get(`${process.env.REACT_APP_URL_LOC}/master/company`);
+        const compsData = await axios.get(`${import.meta.env.VITE_URL_LOC}/master/company`);
         const response = compsData.data;
         const result = response.data;
         comps.current = result.data;
@@ -474,9 +474,9 @@ export default function FormVendorPage() {
       try {
         let submit;
         if (loader_data.role === 'VENDOR') {
-          submit = await axios.post(`${process.env.REACT_APP_URL_LOC}/ticket/newform/submit`, jsonSend);
+          submit = await axios.post(`${import.meta.env.VITE_URL_LOC}/ticket/newform/submit`, jsonSend);
         } else {
-          submit = await axios.post(`${process.env.REACT_APP_URL_LOC}/ticket/form/submit`, jsonSend);
+          submit = await axios.post(`${import.meta.env.VITE_URL_LOC}/ticket/form/submit`, jsonSend);
         }
         const response = submit.data;
         setFormStat({ stat: true, type: 'success', message: response.message });
@@ -611,7 +611,7 @@ export default function FormVendorPage() {
         ticket_id: initialForm.current.ticket_id,
         remarks: remarks.current.value,
       };
-      const resultReject = await axios.patch(`${process.env.REACT_APP_URL_LOC}/ticket/reject`, rejectParams);
+      const resultReject = await axios.patch(`${import.meta.env.VITE_URL_LOC}/ticket/reject`, rejectParams);
       const response = resultReject.data;
       setFormStat({ stat: true, type: 'success', message: response.message });
       setLoader(false);
@@ -1458,7 +1458,7 @@ export default function FormVendorPage() {
                 multiline
                 inputProps={{ readOnly: loader_data.data.cur_pos === 'VENDOR' }}
               />
-              <Link href={`${process.env.REACT_APP_URL_LOC}/file/Kode_Etik_Supplier_Vendor_dan_Kontraktor.doc`}>
+              <Link href={`${import.meta.env.VITE_URL_LOC}/file/Kode_Etik_Supplier_Vendor_dan_Kontraktor.doc`}>
                 File Pakta Integritas
               </Link>
             </Box>

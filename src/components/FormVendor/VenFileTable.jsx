@@ -74,7 +74,7 @@ export default function VenFileTable({ initData, upTable, isallow, isLoad, delFi
           for (const item of file_ven) {
             if (item.id === id) {
               if (item.source == 'ven_file_atth') {
-                const deletedFile = await fetch(`${process.env.REACT_APP_URL_LOC}/vendor/delfile`, {
+                const deletedFile = await fetch(`${import.meta.env.VITE_URL_LOC}/vendor/delfile`, {
                   method: 'DELETE',
                   headers: {
                     'Content-Type': 'application/json',
@@ -92,7 +92,7 @@ export default function VenFileTable({ initData, upTable, isallow, isLoad, delFi
                   throw new Error(response.message);
                 }
               } else {
-                const deletedFile = await fetch(`${process.env.REACT_APP_URL_LOC}/vendor/file`, {
+                const deletedFile = await fetch(`${import.meta.env.VITE_URL_LOC}/vendor/file`, {
                   method: 'DELETE',
                   headers: {
                     'Content-Type': 'application/json',
@@ -197,7 +197,7 @@ export default function VenFileTable({ initData, upTable, isallow, isLoad, delFi
           };
           const handlePreviewClick = (item) => {
             const fileName = item.row.file_name;
-            window.open(`${process.env.REACT_APP_URL_BE}static/${fileName}`);
+            window.open(`${import.meta.env.VITE_URL_BE}static/${fileName}`);
           };
           if (item.row.method == 'delete') {
             return [

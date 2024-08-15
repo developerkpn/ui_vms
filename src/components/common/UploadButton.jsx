@@ -102,8 +102,8 @@ const UploadButton = forwardRef(function UploadButton(
   const openFileGuide = () => {
     window.open(
       props.ticketState === 'INIT'
-        ? `${process.env.REACT_APP_URL_BE}static/ATTACHMENT_GUIDE_VENDOR_WEB_(VENDOR).pdf`
-        : `${process.env.REACT_APP_URL_BE}static/ATTACHMENT_GUIDE_VENDOR_WEB_(USER).pdf`
+        ? `${import.meta.env.VITE_URL_BE}static/ATTACHMENT_GUIDE_VENDOR_WEB_(VENDOR).pdf`
+        : `${import.meta.env.VITE_URL_BE}static/ATTACHMENT_GUIDE_VENDOR_WEB_(USER).pdf`
     );
   };
 
@@ -127,7 +127,7 @@ const UploadButton = forwardRef(function UploadButton(
       form.append('created_by', session.user_id);
       form.append('desc_file', inTypes[typeFile].value);
       form.append('ven_id', idParent);
-      const response = await fetch(`${process.env.REACT_APP_URL_LOC}/vendor/uploadTemp`, {
+      const response = await fetch(`${import.meta.env.VITE_URL_LOC}/vendor/uploadTemp`, {
         method: 'POST',
         body: form,
       });

@@ -1285,7 +1285,7 @@ function RefactorFormVendorPage() {
       setLoading(true);
       let submit;
       if (session.role === undefined || predata.type !== 'form') {
-        submit = await axios.post(`${process.env.REACT_APP_URL_LOC}/ticket/newform/submit`, jsonSend);
+        submit = await axios.post(`${import.meta.env.VITE_URL_LOC}/ticket/newform/submit`, jsonSend);
         // console.log('submitting...');
       } else {
         submit = await axiosPrivate.post(`/ticket/form/submit`, jsonSend);
@@ -2794,8 +2794,10 @@ function RefactorFormVendorPage() {
                   <Link
                     href={
                       langCode === 'id'
-                        ? `${process.env.REACT_APP_URL_LOC}/master/file/Kode_Etik_Supplier_Vendor_dan_Kontraktor.doc`
-                        : `${process.env.REACT_APP_URL_LOC}/master/file/Integrity_Pact_Supplier_Vendor_and_Contractor.docx`
+                        ? `${import.meta.env.VITE_URL_LOC}/master/file/Kode_Etik_Supplier_Vendor_dan_Kontraktor.doc`
+                        : `${
+                            import.meta.env.VITE_URL_LOC
+                          }/master/file/Integrity_Pact_Supplier_Vendor_and_Contractor.docx`
                     }
                   >
                     Link Download File Pakta Integritas
@@ -2806,7 +2808,7 @@ function RefactorFormVendorPage() {
                 <Alert severity="warning" variant="filled" sx={{ minWidth: '20rem', mt: '1rem', mb: '1rem' }}>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                     {t('Please Download Justifikasi')}
-                    <Link href={`${process.env.REACT_APP_URL_LOC}/master/file/Form_VENDOR_LOCAL_JUSTIFIKASI.docx`}>
+                    <Link href={`${import.meta.env.VITE_URL_LOC}/master/file/Form_VENDOR_LOCAL_JUSTIFIKASI.docx`}>
                       Link Download File Form Justifikasi
                     </Link>
                   </Box>

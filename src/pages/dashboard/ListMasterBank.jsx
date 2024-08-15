@@ -217,7 +217,7 @@ export default function ListMasterBank() {
     const dynaCountry = async () => {
       try {
         const country = await axios.post(
-          `${process.env.REACT_APP_URL_LOC}/master/country`,
+          `${import.meta.env.VITE_URL_LOC}/master/country`,
           {},
           { signal: controller.signal }
         );

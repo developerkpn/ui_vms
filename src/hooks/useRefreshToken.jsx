@@ -6,7 +6,7 @@ const useRefreshToken = () => {
   const { setAccessToken, logOut } = useSession();
   const refresh = async () => {
     try {
-      const response = await axios.get(`${process.env.REACT_APP_URL_LOC}/user/refresh`, {
+      const response = await axios.get(`${import.meta.env.VITE_URL_LOC}/user/refresh`, {
         withCredentials: true,
       });
       setAccessToken(response.data.accessToken);

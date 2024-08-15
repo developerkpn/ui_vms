@@ -12,7 +12,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import SvgIcon from '@mui/material/SvgIcon';
 import { PasswordWithEyes } from 'src/components/common/PasswordWithEyes';
 import imgbg from '../images/gama-tower.jpg';
-import { ReactComponent as KpnNav } from '../images/kpn-logo.svg';
+import KpnNav from '../images/kpn-logo.svg?react';
 import { LoadingButton } from '@mui/lab';
 import Cookies from 'js-cookie';
 
@@ -36,7 +36,7 @@ export default function LoginPage() {
       navigate(`/frm/newform/${data.FormToken}`);
     } else {
       try {
-        const logindata = await axios.post(`${process.env.REACT_APP_URL_LOC}/user/login`, {
+        const logindata = await axios.post(`${import.meta.env.VITE_URL_LOC}/user/login`, {
           username: data.Username,
           password: data.Password,
         });

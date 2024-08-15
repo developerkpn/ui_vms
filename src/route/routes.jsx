@@ -38,7 +38,7 @@ export const routes = createBrowserRouter([
     path: 'frm/:formtype/:token',
     element: <RefactorFormVendorPage />,
     loader: async ({ params }) => {
-      const checkValid = await axios.post(`${process.env.REACT_APP_URL_LOC}/ticket/checkvalid`, {
+      const checkValid = await axios.post(`${import.meta.env.VITE_URL_LOC}/ticket/checkvalid`, {
         ticket_id: params.token,
       });
       if (checkValid.status === 403) {

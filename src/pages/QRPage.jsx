@@ -7,7 +7,7 @@ export default function QRPage() {
 
   useEffect(() => {
     const getQr = async () => {
-      const qr = await axios.get(`${process.env.REACT_APP_URL_LOC}/master/genqr`);
+      const qr = await axios.get(`${import.meta.env.VITE_URL_LOC}/master/genqr`);
       const data = qr.data.qr;
       setQr(data);
     };

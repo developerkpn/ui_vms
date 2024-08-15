@@ -30,7 +30,7 @@ import moment from 'moment';
 // function loaderTicket(filterAct) {
 //   axios.defaults.headers.common.Authorization =
 //     'Bearer ' + (Cookies.get('refreshtoken') === undefined ? '' : Cookies.get('refreshtoken'));
-//   const response = await axios.get(`${process.env.REACT_APP_URL_LOC}/ticket/?is_active=${filterAct}`);
+//   const response = await axios.get(`${import.meta.env.VITE_URL_LOC}/ticket/?is_active=${filterAct}`);
 //   return response.data.data;
 // }
 
