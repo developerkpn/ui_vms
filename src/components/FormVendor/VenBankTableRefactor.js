@@ -12,7 +12,7 @@ import {
 } from '@mui/material';
 import { Delete } from '@mui/icons-material';
 import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 // import AutoCompleteCustom from '../common/AutoCompleteCustom';
 import AutoCompleteBankController from '../common/AutoCompleteBankController';
 import AutoCompleteCustomController from '../common/AutoCompleteCustomController ';
@@ -38,34 +38,37 @@ function VenBankTableRow({
 }) {
   const axiosPrivate = useAxiosPrivate();
   const [isDeleting, setDeleting] = useState(false);
-  const handleDeleteData = async (index, newidbank) => {
-    console.log(getValues(`bank.${index}`));
-    const source = getValues(`bank.${index}.source`);
-    const id = getValues(`bank.${index}.id`);
+  const handleDeleteData = useCallback(
+    async (index, newidbank) => {
+      console.log(getValues(`bank.${index}`));
+      const source = getValues(`bank.${index}.source`);
+      const id = getValues(`bank.${index}.id`);
 
-    if (confirm(`Are you sure want to delete ${getValues(`bank.${index}.bank_acc`)} ?`)) {
-      setDeleting(true);
-      try {
-        const { data } = await axiosPrivate.post(`/vendor/deletebank`, { id: id });
-        const { data: deleteFiles } = await axiosPrivate.delete(`/vendor/clearfilebank`, { data: { bank_id: id } });
-        setStat({
-          stat: true,
-          type: 'success',
-          message: data.message,
-        });
-        remove(index);
-      } catch (error) {
-        console.error(error);
-        setStat({
-          stat: true,
-          type: 'error',
-          message: error.response?.data?.message ?? error.message,
-        });
-      } finally {
-        setDeleting(false);
+      if (confirm(`Are you sure want to delete ${getValues(`bank.${index}.bank_acc`)} ?`)) {
+        setDeleting(true);
+        try {
+          const { data } = await axiosPrivate.post(`/vendor/deletebank`, { id: id });
+          const { data: deleteFiles } = await axiosPrivate.delete(`/vendor/clearfilebank`, { data: { bank_id: id } });
+          setStat({
+            stat: true,
+            type: 'success',
+            message: data.message,
+          });
+          remove(index);
+        } catch (error) {
+          console.error(error);
+          setStat({
+            stat: true,
+            type: 'error',
+            message: error.response?.data?.message ?? error.message,
+          });
+        } finally {
+          setDeleting(false);
+        }
       }
-    }
-  };
+    },
+    [index]
+  );
 
   return (
     <TableRow key={field.id}>
@@ -198,17 +201,17 @@ export default function VenBankTableRefactor({
     message: '',
   });
 
-  const handleSnackClose = () => {
+  const handleSnackClose = useCallback(() => {
     setFormStat({
       stat: false,
       type: 'success',
       message: '',
     });
-  };
+  }, []);
 
-  const updateFormStat = (value) => {
+  const updateFormStat = useCallback((value) => {
     setFormStat(value);
-  };
+  }, []);
   return (
     <>
       <Snackbar
@@ -240,6 +243,7 @@ export default function VenBankTableRefactor({
               (field, index) => {
                 return (
                   <VenBankTableRow
+                    key={'row-' + index}
                     field={field}
                     index={index}
                     control={control}

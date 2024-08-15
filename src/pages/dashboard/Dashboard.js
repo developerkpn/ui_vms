@@ -84,7 +84,7 @@ const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' 
 export default function MiniDrawer() {
   const theme = useTheme();
   const location = useLocation();
-  const { session, setSession } = useSession();
+  // const { session, setSession } = useSession();
   const axiosPrivate = useAxiosPrivate();
 
   const [open, setOpen] = useState(false);
@@ -94,38 +94,38 @@ export default function MiniDrawer() {
   });
   const [navMenu, setNavmenu] = useState('');
 
-  useEffect(() => {
-    const controller = new AbortController();
-    if (Cookies.get('accessToken')) {
-      const getAuthorization = async () => {
-        try {
-          const getAuth = await axiosPrivate.post(
-            `/user/authorization`,
-            {
-              group_id: session.groupid,
-            },
-            { signal: controller.signal }
-          );
-          setSession({ ...session, ['permission']: getAuth.data });
-        } catch (error) {
-          console.error(error);
-        }
-      };
-      getAuthorization();
-    }
-    return () => {
-      controller.abort();
-    };
+  // useEffect(() => {
+  //   const controller = new AbortController();
+  //   if (Cookies.get('accessToken')) {
+  //     const getAuthorization = async () => {
+  //       try {
+  //         const getAuth = await axiosPrivate.post(
+  //           `/user/authorization`,
+  //           {
+  //             group_id: session.groupid,
+  //           },
+  //           { signal: controller.signal }
+  //         );
+  //         setSession({ ...session, ['permission']: getAuth.data });
+  //       } catch (error) {
+  //         console.error(error);
+  //       }
+  //     };
+  //     getAuthorization();
+  //   }
+  //   return () => {
+  //     controller.abort();
+  //   };
+  // }, []);
+
+  const handleDrawerOpen = useCallback(() => {
+    setOpen(true);
   }, []);
 
-  const handleDrawerOpen = () => {
-    setOpen(true);
-  };
-
-  const handleDrawerClose = () => {
+  const handleDrawerClose = useCallback(() => {
     setOpen(false);
     setNavcol({ ...navCol, state: false });
-  };
+  }, []);
 
   const updateNavcol = useCallback((menu) => {
     setNavcol((prevNav) => {

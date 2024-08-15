@@ -1,5 +1,5 @@
 import { DataGrid, GridActionsCellItem } from '@mui/x-data-grid';
-import { useState, forwardRef, useEffect, useMemo } from 'react';
+import { useState, forwardRef, useEffect, useMemo, useCallback } from 'react';
 import { Delete as DeleteIcon, Undo, Download, Preview } from '@mui/icons-material';
 import { Alert as MuiAlert, Snackbar, Backdrop, CircularProgress, Skeleton, Tooltip } from '@mui/material';
 import { styled, lighten, darken } from '@mui/material/styles';
@@ -54,99 +54,103 @@ export default function VenFileTable({ initData, upTable, isallow, isLoad, delFi
     },
   }));
 
-  const onDeleteSBar = () => {
+  const onDeleteSBar = useCallback(() => {
     setSbarOpen(true);
-  };
+  }, []);
 
-  const onCloseBar = (event, reason) => {
+  const onCloseBar = useCallback((event, reason) => {
     if (reason === 'clickaway') {
       return;
     }
 
     setSbarOpen(false);
-  };
+  }, []);
 
-  const handleDeleteClick = async ({ id, row }) => {
-    let prevData = [];
-    console.log;
-    if (confirm(`Are you sure want to delete ${row.file_name}`)) {
-      try {
-        for (const item of file_ven) {
-          if (item.id === id) {
-            if (item.source == 'ven_file_atth') {
-              const deletedFile = await fetch(`${process.env.REACT_APP_URL_LOC}/vendor/delfile`, {
-                method: 'DELETE',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ id: id }),
-              });
-              const response = await deletedFile.json();
-              if (response.status == 200) {
-                setFetchStat({
-                  stat: 'success',
-                  message: `file ${response.data.file_name} deleted`,
+  const handleDeleteClick = useCallback(
+    async ({ id, row }) => {
+      let prevData = [];
+      if (confirm(`Are you sure want to delete ${row.file_name}`)) {
+        try {
+          for (const item of file_ven) {
+            if (item.id === id) {
+              if (item.source == 'ven_file_atth') {
+                const deletedFile = await fetch(`${process.env.REACT_APP_URL_LOC}/vendor/delfile`, {
+                  method: 'DELETE',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({ id: id }),
                 });
-                onDeleteSBar();
+                const response = await deletedFile.json();
+                if (response.status == 200) {
+                  setFetchStat({
+                    stat: 'success',
+                    message: `file ${response.data.file_name} deleted`,
+                  });
+                  onDeleteSBar();
+                } else {
+                  throw new Error(response.message);
+                }
               } else {
-                throw new Error(response.message);
+                const deletedFile = await fetch(`${process.env.REACT_APP_URL_LOC}/vendor/file`, {
+                  method: 'DELETE',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({ id: id }),
+                });
+                const response = await deletedFile.json();
+                if (response.status == 200) {
+                  setFetchStat({
+                    stat: 'success',
+                    message: `temporary file ${response.data.file_name} deleted`,
+                  });
+                  onDeleteSBar();
+                } else {
+                  throw new Error(response.message);
+                }
               }
+              delFile(item);
             } else {
-              const deletedFile = await fetch(`${process.env.REACT_APP_URL_LOC}/vendor/file`, {
-                method: 'DELETE',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ id: id }),
-              });
-              const response = await deletedFile.json();
-              if (response.status == 200) {
-                setFetchStat({
-                  stat: 'success',
-                  message: `temporary file ${response.data.file_name} deleted`,
-                });
-                onDeleteSBar();
-              } else {
-                throw new Error(response.message);
-              }
+              prevData.push(item);
             }
-            delFile(item);
-          } else {
-            prevData.push(item);
           }
+          setFile_ven(prevData);
+          upTable(prevData);
+        } catch (error) {
+          console.error(error);
+          setFetchStat({
+            stat: 'error',
+            message: 'error deleting item',
+          });
+          onDeleteSBar();
         }
-        setFile_ven(prevData);
-        upTable(prevData);
-      } catch (error) {
-        console.error(error);
-        setFetchStat({
-          stat: 'error',
-          message: 'error deleting item',
-        });
-        onDeleteSBar();
       }
-    }
 
-    // console.log(file_ven);
-  };
+      // console.log(file_ven);
+    },
+    [file_ven]
+  );
 
-  const handleUndoClick =
+  const handleUndoClick = useCallback(
     ({ id, row }) =>
-    () => {
-      let pushData = [];
-      file_ven.map((item) => {
-        // console.log(id, item.id);
-        if (item.id === id) {
-          pushData.push({ ...item, method: '' });
-        } else {
-          pushData.push(item);
-        }
-      });
-      // setFetchStat({ stat: 'info', message: `${row.file_name} delete stage canceled` });
-      setFile_ven(pushData);
-      upTable(pushData);
-      // onDeleteSBar();
-    };
+      () => {
+        let pushData = [];
+        file_ven.map((item) => {
+          // console.log(id, item.id);
+          if (item.id === id) {
+            pushData.push({ ...item, method: '' });
+          } else {
+            pushData.push(item);
+          }
+        });
+        // setFetchStat({ stat: 'info', message: `${row.file_name} delete stage canceled` });
+        setFile_ven(pushData);
+        upTable(pushData);
+        // onDeleteSBar();
+      },
+    [file_ven]
+  );
 
   const columns = useMemo(
     () => [
@@ -207,25 +211,22 @@ export default function VenFileTable({ initData, upTable, isallow, isLoad, delFi
           } else {
             if (isallow) {
               return [
-                <Tooltip title={props.t('Delete')} placement="top">
+                <Tooltip title={props.t('Delete')} placement="top" key={`delete-${item.id}`}>
                   <GridActionsCellItem
-                    key={`delete-${item.id}`}
                     icon={<DeleteIcon />}
                     label={props.t('Delete')}
                     onClick={() => handleDeleteClick(item)}
                   />
                 </Tooltip>,
-                <Tooltip title={props.t('Download')} placement="top">
+                <Tooltip title={props.t('Download')} placement="top" key={`dwn-${item.id}`}>
                   <GridActionsCellItem
-                    key={`dwn-${item.id}`}
                     icon={<Download />}
                     label={props.t('Download')}
                     onClick={() => handleDownloadClick(item)}
                   />
                 </Tooltip>,
-                <Tooltip title={props.t('Preview')} placement="top">
+                <Tooltip title={props.t('Preview')} placement="top" key={`prv-${item.id}`}>
                   <GridActionsCellItem
-                    key={`prv-${item.id}`}
                     icon={<Preview />}
                     label={props.t('Preview')}
                     onClick={() => handlePreviewClick(item)}
@@ -234,17 +235,15 @@ export default function VenFileTable({ initData, upTable, isallow, isLoad, delFi
               ];
             } else {
               return [
-                <Tooltip title={props.t('Download')} placement="top">
+                <Tooltip title={props.t('Download')} placement="top" key={`dwn-${item.id}`}>
                   <GridActionsCellItem
-                    key={`dwn-${item.id}`}
                     icon={<Download />}
                     label={props.t('Download')}
                     onClick={() => handleDownloadClick(item)}
                   />
                 </Tooltip>,
-                <Tooltip title={props.t('Preview')} placement="top">
+                <Tooltip title={props.t('Preview')} placement="top" key={`prv-${item.id}`}>
                   <GridActionsCellItem
-                    key={`prv-${item.id}`}
                     icon={<Preview />}
                     label={props.t('Preview')}
                     onClick={() => handlePreviewClick(item)}
