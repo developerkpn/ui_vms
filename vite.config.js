@@ -9,7 +9,7 @@ export default defineConfig(() => {
       include: ['@emotion/react', '@emotion/styled', '@mui/icons-material', 'lodash'],
     },
     build: {
-      outDir: '../vms_app/build',
+      outDir: '../vendor_ms_app/public/build',
     },
     server: {
       port: 3000,

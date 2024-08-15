@@ -1,7 +1,7 @@
 import { Container, Typography, Grid, Box, Button } from '@mui/material';
 import SelectComp from 'src/components/common/SelectComp';
 import { TextFieldComp } from 'src/components/common/TextFieldComp';
-import { PasswordWithEyes } from 'src/components/common/2';
+import { PasswordWithEyes } from 'src/components/common/PasswordWithEyes';
 import { useForm } from 'react-hook-form';
 import { useEffect, useState } from 'react';
 import useAxiosPrivate from 'src/hooks/useAxiosPrivate';

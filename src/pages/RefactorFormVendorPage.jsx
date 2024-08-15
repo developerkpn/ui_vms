@@ -1171,7 +1171,7 @@ function RefactorFormVendorPage() {
     } finally {
       setLoadAddBnk(false);
     }
-  }, []);
+  }, [chgLocal, loader_data]);
 
   useEffect(() => {
     console.log(currentEdit);
