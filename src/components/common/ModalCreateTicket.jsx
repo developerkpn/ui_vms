@@ -19,6 +19,15 @@ import { useSession } from 'src/provider/sessionProvider';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { LoadingButton } from '@mui/lab';
+import SelectCompNoCont from './SelectCompNoCont';
+
+const ticket_type = [
+  { value: 'UPS', label: 'UPSTREAM' },
+  {
+    value: 'DWS',
+    label: 'DOWNSTREAM',
+  },
+];
 
 export default function ModalCreateTicket({ open, onClose, linkUrl, urlSet, popUp, onClick }) {
   const axiosPrivate = useAxiosPrivate();
@@ -26,6 +35,7 @@ export default function ModalCreateTicket({ open, onClose, linkUrl, urlSet, popU
   const navigate = useNavigate();
   const [links, setLinks] = useState(linkUrl);
   const [btnClicked, setBtnclicked] = useState(false);
+  const [ttype, setTType] = useState('');
   const [formStat, setFormStat] = useState({
     stat: false,
     message: '',
@@ -36,8 +46,13 @@ export default function ModalCreateTicket({ open, onClose, linkUrl, urlSet, popU
     setFormStat({
       stat: false,
       message: '',
-      type: 'success',
+      type: '',
     });
+  };
+
+  const changeTType = (value) => {
+    console.log(value);
+    setTType(value);
   };
 
   useEffect(() => {
@@ -53,27 +68,36 @@ export default function ModalCreateTicket({ open, onClose, linkUrl, urlSet, popU
   };
 
   const handlegenticket = (param) => async () => {
-    setBtnclicked(true);
-    try {
-      const response = await axiosPrivate.post(`/ticket/new`, {
-        user_id: session.user_id,
-        to_who: param,
-      });
-      const createdTicket = response.data;
-      if (param === 'VENDOR') {
-        urlSet(`${location.protocol}/${location.host}/${createdTicket.data.link}`);
-        setFormStat({
-          stat: true,
-          message: 'Success generate ticket',
-          type: 'success',
+    if (ttype !== '') {
+      setBtnclicked(true);
+      try {
+        const response = await axiosPrivate.post(`/ticket/new`, {
+          user_id: session.user_id,
+          to_who: param,
+          ticket_type: ttype,
         });
+        const createdTicket = response.data;
+        if (param === 'VENDOR') {
+          urlSet(`${location.protocol}/${location.host}/${createdTicket.data.link}`);
+          setFormStat({
+            stat: true,
+            message: 'Success generate ticket',
+            type: 'success',
+          });
+          setBtnclicked(false);
+        } else {
+          navigate(`../form/${createdTicket.data.token}`);
+        }
+      } catch (err) {
         setBtnclicked(false);
-      } else {
-        navigate(`../form/${createdTicket.data.token}`);
+        alert(err);
       }
-    } catch (err) {
-      setBtnclicked(false);
-      alert(err);
+    } else {
+      setFormStat({
+        stat: true,
+        message: 'Please provide ticket type',
+        type: 'error',
+      });
     }
   };
   const handleClickLink = async (e) => {
@@ -111,6 +135,13 @@ export default function ModalCreateTicket({ open, onClose, linkUrl, urlSet, popU
           <Typography sx={{ mb: 7 }} variant="h5">
             Create New Form Request Ticket
           </Typography>
+          <SelectCompNoCont
+            options={ticket_type}
+            value={ttype}
+            label="Ticket Type"
+            sx={{ width: '20rem' }}
+            onChangeovr={changeTType}
+          />
           <LoadingButton
             sx={{ height: 80, width: 400, mb: 2 }}
             onClick={handlegenticket('VENDOR')}

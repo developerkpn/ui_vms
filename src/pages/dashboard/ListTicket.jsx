@@ -15,24 +15,15 @@ import {
   MenuItem,
   Tooltip,
 } from '@mui/material';
-import axios from 'axios';
 import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
-import { useEffect, useState } from 'react';
-import { Edit, Link, Visibility, Delete, Refresh, Update, MailOutline } from '@mui/icons-material';
-import Cookies from 'js-cookie';
+import { useEffect, useMemo, useState } from 'react';
+import { Edit, Link, Visibility, Delete, Refresh, Update } from '@mui/icons-material';
 import ModalCreateTicket from 'src/components/common/ModalCreateTicket';
 import { useSession } from 'src/provider/sessionProvider';
 import { useNavigate } from 'react-router-dom';
 import ProgressStat from 'src/components/common/ProgressStat';
 import { LoadingButton } from '@mui/lab';
 import moment from 'moment';
-
-// function loaderTicket(filterAct) {
-//   axios.defaults.headers.common.Authorization =
-//     'Bearer ' + (Cookies.get('refreshtoken') === undefined ? '' : Cookies.get('refreshtoken'));
-//   const response = await axios.get(`${import.meta.env.VITE_URL_LOC}/ticket/?is_active=${filterAct}`);
-//   return response.data.data;
-// }
 
 const overrides = {
   '& .MuiDataGrid-main': {},
@@ -53,7 +44,7 @@ function RefreshTable(props) {
 
 export default function ListTicket() {
   // const load = useLoaderData();
-  const { session, getPermission, logOut } = useSession();
+  const { getPermission } = useSession();
   const [perm, setPerm] = useState();
   const [ticket, setTicket] = useState();
   const [openModal, setOpenmodal] = useState(false);
@@ -239,189 +230,192 @@ export default function ListTicket() {
     }, 1000);
   };
 
-  const columnTable = [
-    {
-      field: 'ticket_num',
-      type: 'string',
-      headerName: 'Ticket Number',
-      width: 150,
-    },
-    {
-      field: 'updated_at',
-      type: 'string',
-      headerName: 'Updated Date',
-      width: 180,
-    },
-    {
-      field: 'updated_by',
-      type: 'string',
-      headerName: 'Updated By',
-      width: 150,
-    },
-    {
-      field: 'date_ticket',
-      type: 'string',
-      headerName: 'Created Date',
-      width: 180,
-    },
-    {
-      field: 'assignee',
-      type: 'string',
-      headerName: 'Assignee',
-      width: 250,
-    },
-    {
-      field: 'vendor_name',
-      type: 'string',
-      headerName: 'Vendor Name',
-      width: 250,
-    },
-    {
-      field: 'vendor_code',
-      type: 'string',
-      headerName: 'Vendor Code',
-      width: 150,
-    },
-    {
-      field: 'cur_pos',
-      type: 'string',
-      headerName: 'Position',
-      width: 150,
-    },
-    {
-      field: 'status_ticket',
-      type: 'string',
-      headerName: 'Status',
-      width: 150,
-      renderCell: (item) => {
-        let status = item.row.status_ticket;
-        let severity;
-        let text;
-        if (status === 'ON PROCESS') {
-          severity = 'warning.main';
-          text = 'black';
-        } else if (status === 'REJECT') {
-          severity = 'error.main';
-          text = 'white';
-        } else if (status === 'ACCEPTED') {
-          severity = 'success.main';
-          text = 'white';
-        }
-        return (
-          <>
-            <ProgressStat color={severity}>
-              <Typography color={text} variant="body">
-                {status}
-              </Typography>
-            </ProgressStat>
-          </>
-        );
+  const columnTable = useMemo(
+    () => [
+      {
+        field: 'ticket_num',
+        type: 'string',
+        headerName: 'Ticket Number',
+        width: 150,
       },
-    },
-    {
-      field: 'action',
-      type: 'actions',
-      width: 150,
-      renderCell: (item) => {
-        let Buttons = [];
-        if (item.row.is_active == true) {
-          if (item.row.ticket_state == 'INIT') {
-            if (perm.INIT.create) {
-              Buttons.push(
-                <Tooltip key={item.id} title="Link">
-                  <IconButton onClick={handleButtonAction('Link', item.row)} onClose={handleOnBtnClose}>
-                    <Link />
-                  </IconButton>
-                </Tooltip>
-              );
-              if (item.row.is_expired) {
+      {
+        field: 'updated_at',
+        type: 'string',
+        headerName: 'Updated Date',
+        width: 180,
+      },
+      {
+        field: 'updated_by',
+        type: 'string',
+        headerName: 'Updated By',
+        width: 150,
+      },
+      {
+        field: 'date_ticket',
+        type: 'string',
+        headerName: 'Created Date',
+        width: 180,
+      },
+      {
+        field: 'assignee',
+        type: 'string',
+        headerName: 'Assignee',
+        width: 250,
+      },
+      {
+        field: 'vendor_name',
+        type: 'string',
+        headerName: 'Vendor Name',
+        width: 250,
+      },
+      {
+        field: 'vendor_code',
+        type: 'string',
+        headerName: 'Vendor Code',
+        width: 150,
+      },
+      {
+        field: 'cur_pos',
+        type: 'string',
+        headerName: 'Position',
+        width: 150,
+      },
+      {
+        field: 'status_ticket',
+        type: 'string',
+        headerName: 'Status',
+        width: 150,
+        renderCell: (item) => {
+          let status = item.row.status_ticket;
+          let severity;
+          let text;
+          if (status === 'ON PROCESS') {
+            severity = 'warning.main';
+            text = 'black';
+          } else if (status === 'REJECT') {
+            severity = 'error.main';
+            text = 'white';
+          } else if (status === 'ACCEPTED') {
+            severity = 'success.main';
+            text = 'white';
+          }
+          return (
+            <>
+              <ProgressStat color={severity}>
+                <Typography color={text} variant="body">
+                  {status}
+                </Typography>
+              </ProgressStat>
+            </>
+          );
+        },
+      },
+      {
+        field: 'action',
+        type: 'actions',
+        width: 150,
+        renderCell: (item) => {
+          let Buttons = [];
+          if (item.row.is_active == true) {
+            if (item.row.ticket_state == 'INIT') {
+              if (perm.INIT.create) {
                 Buttons.push(
-                  <Tooltip key={item.id} title="Extend Expiry">
-                    <IconButton onClick={handleButtonAction('Extend', item.row)}>
-                      <Update />
+                  <Tooltip key={item.id} title="Link">
+                    <IconButton onClick={handleButtonAction('Link', item.row)} onClose={handleOnBtnClose}>
+                      <Link />
+                    </IconButton>
+                  </Tooltip>
+                );
+                if (item.row.is_expired) {
+                  Buttons.push(
+                    <Tooltip key={item.id} title="Extend Expiry">
+                      <IconButton onClick={handleButtonAction('Extend', item.row)}>
+                        <Update />
+                      </IconButton>
+                    </Tooltip>
+                  );
+                }
+              } else if (perm.INIT.read) {
+                Buttons.push(
+                  <Tooltip key={item.id} title="View">
+                    <IconButton onClick={handleButtonAction('View', item.row)} onClose={handleOnBtnClose}>
+                      <Visibility />
                     </IconButton>
                   </Tooltip>
                 );
               }
-            } else if (perm.INIT.read) {
-              Buttons.push(
-                <Tooltip key={item.id} title="View">
-                  <IconButton onClick={handleButtonAction('View', item.row)} onClose={handleOnBtnClose}>
-                    <Visibility />
-                  </IconButton>
-                </Tooltip>
-              );
+              if (perm.INIT.delete) {
+                Buttons.push(
+                  <Tooltip key={item.id + '_delete'} title="Delete">
+                    <IconButton onClick={handleButtonAction('Delete', item.row)} onClose={handleOnBtnClose}>
+                      <Delete />
+                    </IconButton>
+                  </Tooltip>
+                );
+              }
             }
-            if (perm.INIT.delete) {
-              Buttons.push(
-                <Tooltip key={item.id + '_delete'} title="Delete">
-                  <IconButton onClick={handleButtonAction('Delete', item.row)} onClose={handleOnBtnClose}>
-                    <Delete />
-                  </IconButton>
-                </Tooltip>
-              );
+            if (item.row.ticket_state == 'CREA') {
+              if (perm.CREA.update) {
+                Buttons.push(
+                  <Tooltip key={item.id} title="Edit">
+                    <IconButton onClick={handleButtonAction('Edit', item.row)}>
+                      <Edit />
+                    </IconButton>
+                  </Tooltip>
+                );
+              } else if (perm.CREA.read) {
+                Buttons.push(
+                  <Tooltip key={item.id} title="View">
+                    <IconButton onClick={handleButtonAction('View', item.row)} onClose={handleOnBtnClose}>
+                      <Visibility />
+                    </IconButton>
+                  </Tooltip>
+                );
+              }
             }
+            if (item.row.ticket_state == 'FINA') {
+              if (perm.FINA.update && item.row.cur_pos !== 'CEO') {
+                Buttons.push(
+                  <Tooltip key={item.id} title="Edit">
+                    <IconButton onClick={handleButtonAction('Edit', item.row)}>
+                      <Edit />
+                    </IconButton>
+                  </Tooltip>
+                );
+              } else if (perm.FINA.read) {
+                Buttons.push(
+                  <Tooltip key={item.id} title="View">
+                    <IconButton onClick={handleButtonAction('View', item.row)} onClose={handleOnBtnClose}>
+                      <Visibility />
+                    </IconButton>
+                  </Tooltip>
+                );
+                // if (item.row.cur_pos === 'CEO') {
+                //   Buttons.push(
+                //     <Tooltip key={item.id} title="Resend CEO">
+                //       <IconButton onClick={handleButtonAction('RESEND', item.row)} onClose={handleOnBtnClose}>
+                //         <MailOutline />
+                //       </IconButton>
+                //     </Tooltip>
+                //   );
+                // }
+              }
+            }
+          } else {
+            Buttons.push(
+              <Tooltip key={item.id} title="View">
+                <IconButton onClick={handleButtonAction('View', item.row)} onClose={handleOnBtnClose}>
+                  <Visibility />
+                </IconButton>
+              </Tooltip>
+            );
           }
-          if (item.row.ticket_state == 'CREA') {
-            if (perm.CREA.update) {
-              Buttons.push(
-                <Tooltip key={item.id} title="Edit">
-                  <IconButton onClick={handleButtonAction('Edit', item.row)}>
-                    <Edit />
-                  </IconButton>
-                </Tooltip>
-              );
-            } else if (perm.CREA.read) {
-              Buttons.push(
-                <Tooltip key={item.id} title="View">
-                  <IconButton onClick={handleButtonAction('View', item.row)} onClose={handleOnBtnClose}>
-                    <Visibility />
-                  </IconButton>
-                </Tooltip>
-              );
-            }
-          }
-          if (item.row.ticket_state == 'FINA') {
-            if (perm.FINA.update && item.row.cur_pos !== 'CEO') {
-              Buttons.push(
-                <Tooltip key={item.id} title="Edit">
-                  <IconButton onClick={handleButtonAction('Edit', item.row)}>
-                    <Edit />
-                  </IconButton>
-                </Tooltip>
-              );
-            } else if (perm.FINA.read) {
-              Buttons.push(
-                <Tooltip key={item.id} title="View">
-                  <IconButton onClick={handleButtonAction('View', item.row)} onClose={handleOnBtnClose}>
-                    <Visibility />
-                  </IconButton>
-                </Tooltip>
-              );
-              // if (item.row.cur_pos === 'CEO') {
-              //   Buttons.push(
-              //     <Tooltip key={item.id} title="Resend CEO">
-              //       <IconButton onClick={handleButtonAction('RESEND', item.row)} onClose={handleOnBtnClose}>
-              //         <MailOutline />
-              //       </IconButton>
-              //     </Tooltip>
-              //   );
-              // }
-            }
-          }
-        } else {
-          Buttons.push(
-            <Tooltip key={item.id} title="View">
-              <IconButton onClick={handleButtonAction('View', item.row)} onClose={handleOnBtnClose}>
-                <Visibility />
-              </IconButton>
-            </Tooltip>
-          );
-        }
-        return Buttons;
+          return Buttons;
+        },
       },
-    },
-  ];
+    ],
+    [perm]
+  );
 
   return (
     <Box sx={{ height: '100%', width: '100%' }}>
