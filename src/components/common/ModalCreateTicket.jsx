@@ -11,6 +11,7 @@ import {
   Box,
   Snackbar,
   Alert,
+  CircularProgress,
 } from '@mui/material';
 import { Link } from '@mui/icons-material';
 import axios from 'axios';
@@ -29,11 +30,11 @@ const ticket_type = [
   },
 ];
 
-export default function ModalCreateTicket({ open, onClose, linkUrl, urlSet, popUp, onClick }) {
+export default function ModalCreateTicket({ open, onClose, popUp, onClick }) {
   const axiosPrivate = useAxiosPrivate();
   const { session } = useSession();
   const navigate = useNavigate();
-  const [links, setLinks] = useState(linkUrl);
+  const [link, setLink] = useState("");
   const [btnClicked, setBtnclicked] = useState(false);
   const [ttype, setTType] = useState('');
   const [formStat, setFormStat] = useState({
@@ -46,7 +47,7 @@ export default function ModalCreateTicket({ open, onClose, linkUrl, urlSet, popU
     setFormStat({
       stat: false,
       message: '',
-      type: '',
+      type: 'info',
     });
   };
 
@@ -55,16 +56,12 @@ export default function ModalCreateTicket({ open, onClose, linkUrl, urlSet, popU
     setTType(value);
   };
 
-  useEffect(() => {
-    setLinks(linkUrl);
-  }, [linkUrl]);
-
   const handlePopUp = (e) => {
     popUp(e);
   };
 
   const handleClick = (e) => {
-    onClick(links);
+    onClick(link);
   };
 
   const handlegenticket = (param) => async () => {
@@ -77,8 +74,9 @@ export default function ModalCreateTicket({ open, onClose, linkUrl, urlSet, popU
           ticket_type: ttype,
         });
         const createdTicket = response.data;
+        console.log(createdTicket)
         if (param === 'VENDOR') {
-          urlSet(`${location.protocol}/${location.host}/${createdTicket.data.link}`);
+          setLink(`${location.protocol}/${location.host}/${createdTicket.data.link}`);
           setFormStat({
             stat: true,
             message: 'Success generate ticket',
@@ -104,7 +102,7 @@ export default function ModalCreateTicket({ open, onClose, linkUrl, urlSet, popU
     if (navigator.clipboard === undefined) {
       handleClick();
     } else {
-      navigator.clipboard.writeText(links);
+      navigator.clipboard.writeText(link);
     }
     handlePopUp(e);
   };
@@ -142,16 +140,8 @@ export default function ModalCreateTicket({ open, onClose, linkUrl, urlSet, popU
             sx={{ width: '20rem' }}
             onChangeovr={changeTType}
           />
-          <LoadingButton
-            sx={{ height: 80, width: 400, mb: 2 }}
-            onClick={handlegenticket('VENDOR')}
-            loading={btnClicked}
-          >
-            By Vendor
-          </LoadingButton>
-          <LoadingButton sx={{ height: 80, width: 400, my: 2 }} onClick={handlegenticket('PROC')} loading={btnClicked}>
-            By User
-          </LoadingButton>
+          <Button disabled={btnClicked} sx={{ height: 80, width: 400, mb: 2 }} onClick={handlegenticket('VENDOR')}>{btnClicked ? <CircularProgress /> : "By Vendor"}</Button>
+          <Button disabled={btnClicked} sx={{ height: 80, width: 400, mb: 2 }} onClick={handlegenticket('PROC')}>{btnClicked ? <CircularProgress /> : "By User"}</Button>
           <FormControl sx={{ mt: 5, mb: 1, width: 780 }} variant="outlined">
             <InputLabel htmlFor="link-url-form-label">Link Form</InputLabel>
             <OutlinedInput
@@ -164,7 +154,7 @@ export default function ModalCreateTicket({ open, onClose, linkUrl, urlSet, popU
                 </InputAdornment>
               }
               label="Password"
-              value={links}
+              value={link}
               readOnly={true}
               onClick={handleClickLink}
             />

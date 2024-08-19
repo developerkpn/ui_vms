@@ -35,9 +35,11 @@ function RefreshTable(props) {
   };
   return (
     <Tooltip title={<Typography>Refresh</Typography>}>
-      <LoadingButton loading={props.isLoading} onClick={refreshBtn} sx={props.sx} variant={'contained'}>
-        <Refresh></Refresh>
-      </LoadingButton>
+      <span>
+        <Button onClick={refreshBtn} sx={props.sx} variant={'contained'} disabled={props.isLoading}>
+          {props.isLoading ? <CircularProgress /> : <Refresh />}
+        </Button>
+      </span>
     </Tooltip>
   );
 }
@@ -48,7 +50,6 @@ export default function ListTicket() {
   const [perm, setPerm] = useState();
   const [ticket, setTicket] = useState();
   const [openModal, setOpenmodal] = useState(false);
-  const [url, setUrl] = useState('');
   const [btnTicket, setBtn] = useState(false);
   const [grow, setGrow] = useState(false);
   const [anchorEl, setAnchorel] = useState(null);
@@ -59,10 +60,7 @@ export default function ListTicket() {
   const [refreshBtn, setRefreshbtn] = useState(true);
   const axiosPrivate = useAxiosPrivate();
   const navigate = useNavigate();
-  const urlSetFunc = (urlitem) => {
-    setUrl(urlitem);
-    setRefreshbtn(true);
-  };
+
   const tickets = async (controller) => {
     let permission = {};
     permission['INIT'] = getPermission('Initial Form');
@@ -123,7 +121,7 @@ export default function ListTicket() {
     return () => {
       controller.abort();
     };
-  }, [url, filterAct, deleted, refreshBtn]);
+  }, [filterAct, deleted, refreshBtn]);
 
   useEffect(() => {
     let permission = {};
@@ -136,7 +134,6 @@ export default function ListTicket() {
 
   const handleOnClose = () => {
     setOpenmodal(false);
-    setUrl('');
   };
 
   const handleOnBtnClose = () => () => {
@@ -476,8 +473,6 @@ export default function ListTicket() {
       <ModalCreateTicket
         open={openModal}
         onClose={handleOnClose}
-        linkUrl={url}
-        urlSet={urlSetFunc}
         popUp={popUpFeedback}
         onClick={copyToClipboard}
       />
