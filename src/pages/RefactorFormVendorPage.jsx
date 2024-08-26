@@ -1887,8 +1887,8 @@ function RefactorFormVendorPage() {
                       control={control}
                       disabled={
                         !(
-                          (UPDATE.current.INIT && ticketState === 'INIT') ||
-                          (UPDATE.current.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
+                          (UPDATE.INIT && ticketState === 'INIT') ||
+                          (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
                         ) || state.chgLocal === 'LOCAL'
                       }
                       options={countries.current}
@@ -1944,12 +1944,7 @@ function RefactorFormVendorPage() {
                       label={t('Telephone Number')}
                       useplaceholder
                       control={control}
-                      disabled={
-                        !(
-                          (UPDATE.current.INIT && ticketState === 'INIT') ||
-                          (UPDATE.current.CREA && ticketState === 'CREA')
-                        )
-                      }
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
                       format={state.phoneNumber}
                       isNumString={false}
                     />
@@ -1960,12 +1955,7 @@ function RefactorFormVendorPage() {
                       label={t('Handphone Number')}
                       useplaceholder
                       control={control}
-                      disabled={
-                        !(
-                          (UPDATE.current.INIT && ticketState === 'INIT') ||
-                          (UPDATE.current.CREA && ticketState === 'CREA')
-                        )
-                      }
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
                       format={state.phoneNumber}
                       isNumString={false}
                       tooltip={t('Gunakan format kode telfon internasional')}
@@ -2137,12 +2127,7 @@ function RefactorFormVendorPage() {
                       label={t('Handphone Number PIC')}
                       useplaceholder
                       control={control}
-                      disabled={
-                        !(
-                          (UPDATE.current.INIT && ticketState === 'INIT') ||
-                          (UPDATE.current.CREA && ticketState === 'CREA')
-                        )
-                      }
+                      disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
                       format={state.phoneNumber}
                       isNumString={false}
                       rules={{ required: 'Please insert this field' }}
@@ -2916,7 +2901,7 @@ function RefactorFormVendorPage() {
                         control={control}
                         options={currencies}
                         onChangeovr={funChgCurr}
-                        disabled={state.chgVenacc === 'NON_TRADE' || !(ticketState === 'CREA' && UPDATE.current.CREA)}
+                        disabled={state.chgVenacc === 'NON_TRADE' || !(ticketState === 'CREA' && UPDATE.CREA)}
                         rules={{ required: state.chgVenacc === 'TRADE' ? 'Please insert this field' : false }}
                       />
                     </Grid>
@@ -2928,7 +2913,7 @@ function RefactorFormVendorPage() {
                         control={control}
                         format={['thousandSeparator']}
                         currency={state.chgCurr}
-                        disabled={state.chgVenacc === 'NON_TRADE' || !(ticketState === 'CREA' && UPDATE.current.CREA)}
+                        disabled={state.chgVenacc === 'NON_TRADE' || !(ticketState === 'CREA' && UPDATE.CREA)}
                         rules={{ required: state.chgVenacc === 'TRADE' ? t('Please insert this field') : false }}
                       />
                     </Grid>
@@ -2969,7 +2954,7 @@ function RefactorFormVendorPage() {
                           label="Description *"
                           helperText={t('Wajib diisi jika vendor mengikuti tender')}
                           control={control}
-                          disabled={!(ticketState === 'CREA' && UPDATE.current.CREA)}
+                          disabled={!(ticketState === 'CREA' && UPDATE.CREA)}
                           rules={{ required: state.isTender ? 'Please insert this field' : false }}
                         />
                       </Grid>
