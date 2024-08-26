@@ -16,7 +16,7 @@ import {
   Tooltip,
 } from '@mui/material';
 import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Edit, Link, Visibility, Delete, Refresh, Update } from '@mui/icons-material';
 import ModalCreateTicket from 'src/components/common/ModalCreateTicket';
 import { useSession } from 'src/provider/sessionProvider';
@@ -147,7 +147,7 @@ export default function ListTicket() {
     setRefreshbtn(true);
   };
 
-  const copyToClipboard = async (textToCopy) => {
+  const copyToClipboard = useCallback(async (textToCopy) => {
     // Navigator clipboard api needs a secure context (https)
     // Use the 'out of viewport hidden text area' trick
     const textArea = document.createElement('textarea');
@@ -169,57 +169,60 @@ export default function ListTicket() {
     } finally {
       textArea.remove();
     }
-  };
+  }, []);
 
-  const handleButtonAction = (type, row) => async (e) => {
-    try {
-      if (type === 'Link') {
-        if (navigator.clipboard === undefined) {
-          await copyToClipboard(`${location.protocol}/${location.host}/frm/newform/${row.id}`);
-        } else {
-          navigator.clipboard.writeText(`${location.protocol}/${location.host}/frm/newform/${row.id}`);
-        }
-        setAnchorel(e.target);
-        setBtn(true);
-        setGrow(true);
-        setTimeout(() => {
-          setBtn(false);
-        }, 1000);
-      } else if (type === 'Delete') {
-        const deleteTicket = await axiosPrivate.delete(`/ticket/${row.id}`);
-        setDelete(!deleted);
-        setRefreshbtn(true);
-        alert(`Ticket ${deleteTicket.data.data} is deleted`);
-      } else if (type === 'Extend') {
-        if (confirm('Are you sure want to extend ? (+1 day)')) {
-          const extendTicket = await axiosPrivate.post(`/ticket/extexp`, {
-            ticket_id: row.id,
-          });
-          alert(`Ticket ${extendTicket.data.ticket_num} expiry date extended`);
+  const handleButtonAction = useCallback(
+    (type, row) => async (e) => {
+      try {
+        if (type === 'Link') {
+          if (navigator.clipboard === undefined) {
+            await copyToClipboard(`${location.protocol}/${location.host}/frm/newform/${row.id}`);
+          } else {
+            navigator.clipboard.writeText(`${location.protocol}/${location.host}/frm/newform/${row.id}`);
+          }
+          setAnchorel(e.target);
+          setBtn(true);
+          setGrow(true);
+          setTimeout(() => {
+            setBtn(false);
+          }, 1000);
+        } else if (type === 'Delete') {
+          const deleteTicket = await axiosPrivate.delete(`/ticket/${row.id}`);
+          setDelete(!deleted);
           setRefreshbtn(true);
-        }
-      } else if (type === 'RESEND') {
-        if (confirm('Are you sure want to resend request to CEO ?')) {
-          try {
-            const resendTicket = await axiosPrivate.post(`/ticket/resendceo`, {
+          alert(`Ticket ${deleteTicket.data.data} is deleted`);
+        } else if (type === 'Extend') {
+          if (confirm('Are you sure want to extend ? (+1 day)')) {
+            const extendTicket = await axiosPrivate.post(`/ticket/extexp`, {
               ticket_id: row.id,
             });
-            alert(`Ticket resent`);
-          } catch (error) {
-            alert(error.response?.data?.message);
-          } finally {
+            alert(`Ticket ${extendTicket.data.ticket_num} expiry date extended`);
             setRefreshbtn(true);
           }
+        } else if (type === 'RESEND') {
+          if (confirm('Are you sure want to resend request to CEO ?')) {
+            try {
+              const resendTicket = await axiosPrivate.post(`/ticket/resendceo`, {
+                ticket_id: row.id,
+              });
+              alert(`Ticket resent`);
+            } catch (error) {
+              alert(error.response?.data?.message);
+            } finally {
+              setRefreshbtn(true);
+            }
+          }
+        } else {
+          // <Navigate to={`/form/${row.id}`} />;
+          navigate(`../form/${row.id}`, { relative: 'path' });
+          setLoader(true);
         }
-      } else {
-        // <Navigate to={`/form/${row.id}`} />;
-        navigate(`../form/${row.id}`, { relative: 'path' });
-        setLoader(true);
+      } catch (error) {
+        console.error(error);
       }
-    } catch (error) {
-      console.error(error);
-    }
-  };
+    },
+    [ticket]
+  );
 
   const popUpFeedback = (e) => {
     setAnchorel(e.target);

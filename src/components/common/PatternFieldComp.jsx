@@ -16,6 +16,7 @@ export default function PatternFieldComp({
   tooltip,
   t,
   helperText,
+  disabled,
   useplaceholder,
 }) {
   return (
@@ -51,6 +52,7 @@ export default function PatternFieldComp({
                 patternChar={patternChar}
                 inputProps={{
                   readOnly: readOnly,
+                  disabled: disabled,
                   placeholder: useplaceholder && format.replace(/#/g, '_'),
                 }}
                 helperText={helpertext}

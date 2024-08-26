@@ -9,7 +9,7 @@ export default function AutoCompleteSelect({
   onChangeovr,
   freeSolo,
   readOnly,
-  disable,
+  disabled,
   rules,
   t,
   helperText,
@@ -50,7 +50,7 @@ export default function AutoCompleteSelect({
             autoSelect={freeSolo}
             fullWidth
             readOnly={readOnly}
-            disabled={disable}
+            disabled={disabled}
             renderInput={(params) => (
               <TextField {...params} label={label} error={error} inputRef={ref} helperText={helpertext} />
             )}

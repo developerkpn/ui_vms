@@ -103,7 +103,8 @@
       "Vendor Priority": "Vendor Prioritas",
       "Mohon dilanjutkan ke kolom berikutnya jika tidak cukup": "Mohon dilanjutkan ke kolom berikutnya jika tidak cukup",
       "Please insert at least 1": "Mohon isi minimal 1",
-      "Karakter": "Karakter"
+      "Karakter": "Karakter",
+      "Alasan memilih vendor tersebut menjadi rekanan KPN": "Alasan memilih vendor tersebut menjadi rekanan KPN"
     }
   },
   "en": {
@@ -210,7 +211,8 @@
       "Vendor Priority": "Vendor Priority",
       "Mohon dilanjutkan ke kolom berikutnya jika tidak cukup": "Please continue to next field if current field is not enough",
       "Karakter": "Character",
-      "Please insert at least 1": "Please insert at least 1"
+      "Please insert at least 1": "Please insert at least 1",
+      "Alasan memilih vendor tersebut menjadi rekanan KPN": "Reason for choosing vendor as KPN's partner"
     }
   }
 }

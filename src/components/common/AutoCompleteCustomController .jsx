@@ -35,6 +35,8 @@ export default function AutoCompleteCustomController(params) {
                 ev.preventDefault();
               }}
               filterOptions={(options, param) => {
+                console.log(options);
+                console.log(param);
                 const filtered = filter(options, param);
                 if (param.inputValue !== '' && params.addnew) {
                   filtered.push({

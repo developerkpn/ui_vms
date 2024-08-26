@@ -23,10 +23,10 @@ import SelectCompNoCont from './SelectCompNoCont';
 
 const ticket_type = [
   { value: 'UPS', label: 'UPSTREAM' },
-  {
-    value: 'DWS',
-    label: 'DOWNSTREAM',
-  },
+  // {
+  //   value: 'DWS',
+  //   label: 'DOWNSTREAM',
+  // },
 ];
 
 export default function ModalCreateTicket({ open, onClose, linkUrl, urlSet, popUp, onClick }) {
@@ -51,7 +51,7 @@ export default function ModalCreateTicket({ open, onClose, linkUrl, urlSet, popU
   };
 
   const changeTType = (value) => {
-    console.log(value);
+    // console.log(value);
     setTType(value);
   };
 
@@ -138,7 +138,7 @@ export default function ModalCreateTicket({ open, onClose, linkUrl, urlSet, popU
           <SelectCompNoCont
             options={ticket_type}
             value={ttype}
-            label="Ticket Type"
+            label="Business Unit"
             sx={{ width: '20rem' }}
             onChangeovr={changeTType}
           />

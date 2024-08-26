@@ -10,6 +10,7 @@ export default defineConfig(() => {
     },
     build: {
       outDir: '../vendor_ms_app/public/build',
+      emptyOutDir: true,
     },
     server: {
       port: 3000,
