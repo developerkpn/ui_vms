@@ -478,6 +478,7 @@ export default function ListTicket() {
         onClose={handleOnClose}
         popUp={popUpFeedback}
         onClick={copyToClipboard}
+        refresh={buttonRefreshAct}
       />
       <Popper open={btnTicket} anchorEl={anchorEl} transition sx={{ zIndex: 3000 }}>
         {({ TransitionProps }) => {

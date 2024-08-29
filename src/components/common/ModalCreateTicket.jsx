@@ -30,11 +30,11 @@ const ticket_type = [
   // },
 ];
 
-export default function ModalCreateTicket({ open, onClose, popUp, onClick }) {
+export default function ModalCreateTicket({ open, onClose, popUp, onClick, refresh }) {
   const axiosPrivate = useAxiosPrivate();
   const { session } = useSession();
   const navigate = useNavigate();
-  const [link, setLink] = useState("");
+  const [link, setLink] = useState('');
   const [btnClicked, setBtnclicked] = useState(false);
   const [ttype, setTType] = useState('');
   const [formStat, setFormStat] = useState({
@@ -74,7 +74,6 @@ export default function ModalCreateTicket({ open, onClose, popUp, onClick }) {
           ticket_type: ttype,
         });
         const createdTicket = response.data;
-        console.log(createdTicket)
         if (param === 'VENDOR') {
           setLink(`${location.protocol}/${location.host}/${createdTicket.data.link}`);
           setFormStat({
@@ -83,6 +82,7 @@ export default function ModalCreateTicket({ open, onClose, popUp, onClick }) {
             type: 'success',
           });
           setBtnclicked(false);
+          refresh();
         } else {
           navigate(`../form/${createdTicket.data.token}`);
         }
@@ -140,8 +140,12 @@ export default function ModalCreateTicket({ open, onClose, popUp, onClick }) {
             sx={{ width: '20rem' }}
             onChangeovr={changeTType}
           />
-          <Button disabled={btnClicked} sx={{ height: 80, width: 400, mb: 2 }} onClick={handlegenticket('VENDOR')}>{btnClicked ? <CircularProgress /> : "By Vendor"}</Button>
-          <Button disabled={btnClicked} sx={{ height: 80, width: 400, mb: 2 }} onClick={handlegenticket('PROC')}>{btnClicked ? <CircularProgress /> : "By User"}</Button>
+          <Button disabled={btnClicked} sx={{ height: 80, width: 400, mb: 2 }} onClick={handlegenticket('VENDOR')}>
+            {btnClicked ? <CircularProgress /> : 'By Vendor'}
+          </Button>
+          <Button disabled={btnClicked} sx={{ height: 80, width: 400, mb: 2 }} onClick={handlegenticket('PROC')}>
+            {btnClicked ? <CircularProgress /> : 'By User'}
+          </Button>
           <FormControl sx={{ mt: 5, mb: 1, width: 780 }} variant="outlined">
             <InputLabel htmlFor="link-url-form-label">Link Form</InputLabel>
             <OutlinedInput
