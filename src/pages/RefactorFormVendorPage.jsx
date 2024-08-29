@@ -22,7 +22,7 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useGridApiRef } from '@mui/x-data-grid';
-import { useState, useRef, useEffect, useMemo, useCallback, useReducer } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import UploadButton from 'src/components/common/UploadButton';
 import { useLoaderData, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
@@ -72,142 +72,6 @@ const ventypeList = {
   // EMPLOYEE: [{ value: 'X', label: 'X' }],
   // INTERDIVISION: [{ value: 'X', label: 'X' }],
 };
-
-function reducer(state, action) {
-  switch (action.type) {
-    case 'setChgComp': {
-      return {
-        ...state,
-        chgComp: action.payload,
-      };
-    }
-    case 'setChgCty': {
-      return {
-        ...state,
-        chgCountry: action.payload,
-      };
-    }
-    case 'setVengrp': {
-      return {
-        ...state,
-        chgVengrp: action.payload,
-      };
-    }
-    case 'setVenacc': {
-      return {
-        ...state,
-        chgVenacc: action.payload,
-      };
-    }
-    case 'setChgCurr': {
-      return {
-        ...state,
-        chgCurr: action.payload,
-      };
-    }
-    case 'setCurrentEdit': {
-      return;
-    }
-    case 'setPhnNum': {
-      return {
-        ...state,
-        phoneNumber: action.payload,
-      };
-    }
-    case 'setFileType': {
-      return {
-        ...state,
-        fileType: action.payload,
-      };
-    }
-    case 'setIsPTKP': {
-      return {
-        ...state,
-        chgIsPTKP: action.payload,
-      };
-    }
-    case 'setLocal': {
-      return {
-        ...state,
-        chgLocal: action.payload,
-      };
-    }
-    case 'setComptitle': {
-      return {
-        ...state,
-        compTitle: action.payload,
-      };
-    }
-    case 'setCompname': {
-      return {
-        ...state,
-        compName: action.payload,
-      };
-    }
-    case 'setCheckex': {
-      return {
-        ...state,
-        checkIsExist: action.payload,
-      };
-    }
-    case 'setOpenAlert': {
-      return {
-        ...state,
-        openAlert: action.payload,
-      };
-    }
-    case 'setTender': {
-      return {
-        ...state,
-        isTender: action.payload,
-      };
-    }
-    case 'setBtnclick': {
-      return {
-        ...state,
-        btnClicked: action.payload,
-      };
-    }
-    case 'setModalopen': {
-      return {
-        ...state,
-        modalRejectopen: action.payload,
-      };
-    }
-    case 'setConfOpen': {
-      return {
-        ...state,
-        modalConfirmopen: action.payload,
-      };
-    }
-    case 'setConfirmAction': {
-      return {
-        ...state,
-        confirmAction: action.payload,
-      };
-    }
-    case 'setLoadAddBnk': {
-      return {
-        ...state,
-        loadAddBank: action.payload,
-      };
-    }
-    case 'setLang': {
-      return {
-        ...state,
-        langCode: action.payload,
-      };
-    }
-    case 'setInitDfile': {
-      return {
-        ...state,
-        initDataFile: action.payload,
-      };
-    }
-    default:
-      return { ...state };
-  }
-}
 
 function RefactorFormVendorPage() {
   const theme = useTheme();
@@ -409,11 +273,7 @@ function RefactorFormVendorPage() {
       };
 
       if (valueForm.name1 === '') {
-        // setCheckex(true);
-        dispatch({
-          type: 'setCheckex',
-          payload: true,
-        });
+        setCheckex(true);
         setExpanded({
           panelReqDet: true,
           panelCompDet: true,
@@ -430,11 +290,7 @@ function RefactorFormVendorPage() {
           panelRejectLog: false,
         });
       } else {
-        // setCheckex(false);
-        dispatch({
-          type: 'setCheckex',
-          payload: false,
-        });
+        setCheckex(false);
         setExpanded({
           panelReqDet: true,
           panelCompDet: true,
@@ -582,11 +438,7 @@ function RefactorFormVendorPage() {
       };
 
       if (valueForm.name1 === '') {
-        // setCheckex(true);
-        dispatch({
-          type: 'setCheckex',
-          payload: true,
-        });
+        setCheckex(true);
         setExpanded({
           panelReqDet: true,
           panelCompDet: true,
@@ -603,11 +455,7 @@ function RefactorFormVendorPage() {
           panelRejectLog: false,
         });
       } else {
-        // setCheckex(false);
-        dispatch({
-          type: 'setCheckex',
-          payload: false,
-        });
+        setCheckex(false);
         setExpanded({
           panelReqDet: true,
           panelCompDet: true,
@@ -647,89 +495,51 @@ function RefactorFormVendorPage() {
       controller.abort();
     };
   }, []);
-
-  const [state, dispatch] = useReducer(reducer, {
-    chgComp: null,
-    chgCountry: loader_data.data?.country,
-    chgVengrp: loader_data.data?.vengroup,
-    chgVenacc: loader_data.data?.venacc,
-    chgCurr: loader_data.data?.currency,
-    currentEdit: [],
-    phoneNumber: '+XX',
-    fileType: [],
-    chgIsPTKP: false,
-    chgLocal: '',
-    compTitle: loader_data.data?.titlecomp,
-    compName: undefined,
-    checkIsExist: true,
-    openAlert: false,
-    isTender: loader_data.data?.is_tender,
-    btnClicked: false,
-    modalRejectopen: false,
-    modalConfirmopen: false,
-    confirmAction: false,
-    loadAddBank: false,
-    langCode: 'id',
-    initDataFile: [],
-  });
-
-  // const [chgComp, setChgComp] = useState();
-  // const [chgCountry, setChgCty] = useState(loader_data.data?.country);
-  // const [chgVengrp, setVengrp] = useState(loader_data.data?.vengroup);
-  // const [chgVenacc, setVenacc] = useState(loader_data.data?.venacc);
-  // const [chgCurr, setChgCurr] = useState(loader_data.data?.currency);
-  // const [currentEdit, setCurrentEdit] = useState([]);
-  // const [phoneNumber, setPhnNum] = useState('+XX');
-  // const [fileType, setFileType] = useState([]);
-  // const [chgIsPTKP, setIsPTKP] = useState(false);
-  // const [chgLocal, setLocal] = useState('');
-  // const [compTitle, setComptitle] = useState(loader_data.data?.titlecomp);
-  // const [compName, setCompname] = useState();
-  // const [checkIsExist, setCheckex] = useState(true);
-  // const [openAlert, setOpenAlert] = useState(false);
-  // const [isTender, setTender] = useState(loader_data.data?.is_tender);
-  // const [btnClicked, setBtnclick] = useState(false);
-  // const [modalRejectopen, setModalopen] = useState(false);
-  // const [modalConfirmopen, setConfOpen] = useState(false);
-  // const [confirmAction, setConfirmAction] = useState(false);
-  // const [loadAddBank, setLoadAddBnk] = useState(false);
-  // const [langCode, setLang] = useState('id');
-  // const [initDataFile, setInitDfile] = useState([]);
-
-  const { t, i18n } = useTranslation('translation', { lng: state.langCode });
+  const [chgComp, setChgComp] = useState();
+  const [chgCountry, setChgCty] = useState(loader_data.data?.country);
+  const [chgVengrp, setVengrp] = useState(loader_data.data?.vengroup);
+  const [chgVenacc, setVenacc] = useState(loader_data.data?.venacc);
+  const [chgCurr, setChgCurr] = useState(loader_data.data?.currency);
+  const [currentEdit, setCurrentEdit] = useState([]);
+  const [phoneNumber, setPhnNum] = useState('+XX');
+  const [fileType, setFileType] = useState([]);
+  const [chgIsPTKP, setIsPTKP] = useState(false);
+  const [chgLocal, setLocal] = useState('');
+  const [compTitle, setComptitle] = useState(loader_data.data?.titlecomp);
+  const [compName, setCompname] = useState();
+  const [checkIsExist, setCheckex] = useState(true);
+  const [openAlert, setOpenAlert] = useState(false);
+  const [isTender, setTender] = useState(loader_data.data?.is_tender);
+  const [btnClicked, setBtnclick] = useState(false);
+  const [modalRejectopen, setModalopen] = useState(false);
+  const [modalConfirmopen, setConfOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(false);
+  const [loadAddBank, setLoadAddBnk] = useState(false);
+  const [langCode, setLang] = useState('id');
+  const { t, i18n } = useTranslation('translation', { lng: langCode });
+  const [initDataFile, setInitDfile] = useState([]);
   // const updateCurrentEdit = (rows) => {
   //   setCurrentEdit(rows);
   // };
   const funChgCountry = useCallback((item) => {
-    // setChgCty(item);
-    dispatch({
-      type: 'setChgCty',
-      payload: item,
-    });
+    setChgCty(item);
     countrycode.current = item;
   }, []);
   const funChgVgrp = useCallback((item) => {
-    // setVengrp(item);
-    dispatch({ type: 'setVengrp', payload: item });
+    setVengrp(item);
   }, []);
   const funChgVacc = useCallback((item) => {
-    // setVenacc(item);
-    dispatch({ type: 'setVenacc', payload: item });
+    setVenacc(item);
     if (item !== 'TRADE') {
       clearErrors('currency');
       clearErrors('limit');
     }
   }, []);
   const funChgIsPTKP = useCallback((item) => {
-    // setIsPTKP(item);
-    dispatch({
-      type: 'setIsPTKP',
-      payload: item,
-    });
+    setIsPTKP(item);
   }, []);
   const funChgComp = useCallback((item) => {
-    // setChgComp(item);
-    dispatch({ type: 'setChgComp', payload: item });
+    setChgComp(item);
     resetField('purchorg');
   }, []);
 
@@ -756,11 +566,7 @@ function RefactorFormVendorPage() {
     try {
       const checkExt = await axiosPrivate.get(`/vendor/checkven?name=${item}`);
       // console.log(checkExt);
-      // setCheckex(false);
-      dispatch({
-        type: 'setCheckex',
-        payload: false,
-      });
+      setCheckex(false);
       // console.log(expanded);
       setExpanded({
         panelReqDet: true,
@@ -778,18 +584,10 @@ function RefactorFormVendorPage() {
         panelRejectLog: false,
       });
       setLoadex(false);
-      // setBtnclick(false);
-      dispatch({
-        type: 'setBtnClicked',
-        payload: false,
-      });
+      setBtnclick(false);
     } catch (error) {
       console.log(error);
-      // setOpenAlert(true);
-      dispatch({
-        type: 'setOpenAlert',
-        payload: true,
-      });
+      setOpenAlert(true);
       setExpanded({
         panelReqDet: true,
         panelCompDet: true,
@@ -810,53 +608,32 @@ function RefactorFormVendorPage() {
   }, []);
 
   const funChgCurr = useCallback((item) => {
-    // setChgCurr(item);
-    dispatch({ type: 'setChgCurr', payload: item });
+    setChgCurr(item);
   }, []);
 
   const funChgLoc = useCallback((item) => {
     if (item === 'LOCAL') {
-      // setChgCty('ID');
-      dispatch({
-        type: 'setChgCty',
-        payload: 'ID',
-      });
+      setChgCty('ID');
       setValue('country', 'ID');
     }
-    // setLocal(item);
-    dispatch({
-      type: 'setLocal',
-      payload: item,
-    });
+    setLocal(item);
   }, []);
 
   const funChgTdr = useCallback((item) => {
     onLoad.current = true;
-    // setTender(item);
-    dispatch({
-      type: 'setTender',
-      payload: item,
-    });
+    setTender(item);
     if (!item) {
       clearErrors('description');
     }
   }, []);
 
   const funChgTitle = useCallback((item) => {
-    // setComptitle(item);
-    dispatch({
-      type: 'setCompTitle',
-      payload: item,
-    });
+    setComptitle(item);
   }, []);
 
   const funChgname = useCallback((item) => {
-    if (item != state.compName && item !== '') {
-      // setCheckex(true);
-      dispatch({
-        type: 'setCheckex',
-        payload: true,
-      });
+    if (item != compName && item !== '') {
+      setCheckex(true);
       setExpanded({
         panelReqDet: true,
         panelCompDet: true,
@@ -872,22 +649,10 @@ function RefactorFormVendorPage() {
         panelCompOrg: false,
         panelInfoAcc: false,
       });
-      // setBtnclick(true);
-      dispatch({
-        type: 'setBtnClicked',
-        payload: true,
-      });
-      // setCompname(item);
-      dispatch({
-        type: 'setCompName',
-        payload: item,
-      });
-    } else if (item == state.compName && item !== '') {
-      // setCheckex(false);
-      dispatch({
-        type: 'setCheckex',
-        payload: false,
-      });
+      setBtnclick(true);
+      setCompname(item);
+    } else if (item == compName && item !== '') {
+      setCheckex(false);
       setExpanded({
         panelReqDet: true,
         panelCompDet: true,
@@ -903,17 +668,9 @@ function RefactorFormVendorPage() {
         panelCompOrg: true,
         panelInfoAcc: true,
       });
-      // setBtnclick(false);
-      dispatch({
-        type: 'setBtnClicked',
-        payload: false,
-      });
+      setBtnclick(false);
     } else {
-      // setCheckex(true);
-      dispatch({
-        type: 'setCheckex',
-        payload: true,
-      });
+      setCheckex(true);
       setExpanded({
         panelReqDet: true,
         panelCompDet: true,
@@ -929,108 +686,51 @@ function RefactorFormVendorPage() {
         panelCompOrg: false,
         panelInfoAcc: false,
       });
-      // setBtnclick(true);
-      dispatch({
-        type: 'setBtnClicked',
-        payload: true,
-      });
-      // setCompname(item);
-      dispatch({
-        type: 'setCompName',
-        payload: item,
-      });
+      setBtnclick(true);
+      setCompname(item);
     }
   }, []);
 
   const modalRejectclose = useCallback(() => {
-    // setModalopen(false);
-    dispatch({
-      type: 'setModalopen',
-      payload: false,
-    });
+    setModalopen(false);
   }, []);
 
   const modalConfclose = useCallback(() => {
-    // setConfOpen(false);
-    dispatch({
-      type: 'setConfOpen',
-      payload: false,
-    });
+    setConfOpen(false);
   }, []);
 
   const confirmActionFun = useCallback(() => {
-    // setConfirmAction(true);
-    dispatch({
-      type: 'setConfirmAction',
-      payload: true,
-    });
+    setConfirmAction(true);
   }, []);
 
   useEffect(() => {
     // console.log(loader_data);
     reset(loader_data.data);
-    // setChgCty(loader_data.data?.country);
-    // setVengrp(loader_data.data?.vengroup);
-    // setVenacc(loader_data.data?.venacc);
-    // setChgCurr(loader_data.data?.currency);
-    // setTender(loader_data.data?.is_tender);
-    // setComptitle(loader_data.data?.titlecomp);
-    // setCompname(loader_data.data?.name1);
-    // setLocal(loader_data.data?.localovs);
-    // setIsPTKP(loader_data.data?.ispkp);
-
-    dispatch({
-      type: 'setChgCty',
-      payload: loader_data.data?.country,
-    });
-    dispatch({
-      type: 'setVengrp',
-      payload: loader_data.data?.vengroup,
-    });
-    dispatch({
-      type: 'setVenacc',
-      payload: loader_data.data?.venacc,
-    });
-    dispatch({
-      type: 'setChgCurr',
-      payload: loader_data.data?.currency,
-    });
-    dispatch({
-      type: 'setTender',
-      payload: loader_data.data?.is_tender,
-    });
-    dispatch({
-      type: 'setComptitle',
-      payload: loader_data.data?.titlecomp,
-    });
-    dispatch({
-      type: 'setCompname',
-      payload: loader_data.data?.name1,
-    });
-    dispatch({
-      type: 'setLocal',
-      payload: loader_data.data?.localovs,
-    });
-    dispatch({
-      type: 'setIsPTKP',
-      payload: loader_data.data?.ispkp,
-    });
-  }, []);
+    setChgCty(loader_data.data?.country);
+    setVengrp(loader_data.data?.vengroup);
+    setVenacc(loader_data.data?.venacc);
+    setChgCurr(loader_data.data?.currency);
+    setTender(loader_data.data?.is_tender);
+    setComptitle(loader_data.data?.titlecomp);
+    setCompname(loader_data.data?.name1);
+    setLocal(loader_data.data?.localovs);
+    setIsPTKP(loader_data.data?.ispkp);
+  }, [loader_data]);
 
   useEffect(() => {
     const controller = new AbortController();
-    if (state.compTitle !== '' && state.chgLocal !== '' && state.compTitle && state.chgLocal) {
+    if (compTitle !== '' && chgLocal !== '' && compTitle && chgLocal) {
       (async () => {
         try {
           unregister('file_atth');
           const { data } = await axiosPrivate.get(
-            `/master/filetype?title=${state.compTitle}&localovs=${state.chgLocal}&curpos=${ticketState}`,
+            `/master/filetype?title=${compTitle}&localovs=${chgLocal}&curpos=${ticketState}`,
             {
               signal: controller.signal,
             }
           );
           data.forEach((item) => {
-            if (state.isTender && item.file_code == 'A010') {
+            if (isTender && item.file_code == 'A010') {
               register(`file_atth.${item.file_code}`, {
                 required: item.file_type,
               });
@@ -1042,46 +742,29 @@ function RefactorFormVendorPage() {
                 }
               );
             }
-            const fileInit = state.initDataFile
+            const fileInit = initDataFile
               .filter((element) => element.file_type === item.file_code)
               .map((item) => item.file_name);
             if (fileInit) {
               setValue(`file_atth.${item.file_code}`, fileInit[0]);
             }
           });
-          // setFileType(
-          //   data.map((item) => {
-          //     if (isTender && item.file_code == 'A010') {
-          //       return {
-          //         key: item.file_code,
-          //         value: `${t(item.file_type)} * `,
-          //         help: langCode === 'id' ? item.help : item.helpen,
-          //       };
-          //     }
-          //     return {
-          //       key: item.file_code,
-          //       value: `${t(item.file_type)} ${item.is_mandatory ? '*' : ''}`,
-          //       help: langCode === 'id' ? item.help : item.helpen,
-          //     };
-          //   })
-          // );
-          dispatch({
-            type: 'setFileType',
-            payload: data.map((item) => {
-              if (state.isTender && item.file_code == 'A010') {
+          setFileType(
+            data.map((item) => {
+              if (isTender && item.file_code == 'A010') {
                 return {
                   key: item.file_code,
                   value: `${t(item.file_type)} * `,
-                  help: state.langCode === 'id' ? item.help : item.helpen,
+                  help: langCode === 'id' ? item.help : item.helpen,
                 };
               }
               return {
                 key: item.file_code,
                 value: `${t(item.file_type)} ${item.is_mandatory ? '*' : ''}`,
-                help: state.langCode === 'id' ? item.help : item.helpen,
+                help: langCode === 'id' ? item.help : item.helpen,
               };
-            }),
-          });
+            })
+          );
         } catch (error) {
           console.error(error);
         }
@@ -1090,7 +773,7 @@ function RefactorFormVendorPage() {
     return () => {
       controller.abort();
     };
-  }, [state.compTitle, state.langCode, state.chgLocal, loader_data, t, state.isTender, fields, state.initDataFile]);
+  }, [compTitle, langCode, chgLocal, loader_data, t, isTender, fields, initDataFile]);
 
   useEffect(() => {
     const firstError = Object.keys(errors).reduce((field, a) => {
@@ -1103,26 +786,18 @@ function RefactorFormVendorPage() {
   }, [errors, setFocus]);
 
   useEffect(() => {
-    if (state.confirmAction) {
+    if (confirmAction) {
       submitForm(getValues());
-      // setConfOpen(false);
-      dispatch({
-        type: 'setConfOpen',
-        payload: false,
-      });
-      // setConfirmAction(false);
-      dispatch({
-        type: 'setConfirmAction',
-        payload: false,
-      });
+      setConfOpen(false);
+      setConfirmAction(false);
     }
-  }, [state.confirmAction]);
+  }, [confirmAction]);
 
   useEffect(() => {
-    if (state.isTender && onLoad.current) {
+    if (isTender && onLoad.current) {
       setFocus('description');
     }
-  }, [state.isTender]);
+  }, [isTender]);
 
   // useEffect(() => {
   //   console.log(i18n.language);
@@ -1242,11 +917,7 @@ function RefactorFormVendorPage() {
       try {
         const fileInit = await axiosPrivate.get(`/vendor/file/${loader_data.ven_id}`, { signal: controller.signal });
         const result = fileInit.data.data;
-        // setInitDfile(result.data);
-        dispatch({
-          type: 'setInitDfile',
-          payload: result.data,
-        });
+        setInitDfile(result.data);
         setLoadInitFile(false);
       } catch (err) {
         setLoadInitFile(false);
@@ -1265,7 +936,7 @@ function RefactorFormVendorPage() {
         const getcities = await axiosPrivate.post(
           `/master/city`,
           {
-            countryId: state.chgCountry,
+            countryId: chgCountry,
           },
           {
             signal: controller.signal,
@@ -1285,32 +956,27 @@ function RefactorFormVendorPage() {
 
     const getPhoneNum = async () => {
       try {
-        const { data: phoneNum } = await axiosPrivate.get('/master/phonecode?id=' + state.chgCountry);
-        // setPhnNum(`+${phoneNum.code}-################`);
-        dispatch({ type: 'setPhnNum', payload: `+${phoneNum.code}-################` });
+        const { data: phoneNum } = await axiosPrivate.get('/master/phonecode?id=' + chgCountry);
+        setPhnNum(`+${phoneNum.code}-################`);
       } catch (error) {
         console.error(error);
       }
     };
 
-    if (state.chgCountry) {
+    if (chgCountry) {
       dynaCity();
       getPhoneNum();
     }
     return () => {
       controller.abort();
     };
-  }, [state.chgCountry, loader_data]);
+  }, [chgCountry, loader_data]);
 
   useEffect(() => {
     if (allCurr.current.length > 0) {
-      setCurr(
-        allCurr.current.filter(
-          (item) => (state.chgLocal === 'LOCAL' && item.nation === 'ID') || state.chgLocal === 'OVS'
-        )
-      );
+      setCurr(allCurr.current.filter((item) => (chgLocal === 'LOCAL' && item.nation === 'ID') || chgLocal === 'OVS'));
     }
-  }, [state.chgLocal, allCurr.current]);
+  }, [chgLocal, allCurr.current]);
 
   useEffect(() => {
     setLoading(true);
@@ -1365,27 +1031,15 @@ function RefactorFormVendorPage() {
     };
 
     const getBanks = async () => {
-      // setLoadBanks(true);
-      dispatch({
-        type: 'setLoadBanks',
-        payload: true,
-      });
+      setLoadBanks(true);
       try {
-        // setLoadBanks(false);
-        dispatch({
-          type: 'setLoadBanks',
-          payload: false,
-        });
+        setLoadBanks(false);
         const banksData = await axiosPrivate.get(`/master/banksap`, { signal: controller.signal });
         const response = banksData.data;
         const result = response.data;
         banks.current = result;
       } catch (error) {
-        // setLoadBanks(false);
-        dispatch({
-          type: 'setLoadBanks',
-          payload: false,
-        });
+        setLoadBanks(false);
         console.log(error);
         // alert(error.stack);
       }
@@ -1468,7 +1122,7 @@ function RefactorFormVendorPage() {
       setExpanded((prev) => {
         let newExpand = {};
         Object.keys(prev).forEach((keys) => {
-          if (keys === panel && !state.checkIsExist) {
+          if (keys === panel && !checkIsExist) {
             newExpand[panel] = !prev[keys];
           } else {
             newExpand[keys] = prev[keys];
@@ -1488,11 +1142,7 @@ function RefactorFormVendorPage() {
   }, []);
 
   const changeLang = useCallback((e, value) => {
-    // setLang(value);
-    dispatch({
-      type: 'setLang',
-      payload: value,
-    });
+    setLang(value);
     i18n.changeLanguage(value);
   }, []);
 
@@ -1524,21 +1174,17 @@ function RefactorFormVendorPage() {
   );
 
   const handleAddNewBank = useCallback(async () => {
-    // setLoadAddBnk(true);
-    dispatch({
-      type: 'setLoadAddBnk',
-      payload: true,
-    });
+    setLoadAddBnk(true);
     try {
       const bankv_id = v4();
       const { data } = await axiosPrivate.post(`/vendor/newbank`, {
         bankv_id: bankv_id,
         ven_id: loader_data.ven_id,
-        bank_country: state.chgLocal === 'LOCAL' ? 'ID' : null,
+        bank_country: chgLocal === 'LOCAL' ? 'ID' : null,
       });
       append({
         id: bankv_id,
-        bank_country: state.chgLocal === 'LOCAL' ? { value: 'ID', label: 'Indonesia' } : null,
+        bank_country: chgLocal === 'LOCAL' ? { value: 'ID', label: 'Indonesia' } : null,
         bank_id: null,
         bank_curr: null,
         bank_acc: '',
@@ -1552,20 +1198,16 @@ function RefactorFormVendorPage() {
         message: error.response?.data?.message ?? error?.message,
       });
     } finally {
-      // setLoadAddBnk(false);
-      dispatch({
-        type: 'setLoadAddBnk',
-        payload: false,
-      });
+      setLoadAddBnk(false);
     }
-  }, [state.chgLocal, loader_data]);
+  }, [chgLocal, loader_data]);
 
-  useEffect(() => {
-    console.log(state.currentEdit);
-    Object.keys(state.currentEdit).map((item) => {
-      console.log(apiRef.current.getCellElement(item, 'action').children[0].firstElementChild.getAttribute('id'));
-    });
-  }, [state.currentEdit]);
+  // useEffect(() => {
+  //   console.log(currentEdit);
+  //   Object.keys(currentEdit).map((item) => {
+  //     console.log(apiRef.current.getCellElement(item, 'action').children[0].firstElementChild.getAttribute('id'));
+  //   });
+  // }, [currentEdit]);
 
   const submitForm = async (value) => {
     // setBtnclick(true);
@@ -1700,18 +1342,14 @@ function RefactorFormVendorPage() {
       setFormStat({ stat: true, type: 'error', message: 'error submitting' });
     } finally {
       setLoading(false);
-      // setBtnclick(false);
-      dispatch({
-        type: 'setBtnClicked',
-        payload: false,
-      });
+      setBtnclick(false);
     }
   };
 
   useEffect(() => {
     resetField('limit');
     resetField('currency');
-  }, [state.chgVenacc]);
+  }, [chgVenacc]);
 
   // useEffect(() => {
   //   if (loadingCountry) {
@@ -1739,7 +1377,6 @@ function RefactorFormVendorPage() {
 
   return (
     <>
-      {console.log('RENDER FORM')}
       <Container maxWidth="xl">
         <Box sx={{ height: 120, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
           <Typography variant="h4" gutterBottom>
@@ -1749,7 +1386,7 @@ function RefactorFormVendorPage() {
         <Container>
           <form key={1} onSubmit={handleSubmit(submitForm)}>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <ToggleButtonGroup value={state.langCode} onChange={changeLang} exclusive>
+              <ToggleButtonGroup value={langCode} onChange={changeLang} exclusive>
                 <ToggleButton value="id">ID</ToggleButton>
                 <ToggleButton value="en">EN</ToggleButton>
               </ToggleButtonGroup>
@@ -1889,7 +1526,7 @@ function RefactorFormVendorPage() {
                         !(
                           (UPDATE.INIT && ticketState === 'INIT') ||
                           (UPDATE.CREA && ticketState === 'CREA' && loader_data.ticket_type === 'PROC')
-                        ) || state.chgLocal === 'LOCAL'
+                        ) || chgLocal === 'LOCAL'
                       }
                       options={countries.current}
                       onChangeovr={funChgCountry}
@@ -1918,7 +1555,7 @@ function RefactorFormVendorPage() {
                       toUpperCase={true}
                     />
                   </Grid>
-                  {state.checkIsExist && (
+                  {checkIsExist && (
                     <>
                       <Grid item xs={2}>
                         <LoadingButton
@@ -1936,7 +1573,7 @@ function RefactorFormVendorPage() {
                       </Grid>
                     </>
                   )}
-                  {!state.checkIsExist && <Grid item xs={6}></Grid>}
+                  {!checkIsExist && <Grid item xs={6}></Grid>}
 
                   <Grid item xs={3}>
                     <PatternFieldComp
@@ -1945,7 +1582,7 @@ function RefactorFormVendorPage() {
                       useplaceholder
                       control={control}
                       disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
-                      format={state.phoneNumber}
+                      format={phoneNumber}
                       isNumString={false}
                     />
                   </Grid>
@@ -1956,7 +1593,7 @@ function RefactorFormVendorPage() {
                       useplaceholder
                       control={control}
                       disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
-                      format={state.phoneNumber}
+                      format={phoneNumber}
                       isNumString={false}
                       tooltip={t('Gunakan format kode telfon internasional')}
                     />
@@ -2000,7 +1637,7 @@ function RefactorFormVendorPage() {
                 </Grid>
               </AccordionDetails>
             </Accordion>
-            {state.checkIsExist && state.openAlert && (
+            {checkIsExist && openAlert && (
               <Alert sx={{ mt: '2rem', mb: '2rem' }} severity="error" variant="filled">
                 {t('Already Exist')}
               </Alert>
@@ -2128,7 +1765,7 @@ function RefactorFormVendorPage() {
                       useplaceholder
                       control={control}
                       disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
-                      format={state.phoneNumber}
+                      format={phoneNumber}
                       isNumString={false}
                       rules={{ required: 'Please insert this field' }}
                       tooltip={
@@ -2332,7 +1969,7 @@ function RefactorFormVendorPage() {
                       control={control}
                       disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
                       rules={{
-                        required: state.chgLocal === 'OVS' ? false : t('Please insert this field'),
+                        required: chgLocal === 'OVS' ? false : t('Please insert this field'),
                       }}
                       format="################"
                       isNumString={false}
@@ -2499,7 +2136,7 @@ function RefactorFormVendorPage() {
                       control={control}
                       disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
                       rules={{
-                        required: state.chgLocal === 'OVS' ? false : 'Please insert this field',
+                        required: chgLocal === 'OVS' ? false : 'Please insert this field',
                       }}
                       format="################"
                       isNumString={false}
@@ -2667,7 +2304,7 @@ function RefactorFormVendorPage() {
                       control={control}
                       disabled={!((UPDATE.INIT && ticketState === 'INIT') || (UPDATE.CREA && ticketState === 'CREA'))}
                       rules={{
-                        required: state.chgLocal === 'OVS' ? false : 'Please insert this field',
+                        required: chgLocal === 'OVS' ? false : 'Please insert this field',
                       }}
                       format="################"
                       isNumString={false}
@@ -2734,7 +2371,7 @@ function RefactorFormVendorPage() {
                           message: 'format not matched. only numbers (0-9), point (.), and hyphen (-)',
                         },
                         minLength: {
-                          required: state.chgIsPTKP ? 'Please insert this field' : false,
+                          required: chgIsPTKP ? 'Please insert this field' : false,
                           value: 20,
                           message: 'Karakter tidak cukup',
                         },
@@ -2838,7 +2475,7 @@ function RefactorFormVendorPage() {
                         rules={{
                           required: 'Please insert this field',
                         }}
-                        company={state.chgComp}
+                        company={chgComp}
                       />
                     </Grid>
                     <Grid item xs={3}></Grid>
@@ -2880,10 +2517,10 @@ function RefactorFormVendorPage() {
                         label="Vendor Type *"
                         control={control}
                         options={
-                          state.chgVenacc !== 'NON_TRADE'
+                          chgVenacc !== 'NON_TRADE'
                             ? [{ value: 'X', label: 'X' }]
-                            : ventypeList[state.chgVengrp]
-                            ? ventypeList[state.chgVengrp]
+                            : ventypeList[chgVengrp]
+                            ? ventypeList[chgVengrp]
                             : [{ value: 'X', label: 'X' }]
                         }
                         disabled={!(ticketState === 'CREA' && UPDATE.CREA)}
@@ -2897,24 +2534,24 @@ function RefactorFormVendorPage() {
                       <SelectComp
                         name="currency"
                         t={t}
-                        label={t('Limit Currency') + `${state.chgVenacc === 'TRADE' ? ' *' : ''}`}
+                        label={t('Limit Currency') + `${chgVenacc === 'TRADE' ? ' *' : ''}`}
                         control={control}
                         options={currencies}
                         onChangeovr={funChgCurr}
-                        disabled={state.chgVenacc === 'NON_TRADE' || !(ticketState === 'CREA' && UPDATE.CREA)}
-                        rules={{ required: state.chgVenacc === 'TRADE' ? 'Please insert this field' : false }}
+                        disabled={chgVenacc === 'NON_TRADE' || !(ticketState === 'CREA' && UPDATE.CREA)}
+                        rules={{ required: chgVenacc === 'TRADE' ? 'Please insert this field' : false }}
                       />
                     </Grid>
                     <Grid item xs={4}>
                       <NumericFieldComp
                         t={t}
                         name="limit"
-                        label={t('Limit') + `${state.chgVenacc === 'TRADE' ? ' *' : ''}`}
+                        label={t('Limit') + `${chgVenacc === 'TRADE' ? ' *' : ''}`}
                         control={control}
                         format={['thousandSeparator']}
-                        currency={state.chgCurr}
-                        disabled={state.chgVenacc === 'NON_TRADE' || !(ticketState === 'CREA' && UPDATE.CREA)}
-                        rules={{ required: state.chgVenacc === 'TRADE' ? t('Please insert this field') : false }}
+                        currency={chgCurr}
+                        disabled={chgVenacc === 'NON_TRADE' || !(ticketState === 'CREA' && UPDATE.CREA)}
+                        rules={{ required: chgVenacc === 'TRADE' ? t('Please insert this field') : false }}
                       />
                     </Grid>
                     <Grid item xs={4}></Grid>
@@ -2946,19 +2583,6 @@ function RefactorFormVendorPage() {
                         tooltip={t('Alasan memilih vendor tersebut menjadi rekanan KPN')}
                       />
                     </Grid>
-                    {state.isTender && (
-                      <Grid item xs={12}>
-                        <TextFieldComp
-                          t={t}
-                          name="description"
-                          label="Description *"
-                          helperText={t('Wajib diisi jika vendor mengikuti tender')}
-                          control={control}
-                          disabled={!(ticketState === 'CREA' && UPDATE.CREA)}
-                          rules={{ required: state.isTender ? 'Please insert this field' : false }}
-                        />
-                      </Grid>
-                    )}
                   </Grid>
                 </AccordionDetails>
               </Accordion>
@@ -2966,7 +2590,7 @@ function RefactorFormVendorPage() {
           </form>
           <form onSubmit={handleSubmit1(handleReject)}>
             <Dialog
-              open={state.modalRejectopen}
+              open={modalRejectopen}
               onClose={modalRejectclose}
               maxWidth="lg"
               sx={{ zIndex: (theme) => theme.zIndex.drawer - 2 }}
@@ -2993,11 +2617,7 @@ function RefactorFormVendorPage() {
                 </Button>
                 <Button
                   onClick={() => {
-                    // setModalopen(false);
-                    dispatch({
-                      type: 'setModalopen',
-                      payload: false,
-                    });
+                    setModalopen(false);
                   }}
                   variant="contained"
                 >
@@ -3032,7 +2652,7 @@ function RefactorFormVendorPage() {
                     onClick={(e) => {
                       handleAddNewBank();
                     }}
-                    loading={state.loadAddBank}
+                    loading={loadAddBank}
                   >
                     + Add Bank
                   </LoadingButton>
@@ -3047,7 +2667,7 @@ function RefactorFormVendorPage() {
                 countries={countries.current}
                 currencies={currencies}
                 watch={watch}
-                is_local={state.chgLocal === 'LOCAL'}
+                is_local={chgLocal === 'LOCAL'}
                 is_allow={
                   (UPDATE.INIT || UPDATE.CREA) &&
                   (ticketState === 'INIT' || (ticketState === 'CREA' && loader_data.ticket_type === 'PROC'))
@@ -3103,7 +2723,7 @@ function RefactorFormVendorPage() {
                   {t('Please Download')}
                   <Link
                     href={
-                      state.langCode === 'id'
+                      langCode === 'id'
                         ? `${import.meta.env.VITE_URL_LOC}/master/file/Kode_Etik_Supplier_Vendor_dan_Kontraktor.doc`
                         : `${
                             import.meta.env.VITE_URL_LOC
@@ -3125,8 +2745,8 @@ function RefactorFormVendorPage() {
                 </Alert>
               )}
               <UploadButton
-                inputTypes={state.fileType}
-                iniData={state.initDataFile}
+                inputTypes={fileType}
+                iniData={initDataFile}
                 idParent={loader_data.ven_id}
                 onChildDataChange={setVen_fileFromChild}
                 loadData={loadingInitFile}
@@ -3136,7 +2756,7 @@ function RefactorFormVendorPage() {
                 ref={uploadButRef}
                 fileCheck={getValues('file_atth')}
                 t={t}
-                langCode={state.langCode}
+                langCode={langCode}
                 ticketState={ticketState}
               />
             </AccordionDetails>
@@ -3226,7 +2846,7 @@ function RefactorFormVendorPage() {
                     is_draft.current = true;
                     submitForm(getValues());
                   }}
-                  disabled={state.btnClicked}
+                  disabled={btnClicked}
                 >
                   {t('Save Draft')}
                 </Button>
@@ -3239,11 +2859,7 @@ function RefactorFormVendorPage() {
                   color="error"
                   variant="contained"
                   onClick={() => {
-                    // setModalopen(true);
-                    dispatch({
-                      type: 'setModalopen',
-                      payload: true,
-                    });
+                    setModalopen(true);
                   }}
                 >
                   {t('Reject')}
@@ -3259,18 +2875,14 @@ function RefactorFormVendorPage() {
                     handleSubmit((value) => {
                       // console.log(value);
                       is_draft.current = false;
-                      if (state.isTender && ticketState === 'CREA' && isValid && bank_valid.current) {
-                        // setConfOpen(true);
-                        dispatch({
-                          type: 'setConfOpen',
-                          payload: true,
-                        });
+                      if (isTender && ticketState === 'CREA' && isValid && bank_valid.current) {
+                        setConfOpen(true);
                       } else {
                         submitForm(value);
                       }
                     })();
                   }}
-                  disabled={state.btnClicked}
+                  disabled={btnClicked}
                 >
                   {t('Submit')}
                 </Button>
@@ -3324,7 +2936,7 @@ function RefactorFormVendorPage() {
           </Box>
         </Dialog>
         <ConfirmComponent
-          open={state.modalConfirmopen}
+          open={modalConfirmopen}
           handleConfirm={confirmActionFun}
           onCloseConf={modalConfclose}
           sx={{ zIndex: (theme) => theme.zIndex.drawer - 2 }}
