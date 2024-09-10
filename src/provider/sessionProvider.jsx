@@ -13,6 +13,7 @@ const SessionProvider = ({ children }) => {
     user_id: Cookies.get('user_id') ?? '',
     role: Cookies.get('role') ?? '',
     permission: JSON.parse(localStorage.getItem('permission')) ?? {},
+    menu: JSON.parse(localStorage.getItem('menu')) ?? {},
     groupid: Cookies.get('groupid') ?? '',
   });
 
@@ -25,6 +26,7 @@ const SessionProvider = ({ children }) => {
     Cookies.set('role', data.role);
     Cookies.set('groupid', data.groupid);
     localStorage.setItem('permission', JSON.stringify(data.permission));
+    localStorage.setItem('menu', JSON.stringify(data.menu));
     setSession_({
       fullname: data.fullname,
       username: data.username,
@@ -35,6 +37,7 @@ const SessionProvider = ({ children }) => {
       role: data.role,
       permission: data.permission,
       groupid: data.groupid,
+      menu: data.menu,
     });
   }, []);
 
@@ -48,6 +51,7 @@ const SessionProvider = ({ children }) => {
       role: Cookies.get('role'),
       permission: JSON.parse(localStorage.getItem('permission')),
       groupid: Cookies.get('groupid'),
+      menu: JSON.parse(localStorage.getItem('menu')),
     });
   }, []);
   const logOut = useCallback(() => {
@@ -59,6 +63,7 @@ const SessionProvider = ({ children }) => {
     Cookies.remove('role');
     Cookies.remove('accessToken');
     Cookies.remove('groupid');
+    Cookies.remove('menu');
   }, []);
 
   const getPermission = useCallback((page) => {
@@ -68,6 +73,14 @@ const SessionProvider = ({ children }) => {
     const permissions = JSON.parse(localStorage.getItem('permission'));
     const curPermission = permissions[page];
     return curPermission;
+  }, []);
+
+  const getMenu = useCallback(() => {
+    if (localStorage.getItem('menu') === null) {
+      return '';
+    }
+    const menu = JSON.parse(localStorage.getItem('menu'));
+    return menu;
   }, []);
 
   useEffect(() => {
@@ -82,10 +95,14 @@ const SessionProvider = ({ children }) => {
       Cookies.set('role', session.role);
       Cookies.set('groupid', session.groupid);
       localStorage.setItem('permission', JSON.stringify(session.permission));
+      localStorage.setItem('menu', JSON.stringify(session.menu));
     }
   }, [session]);
 
-  const contextValue = useMemo(() => ({ session, setSession, logOut, getPermission, setAccessToken }), [session]);
+  const contextValue = useMemo(
+    () => ({ session, setSession, logOut, getPermission, getMenu, setAccessToken }),
+    [session]
+  );
 
   return <SessionContext.Provider value={contextValue}>{children}</SessionContext.Provider>;
 };

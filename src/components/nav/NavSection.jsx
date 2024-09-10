@@ -10,10 +10,10 @@ function NavSection({ menu, collapsemen, navmen, onUpNavCol, onUpNavMenu }) {
   const onClickNavHead = (item) => {
     onUpNavCol(item);
   };
-  const { getPermission } = useSession();
+  const { getPermission, getMenu } = useSession();
   return (
     <List>
-      {menu.map((item) => {
+      {Object.values(getMenu()).map((item) => {
         if (getPermission(item.text)?.read === true) {
           return (
             <div key={`div-${item.key}`}>
