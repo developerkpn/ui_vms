@@ -1118,7 +1118,7 @@ function RefactorFormVendorPage() {
   };
 
   const handleExpanded = useCallback(
-    (panel) => () => {
+    (panel) => {
       setExpanded((prev) => {
         let newExpand = {};
         Object.keys(prev).forEach((keys) => {
@@ -1131,7 +1131,7 @@ function RefactorFormVendorPage() {
         return newExpand;
       });
     },
-    []
+    [expanded]
   );
 
   const handleSnackClose = useCallback((e, reason) => {
@@ -1426,7 +1426,7 @@ function RefactorFormVendorPage() {
 
             <Accordion
               expanded={expanded.panelReqDet}
-              onChange={handleExpanded('panelReqDet')}
+              onChange={(e) => handleExpanded('panelReqDet')}
               TransitionProps={{ unmountOnExit: true }}
             >
               <AccordionSummary
@@ -1462,7 +1462,7 @@ function RefactorFormVendorPage() {
             </Accordion>
             <Accordion
               expanded={expanded.panelCompDet}
-              onChange={handleExpanded('panelCompDet')}
+              onChange={(e) => handleExpanded('panelCompDet')}
               TransitionProps={{ unmountOnExit: true }}
             >
               <AccordionSummary
@@ -1644,7 +1644,7 @@ function RefactorFormVendorPage() {
             )}
             <Accordion
               expanded={expanded.panelInfoAcc}
-              onChange={handleExpanded('panelInfoAcc')}
+              onChange={(e) => handleExpanded('panelInfoAcc')}
               TransitionProps={{ unmountOnExit: true }}
             >
               <AccordionSummary
@@ -1709,7 +1709,7 @@ function RefactorFormVendorPage() {
             </Accordion>
             <Accordion
               expanded={expanded.panelCompOrg}
-              onChange={handleExpanded('panelCompOrg')}
+              onChange={(e) => handleExpanded('panelCompOrg')}
               TransitionProps={{ unmountOnExit: true }}
             >
               <AccordionSummary
@@ -1818,7 +1818,7 @@ function RefactorFormVendorPage() {
             </Accordion>
             <Accordion
               expanded={expanded.panelAddr}
-              onChange={handleExpanded('panelAddr')}
+              onChange={(e) => handleExpanded('panelAddr')}
               TransitionProps={{ unmountOnExit: true }}
             >
               <AccordionSummary
@@ -1980,7 +1980,7 @@ function RefactorFormVendorPage() {
             </Accordion>
             <Accordion
               expanded={expanded.panelAddrnpwp}
-              onChange={handleExpanded('panelAddrnpwp')}
+              onChange={(e) => handleExpanded('panelAddrnpwp')}
               TransitionProps={{ unmountOnExit: true }}
             >
               <AccordionSummary
@@ -2147,7 +2147,7 @@ function RefactorFormVendorPage() {
             </Accordion>
             <Accordion
               expanded={expanded.panelAddrsppkp}
-              onChange={handleExpanded('panelAddrsppkp')}
+              onChange={(e) => handleExpanded('panelAddrsppkp')}
               TransitionProps={{ unmountOnExit: true }}
             >
               <AccordionSummary
@@ -2315,7 +2315,7 @@ function RefactorFormVendorPage() {
             </Accordion>
             <Accordion
               expanded={expanded.panelTax}
-              onChange={handleExpanded('panelTax')}
+              onChange={(e) => handleExpanded('panelTax')}
               TransitionProps={{ unmountOnExit: true }}
             >
               <AccordionSummary
@@ -2419,7 +2419,7 @@ function RefactorFormVendorPage() {
             {(ticketState === 'CREA' || ticketState === 'FINA' || ticketState === 'END') && (
               <Accordion
                 expanded={expanded.panelVendetail}
-                onChange={handleExpanded('panelVendetail')}
+                onChange={(e) => handleExpanded('panelVendetail')}
                 TransitionProps={{ unmountOnExit: true }}
               >
                 <AccordionSummary
@@ -2628,7 +2628,7 @@ function RefactorFormVendorPage() {
           </form>
           <Accordion
             expanded={expanded.panelBank}
-            onChange={handleExpanded('panelBank')}
+            onChange={(e) => handleExpanded('panelBank')}
             TransitionProps={{ unmountOnExit: true }}
           >
             <AccordionSummary
@@ -2700,7 +2700,7 @@ function RefactorFormVendorPage() {
           </Accordion>
           <Accordion
             expanded={expanded.panelFile}
-            onChange={handleExpanded('panelFile')}
+            onChange={(e) => handleExpanded('panelFile')}
             TransitionProps={{ unmountOnExit: true }}
           >
             <AccordionSummary
@@ -2764,7 +2764,7 @@ function RefactorFormVendorPage() {
           {(ticketState === 'FINA' || ticketState === 'END') && (
             <Accordion
               expanded={expanded.panelApproval}
-              onChange={handleExpanded('panelApproval')}
+              onChange={(e) => handleExpanded('panelApproval')}
               TransitionProps={{ unmountOnExit: true }}
             >
               <AccordionSummary
@@ -2801,7 +2801,7 @@ function RefactorFormVendorPage() {
           {loader_data.logrej_counter !== null && (
             <Accordion
               expanded={expanded.panelRejectLog}
-              onChange={handleExpanded('panelRejectLog')}
+              onChange={(e) => handleExpanded('panelRejectLog')}
               TransitionProps={{ unmountOnExit: true }}
             >
               <AccordionSummary
