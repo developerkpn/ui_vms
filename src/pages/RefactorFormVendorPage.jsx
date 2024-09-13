@@ -2366,12 +2366,12 @@ function RefactorFormVendorPage() {
                         )
                       }
                       rules={{
+                        required: 'Please insert this field',
                         pattern: {
                           value: /^[0-9.-]+$/,
                           message: 'format not matched. only numbers (0-9), point (.), and hyphen (-)',
                         },
                         minLength: {
-                          required: chgIsPTKP ? 'Please insert this field' : false,
                           value: 20,
                           message: 'Karakter tidak cukup',
                         },
@@ -2476,6 +2476,7 @@ function RefactorFormVendorPage() {
                           required: 'Please insert this field',
                         }}
                         company={chgComp}
+                        t={t}
                       />
                     </Grid>
                     <Grid item xs={3}></Grid>

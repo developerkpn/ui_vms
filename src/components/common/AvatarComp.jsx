@@ -55,6 +55,7 @@ export default function AvatarComp() {
         <MenuItem onClick={handleUserInfo} sx={{ width: '10rem' }}>
           Edit User Info
         </MenuItem>
+        <MenuItem>v1.2.6</MenuItem>
       </Menu>
       <Backdrop sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer - 2 }} open={loader}>
         <CircularProgress color="inherit" />
