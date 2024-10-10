@@ -19,6 +19,7 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   TextField,
+  FormControlLabel,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useGridApiRef } from '@mui/x-data-grid';
@@ -41,6 +42,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '@mui/material/styles';
 import AutoSelectPurOrg from 'src/components/common/AutoSelectPurOrg';
 import { v4 } from 'uuid';
+import useTogglePanel, { FormTab } from 'src/hooks/useTogglePanel';
 
 import RejectLog from 'src/components/common/RejectLog';
 import VenBankTableRefactor from 'src/components/FormVendor/VenBankTableRefactor';
@@ -78,6 +80,10 @@ function RefactorFormVendorPage() {
   const apiRef = useGridApiRef();
   const predata = useLoaderData();
   const axiosPrivate = useAxiosPrivate();
+
+  //reducerFunction
+  const { expanded, toggle } = useTogglePanel();
+
   const defaultValue = {
     emailRequestor: '',
     deptRequestor: '',
@@ -274,38 +280,10 @@ function RefactorFormVendorPage() {
 
       if (valueForm.name1 === '') {
         setCheckex(true);
-        setExpanded({
-          panelReqDet: true,
-          panelCompDet: true,
-          panelAddr: false,
-          panelAddrnpwp: false,
-          panelAddrsppkp: false,
-          panelTax: false,
-          panelBank: false,
-          panelFile: false,
-          panelVendetail: false,
-          panelApproval: false,
-          panelCompOrg: false,
-          panelInfoAcc: false,
-          panelRejectLog: false,
-        });
+        toggle({ type: FormTab.RestrictForm });
       } else {
         setCheckex(false);
-        setExpanded({
-          panelReqDet: true,
-          panelCompDet: true,
-          panelAddr: true,
-          panelAddrnpwp: true,
-          panelAddrsppkp: true,
-          panelTax: true,
-          panelBank: true,
-          panelFile: true,
-          panelVendetail: true,
-          panelApproval: true,
-          panelCompOrg: true,
-          panelInfoAcc: true,
-          panelRejectLog: false,
-        });
+        toggle({ type: FormTab.OpenForm });
       }
 
       setLoaderdata({
@@ -324,19 +302,7 @@ function RefactorFormVendorPage() {
       const response = await axiosPrivate.get(`/ticket/newform/${token}`, {
         signal: controller.signal,
       });
-      setExpanded({
-        panelReqDet: true,
-        panelCompDet: true,
-        panelAddr: true,
-        panelTax: true,
-        panelBank: true,
-        panelFile: true,
-        panelVendetail: true,
-        panelApproval: true,
-        panelCompOrg: true,
-        panelInfoAcc: true,
-        panelRejectLog: false,
-      });
+      toggle({ type: FormTab.OpenForm });
       const data = response.data.data;
       const { data: bankInit } = await axiosPrivate.get(
         `/vendor/bank/${data.ven_id === null ? data.ticket_ven_id : data.ven_id}`,
@@ -439,38 +405,10 @@ function RefactorFormVendorPage() {
 
       if (valueForm.name1 === '') {
         setCheckex(true);
-        setExpanded({
-          panelReqDet: true,
-          panelCompDet: true,
-          panelAddr: false,
-          panelAddrnpwp: false,
-          panelAddrsppkp: false,
-          panelTax: false,
-          panelBank: false,
-          panelFile: false,
-          panelVendetail: false,
-          panelApproval: false,
-          panelCompOrg: false,
-          panelInfoAcc: false,
-          panelRejectLog: false,
-        });
+        toggle({ type: FormTab.RestrictForm });
       } else {
         setCheckex(false);
-        setExpanded({
-          panelReqDet: true,
-          panelCompDet: true,
-          panelAddr: true,
-          panelAddrnpwp: true,
-          panelAddrsppkp: true,
-          panelTax: true,
-          panelBank: true,
-          panelFile: true,
-          panelVendetail: true,
-          panelCompOrg: true,
-          panelInfoAcc: true,
-          panelApproval: true,
-          panelRejectLog: false,
-        });
+        toggle({ type: FormTab.OpenForm });
       }
 
       setLoaderdata({
@@ -518,6 +456,7 @@ function RefactorFormVendorPage() {
   const [langCode, setLang] = useState('id');
   const { t, i18n } = useTranslation('translation', { lng: langCode });
   const [initDataFile, setInitDfile] = useState([]);
+  const fileCheck = useMemo(() => getValues('file_atth'), [watch()]);
   // const updateCurrentEdit = (rows) => {
   //   setCurrentEdit(rows);
   // };
@@ -568,41 +507,13 @@ function RefactorFormVendorPage() {
       // console.log(checkExt);
       setCheckex(false);
       // console.log(expanded);
-      setExpanded({
-        panelReqDet: true,
-        panelCompDet: true,
-        panelAddr: true,
-        panelAddrnpwp: true,
-        panelAddrsppkp: true,
-        panelTax: true,
-        panelBank: true,
-        panelFile: true,
-        panelVendetail: true,
-        panelApproval: true,
-        panelCompOrg: true,
-        panelInfoAcc: true,
-        panelRejectLog: false,
-      });
+      toggle({ type: FormTab.OpenForm });
       setLoadex(false);
       setBtnclick(false);
     } catch (error) {
       console.log(error);
       setOpenAlert(true);
-      setExpanded({
-        panelReqDet: true,
-        panelCompDet: true,
-        panelAddr: false,
-        panelAddrnpwp: false,
-        panelAddrsppkp: false,
-        panelTax: false,
-        panelBank: false,
-        panelFile: false,
-        panelVendetail: false,
-        panelApproval: false,
-        panelCompOrg: false,
-        panelInfoAcc: false,
-        panelRejectLog: false,
-      });
+      toggle({ type: FormTab.RestrictForm });
       setLoadex(false);
     }
   }, []);
@@ -634,58 +545,16 @@ function RefactorFormVendorPage() {
   const funChgname = useCallback((item) => {
     if (item != compName && item !== '') {
       setCheckex(true);
-      setExpanded({
-        panelReqDet: true,
-        panelCompDet: true,
-        panelAddr: false,
-        panelTax: false,
-        panelBank: false,
-        panelFile: false,
-        panelVendetail: false,
-        panelApproval: false,
-        panelRejectLog: false,
-        panelAddrnpwp: false,
-        panelAddrsppkp: false,
-        panelCompOrg: false,
-        panelInfoAcc: false,
-      });
+      toggle({ type: FormTab.RestrictForm });
       setBtnclick(true);
       setCompname(item);
     } else if (item == compName && item !== '') {
       setCheckex(false);
-      setExpanded({
-        panelReqDet: true,
-        panelCompDet: true,
-        panelAddr: true,
-        panelTax: true,
-        panelBank: true,
-        panelFile: true,
-        panelVendetail: true,
-        panelApproval: true,
-        panelRejectLog: false,
-        panelAddrnpwp: true,
-        panelAddrsppkp: true,
-        panelCompOrg: true,
-        panelInfoAcc: true,
-      });
+      toggle({ type: FormTab.OpenForm });
       setBtnclick(false);
     } else {
       setCheckex(true);
-      setExpanded({
-        panelReqDet: true,
-        panelCompDet: true,
-        panelAddr: false,
-        panelTax: false,
-        panelBank: false,
-        panelFile: false,
-        panelVendetail: false,
-        panelApproval: false,
-        panelRejectLog: false,
-        panelAddrnpwp: false,
-        panelAddrsppkp: false,
-        panelCompOrg: false,
-        panelInfoAcc: false,
-      });
+      toggle({ type: FormTab.RestrictForm });
       setBtnclick(true);
       setCompname(item);
     }
@@ -894,21 +763,6 @@ function RefactorFormVendorPage() {
     message: '',
   });
   const [ven_file, setVen_file] = useState([]);
-  const [expanded, setExpanded] = useState({
-    panelReqDet: true,
-    panelCompDet: true,
-    panelAddr: true,
-    panelAddrnpwp: true,
-    panelAddrsppkp: true,
-    panelTax: true,
-    panelBank: true,
-    panelFile: true,
-    panelVendetail: true,
-    panelApproval: true,
-    panelRejectLog: false,
-    panelInfoAcc: true,
-    panelCompOrg: true,
-  });
   useMemo(() => ({ cities, countries, currencies }), [cities, countries, currencies]);
 
   const getInitDataFile = useCallback(
@@ -1116,23 +970,6 @@ function RefactorFormVendorPage() {
   const deleteVenFile = (deletedFile) => {
     resetField(`file_atth.${deletedFile?.file_type}`);
   };
-
-  const handleExpanded = useCallback(
-    (panel) => {
-      setExpanded((prev) => {
-        let newExpand = {};
-        Object.keys(prev).forEach((keys) => {
-          if (keys === panel && !checkIsExist) {
-            newExpand[panel] = !prev[keys];
-          } else {
-            newExpand[keys] = prev[keys];
-          }
-        });
-        return newExpand;
-      });
-    },
-    [expanded]
-  );
 
   const handleSnackClose = useCallback((e, reason) => {
     if (reason === 'clickaway') {
@@ -1426,7 +1263,9 @@ function RefactorFormVendorPage() {
 
             <Accordion
               expanded={expanded.panelReqDet}
-              onChange={(e) => handleExpanded('panelReqDet')}
+              onChange={(e) => {
+                toggle({ type: FormTab.ReqDet });
+              }}
               TransitionProps={{ unmountOnExit: true }}
             >
               <AccordionSummary
@@ -1462,7 +1301,9 @@ function RefactorFormVendorPage() {
             </Accordion>
             <Accordion
               expanded={expanded.panelCompDet}
-              onChange={(e) => handleExpanded('panelCompDet')}
+              onChange={(e) => {
+                toggle({ type: FormTab.CompDet });
+              }}
               TransitionProps={{ unmountOnExit: true }}
             >
               <AccordionSummary
@@ -1644,7 +1485,9 @@ function RefactorFormVendorPage() {
             )}
             <Accordion
               expanded={expanded.panelInfoAcc}
-              onChange={(e) => handleExpanded('panelInfoAcc')}
+              onChange={(e) => {
+                toggle({ type: FormTab.InfoAcc });
+              }}
               TransitionProps={{ unmountOnExit: true }}
             >
               <AccordionSummary
@@ -1709,7 +1552,9 @@ function RefactorFormVendorPage() {
             </Accordion>
             <Accordion
               expanded={expanded.panelCompOrg}
-              onChange={(e) => handleExpanded('panelCompOrg')}
+              onChange={(e) => {
+                toggle({ type: FormTab.CompOrg });
+              }}
               TransitionProps={{ unmountOnExit: true }}
             >
               <AccordionSummary
@@ -1818,7 +1663,9 @@ function RefactorFormVendorPage() {
             </Accordion>
             <Accordion
               expanded={expanded.panelAddr}
-              onChange={(e) => handleExpanded('panelAddr')}
+              onChange={(e) => {
+                toggle({ type: FormTab.Addr });
+              }}
               TransitionProps={{ unmountOnExit: true }}
             >
               <AccordionSummary
@@ -1980,7 +1827,9 @@ function RefactorFormVendorPage() {
             </Accordion>
             <Accordion
               expanded={expanded.panelAddrnpwp}
-              onChange={(e) => handleExpanded('panelAddrnpwp')}
+              onChange={(e) => {
+                toggle({ type: FormTab.AddrNPWP });
+              }}
               TransitionProps={{ unmountOnExit: true }}
             >
               <AccordionSummary
@@ -2147,7 +1996,9 @@ function RefactorFormVendorPage() {
             </Accordion>
             <Accordion
               expanded={expanded.panelAddrsppkp}
-              onChange={(e) => handleExpanded('panelAddrsppkp')}
+              onChange={(e) => {
+                toggle({ type: FormTab.AddrsSPPKP });
+              }}
               TransitionProps={{ unmountOnExit: true }}
             >
               <AccordionSummary
@@ -2315,7 +2166,9 @@ function RefactorFormVendorPage() {
             </Accordion>
             <Accordion
               expanded={expanded.panelTax}
-              onChange={(e) => handleExpanded('panelTax')}
+              onChange={(e) => {
+                toggle({ type: FormTab.Tax });
+              }}
               TransitionProps={{ unmountOnExit: true }}
             >
               <AccordionSummary
@@ -2419,7 +2272,9 @@ function RefactorFormVendorPage() {
             {(ticketState === 'CREA' || ticketState === 'FINA' || ticketState === 'END') && (
               <Accordion
                 expanded={expanded.panelVendetail}
-                onChange={(e) => handleExpanded('panelVendetail')}
+                onChange={(e) => {
+                  toggle({ type: FormTab.VenDetail });
+                }}
                 TransitionProps={{ unmountOnExit: true }}
               >
                 <AccordionSummary
@@ -2629,7 +2484,9 @@ function RefactorFormVendorPage() {
           </form>
           <Accordion
             expanded={expanded.panelBank}
-            onChange={(e) => handleExpanded('panelBank')}
+            onChange={(e) => {
+              toggle({ type: FormTab.Bank });
+            }}
             TransitionProps={{ unmountOnExit: true }}
           >
             <AccordionSummary
@@ -2701,7 +2558,9 @@ function RefactorFormVendorPage() {
           </Accordion>
           <Accordion
             expanded={expanded.panelFile}
-            onChange={(e) => handleExpanded('panelFile')}
+            onChange={(e) => {
+              toggle({ type: FormTab.File });
+            }}
             TransitionProps={{ unmountOnExit: true }}
           >
             <AccordionSummary
@@ -2755,7 +2614,7 @@ function RefactorFormVendorPage() {
                 deleteFile={deleteVenFile}
                 requiredFiles={errors && Object.values(errors.file_atth ?? {})}
                 ref={uploadButRef}
-                fileCheck={getValues('file_atth')}
+                fileCheck={fileCheck}
                 t={t}
                 langCode={langCode}
                 ticketState={ticketState}
@@ -2765,7 +2624,9 @@ function RefactorFormVendorPage() {
           {(ticketState === 'FINA' || ticketState === 'END') && (
             <Accordion
               expanded={expanded.panelApproval}
-              onChange={(e) => handleExpanded('panelApproval')}
+              onChange={(e) => {
+                toggle({ type: FormTab.Approval });
+              }}
               TransitionProps={{ unmountOnExit: true }}
             >
               <AccordionSummary
@@ -2802,7 +2663,9 @@ function RefactorFormVendorPage() {
           {loader_data.logrej_counter !== null && (
             <Accordion
               expanded={expanded.panelRejectLog}
-              onChange={(e) => handleExpanded('panelRejectLog')}
+              onChange={(e) => {
+                toggle({ type: FormTab.RejectLog });
+              }}
               TransitionProps={{ unmountOnExit: true }}
             >
               <AccordionSummary
