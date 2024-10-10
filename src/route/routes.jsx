@@ -1,6 +1,8 @@
 import { Navigate, createBrowserRouter } from 'react-router-dom';
 import axios from 'axios';
 import { lazy } from 'react';
+const VendorUsers = lazy(() => import('src/pages/vendor/VendorUsers'));
+const VerificationPage = lazy(() => import('src/pages/verification/VerificationPage'));
 // import ErrorPage from '../pages/ErrorPage';
 // import Error404 from 'src/pages/Error404';
 // import LoginPage from 'src/pages/LoginPage';
@@ -129,6 +131,14 @@ export const routes = createBrowserRouter([
       {
         path: 'banks',
         element: <ListMasterBank />,
+      },
+      {
+        path: 'vendorverif',
+        element: <VerificationPage />,
+      },
+      {
+        path: 'usrven',
+        element: <VendorUsers />,
       },
     ],
   },
