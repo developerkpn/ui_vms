@@ -13,6 +13,12 @@ const getIcon = (icon) => {
       return lazy(() => import('@mui/icons-material/SupervisedUserCircle'));
     case 'Calculate':
       return lazy(() => import('@mui/icons-material/Calculate'));
+    case 'Extension':
+      return lazy(() => import('@mui/icons-material/Extension'));
+    case 'Gavel':
+      return lazy(() => import('@mui/icons-material/Gavel'));
+    case 'Computer':
+      return lazy(() => import('@mui/icons-material/Computer'));
     default:
       return HelpOutlineIcon;
   }

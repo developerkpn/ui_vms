@@ -1,10 +1,9 @@
 import { Snackbar, Alert } from '@mui/material';
-import { AlertColor } from '@mui/material';
 import { useEffect, useContext, createContext, useState, useCallback, useMemo, ReactNode } from 'react';
 
 import React from 'react';
 
-const SnackBarContext = (createContext < null) | (SnackBarInterface > null);
+const SnackBarContext = createContext();
 
 const SnackbarProvider = ({ children }) => {
   const [sbComp, setSB] = useState({

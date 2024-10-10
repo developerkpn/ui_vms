@@ -19,6 +19,7 @@ export const TextFieldComp = ({
   disabled,
   t,
   maxLength,
+  sx,
 }) => {
   return (
     <>
@@ -82,6 +83,7 @@ export const TextFieldComp = ({
                 fullWidth
                 multiline={multiline}
                 disabled={disabled}
+                sx={sx}
               />
             </Tooltip>
           );

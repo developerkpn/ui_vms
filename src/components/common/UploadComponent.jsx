@@ -5,7 +5,7 @@ import { Controller } from 'react-hook-form';
 import { useState } from 'react';
 import useAxiosPrivate from '../../hooks/useAxiosPrivate';
 
-const LinkFile = ({ file }) => {
+export const LinkFile = ({ file }) => {
   const handleOnClick = async (file) => {
     window.open(`${import.meta.env.VITE_URL_BE}static/${file.file_name}`);
   };
