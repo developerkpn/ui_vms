@@ -111,13 +111,7 @@ export default function LoginPage() {
             </Box>
             <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 1 }}>
               {dirForm.state === 'login' && (
-                <TextFieldComp
-                  name={'Username'}
-                  control={control}
-                  label={'Username'}
-                  rules={{ required: true }}
-                  sx={{ m: 1 }}
-                />
+                <TextFieldComp name={'Username'} control={control} label={'Username'} rules={{ required: true }} />
               )}
               {dirForm.state === 'login' && (
                 <PasswordWithEyes

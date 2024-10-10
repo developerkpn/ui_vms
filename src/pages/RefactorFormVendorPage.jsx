@@ -1211,6 +1211,7 @@ function RefactorFormVendorPage() {
 
   const submitForm = async (value) => {
     // setBtnclick(true);
+    console.log(loader_data.cur_pos);
     const controller = new AbortController();
     const filteredVenFile = ven_file.filter((item) => item.method !== '');
     const ven_detail = {
@@ -1255,7 +1256,7 @@ function RefactorFormVendorPage() {
       description: value.description,
       limit_vendor: value.limit.toString().match(/\d+/g)?.join(''),
       lim_curr: value.currency,
-      ven_code: loader_data.cur_pos !== 'FINA' ? '' : value.vendorcode,
+      ven_code: loader_data.cur_pos !== 'MDM' ? '' : value.vendorcode,
       search_term: value.search_term,
       website_url: value.website_url.trim(),
       ig_link: value.ig_link.trim(),
@@ -1309,7 +1310,6 @@ function RefactorFormVendorPage() {
       ven_files: filteredVenFile,
       cur_pos: loader_data.cur_pos,
     };
-
     try {
       setLoading(true);
       let submit;
