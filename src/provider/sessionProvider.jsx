@@ -5,11 +5,11 @@ import Cookies from 'js-cookie';
 const SessionContext = createContext();
 
 const SessionProvider = ({ children }) => {
+  const [accessToken, _setAccessToken] = useState(Cookies.get('accessToken') ?? '');
   const [session, setSession_] = useState({
     fullname: Cookies.get('fullname') ?? '',
     username: Cookies.get('username') ?? '',
     email: Cookies.get('email') ?? '',
-    accessToken: Cookies.get('accessToken') ?? '',
     user_id: Cookies.get('user_id') ?? '',
     role: Cookies.get('role') ?? '',
     permission: JSON.parse(localStorage.getItem('permission')) ?? {},
@@ -31,7 +31,6 @@ const SessionProvider = ({ children }) => {
       fullname: data.fullname,
       username: data.username,
       email: data.email,
-      accessToken: data.accessToken,
       refreshToken: data.refreshToken,
       user_id: data.user_id,
       role: data.role,
@@ -39,20 +38,11 @@ const SessionProvider = ({ children }) => {
       groupid: data.groupid,
       menu: data.menu,
     });
+    _setAccessToken(data.accessToken);
   }, []);
 
   const setAccessToken = useCallback((act) => {
-    setSession_({
-      fullname: Cookies.get('fullname'),
-      username: Cookies.get('username'),
-      email: Cookies.get('email'),
-      accessToken: act,
-      user_id: Cookies.get('user_id'),
-      role: Cookies.get('role'),
-      permission: JSON.parse(localStorage.getItem('permission')),
-      groupid: Cookies.get('groupid'),
-      menu: JSON.parse(localStorage.getItem('menu')),
-    });
+    _setAccessToken(act);
   }, []);
   const logOut = useCallback(() => {
     localStorage.clear();
@@ -85,9 +75,9 @@ const SessionProvider = ({ children }) => {
 
   useEffect(() => {
     // console.log(Cookies.get('accessToken'));
-    if (session.accessToken) {
-      axios.defaults.headers.common['Authorization'] = 'Bearer ' + session.accessToken;
-      Cookies.set('accessToken', session.accessToken);
+    if (accessToken) {
+      axios.defaults.headers.common['Authorization'] = 'Bearer ' + accessToken;
+      Cookies.set('accessToken', accessToken);
       Cookies.set('fullname', session.fullname);
       Cookies.set('email', session.email);
       Cookies.set('username', session.username);
@@ -100,7 +90,7 @@ const SessionProvider = ({ children }) => {
   }, [session]);
 
   const contextValue = useMemo(
-    () => ({ session, setSession, logOut, getPermission, getMenu, setAccessToken }),
+    () => ({ session, setSession, logOut, getPermission, getMenu, accessToken, setAccessToken }),
     [session]
   );
 

@@ -6,13 +6,13 @@ import Cookies from 'js-cookie';
 
 const useAxiosPrivate = () => {
   const refresh = useRefreshToken();
-  const { session } = useSession();
+  const { accessToken } = useSession();
 
   useEffect(() => {
     const requestIntercept = axiosPrivate.interceptors.request.use(
       (config) => {
         if (!config.headers['Authorization']) {
-          config.headers['Authorization'] = `Bearer ${session.accessToken}`;
+          config.headers['Authorization'] = `Bearer ${accessToken}`;
         }
         return config;
       },
@@ -36,7 +36,7 @@ const useAxiosPrivate = () => {
       axiosPrivate.interceptors.request.eject(requestIntercept);
       axiosPrivate.interceptors.response.eject(responseIntercept);
     };
-  }, [session, refresh]);
+  }, [accessToken, refresh]);
 
   return axiosPrivate;
 };
