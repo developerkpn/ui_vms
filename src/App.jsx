@@ -5,6 +5,7 @@ import ThemeProvider from './theme';
 
 import { routes } from './route/routes';
 import AuthProvider from './provider/sessionProvider';
+import SnackbarProvider from './provider/SnackbarProvider';
 import { Suspense } from 'react';
 import LoadingSuspense from './components/loadingscreen/Loading';
 import { ErrorBoundary } from 'react-error-boundary';
@@ -17,9 +18,11 @@ function App() {
       <Suspense fallback={<LoadingSuspense />}>
         <HelmetProvider>
           <ThemeProvider>
-            <CssBaseline/>
+            <CssBaseline />
             <AuthProvider>
-              <RouterProvider router={routes} />
+              <SnackbarProvider>
+                <RouterProvider router={routes} />
+              </SnackbarProvider>
             </AuthProvider>
           </ThemeProvider>
         </HelmetProvider>

@@ -17,7 +17,7 @@ const SnackbarProvider = ({ children }) => {
   }, []);
 
   const closeSnackbar = useCallback(() => {
-    setSB({ open: false, severity: 'info', message: '' });
+    setSB((prev) => ({ ...prev, open: false }));
   }, []);
 
   const sbContext = { openSnackbar, closeSnackbar };
