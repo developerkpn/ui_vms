@@ -456,7 +456,7 @@ function RefactorFormVendorPage() {
   const [langCode, setLang] = useState('id');
   const { t, i18n } = useTranslation('translation', { lng: langCode });
   const [initDataFile, setInitDfile] = useState([]);
-  const fileCheck = useMemo(() => getValues('file_atth'), [watch()]);
+  const fileCheck = useMemo(() => getValues('file_atth'), [watch('file_atth')]);
   // const updateCurrentEdit = (rows) => {
   //   setCurrentEdit(rows);
   // };
