@@ -44,27 +44,35 @@ export default function LoginPage() {
         setSession(response);
         alert('Successfull login');
         setTimeout(() => {
-          navigate('/dashboard/ticket');
+          if (response.role !== 'VENDOR') {
+            navigate('/dashboard/ticket');
+          } else {
+            navigate('/dashboard');
+          }
         }, 1000);
         setBtnclicked(false);
       } catch (err) {
         setOpenload(false);
         setBtnclicked(false);
         console.log(err);
-        alert(err.response?.data?.message);
+        if (!err.response) {
+          alert(err.message);
+        } else {
+          alert(err.response?.data?.message);
+        }
       }
     }
   };
 
-  useEffect(() => {
-    if (Cookies.get('accessToken')) {
-      navigate('/dashboard/ticket');
-    }
-  }, [navigate]);
-
-  if (Cookies.get('accessToken')) {
-    return <Navigate to="/dashboard/ticket" />;
-  }
+  // useEffect(() => {
+  //   if (Cookies.get('accessToken')) {
+  //     if (Cookies.get('role') !== 'VENDOR') {
+  //       navigate('/dashboard/ticket');
+  //     } else {
+  //       navigate('/dashboard');
+  //     }
+  //   }
+  // }, [navigate]);
 
   return (
     <>

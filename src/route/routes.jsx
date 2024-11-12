@@ -1,6 +1,7 @@
 import { Navigate, createBrowserRouter } from 'react-router-dom';
 import axios from 'axios';
 import { lazy } from 'react';
+import VendorLandingPage from 'src/pages/vendor/VendorLandingPage';
 const VendorUsers = lazy(() => import('src/pages/vendor/VendorUsers'));
 const VerificationPage = lazy(() => import('src/pages/verification/VerificationPage'));
 // import ErrorPage from '../pages/ErrorPage';
@@ -19,6 +20,7 @@ const VerificationPage = lazy(() => import('src/pages/verification/VerificationP
 // import TicketInvalid from 'src/pages/TicketInvalid';
 // import ResetPassword from 'src/pages/ResetPassword';
 
+const FormReqEditDet = lazy(() => import('../pages/reqedit/FormReqEditDet'));
 const ErrorPage = lazy(() => import('../pages/ErrorPage'));
 const Error404 = lazy(() => import('src/pages/Error404'));
 const LoginPage = lazy(() => import('src/pages/LoginPage'));
@@ -79,6 +81,10 @@ export const routes = createBrowserRouter([
     errorElement: <ErrorPage />,
     children: [
       {
+        path: '',
+        element: <VendorLandingPage />,
+      },
+      {
         path: 'form/:token',
         element: <RefactorFormVendorPage />,
         loader: ({ params }) => {
@@ -87,14 +93,6 @@ export const routes = createBrowserRouter([
             token: params.token,
           };
         },
-        // loader: async ({ params }) => {
-        //   const response = await formLoader(params);
-        //   if (response.data.data.cur_pos === 'VENDOR' || response.data.data.cur_pos === 'PROC') {
-        //     return { ...response.data, role: '', section: 'VENDOR' };
-        //   } else {
-        //     return { ...response.data, role: '', section: 'MDM' };
-        //   }
-        // },
       },
       {
         path: 'ticket',
@@ -139,6 +137,10 @@ export const routes = createBrowserRouter([
       {
         path: 'usrven',
         element: <VendorUsers />,
+      },
+      {
+        path: 'editreq/form',
+        element: <FormReqEditDet />,
       },
     ],
   },

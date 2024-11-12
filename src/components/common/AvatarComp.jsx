@@ -46,7 +46,7 @@ export default function AvatarComp() {
             <IconButton onClick={handleMenu}>
               <Avatar>{session.username?.slice(0, 2).toUpperCase()}</Avatar>
             </IconButton>
-            <Typography>{session.fullname?.split(' ')[0]}</Typography>
+            <Typography>{session.fullname?.split(' ').slice(0, 2).join(' ')}</Typography>
           </Box>
         </MenuItem>
         <MenuItem onClick={handleLogout} sx={{ width: '10rem' }}>

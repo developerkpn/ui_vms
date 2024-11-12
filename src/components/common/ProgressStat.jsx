@@ -3,7 +3,7 @@ import { styled } from '@mui/material';
 import PropTypes from 'prop-types';
 
 const Paper = styled(MUIPaper)(() => ({
-  width: 100,
+  width: 'fit-content',
   height: 40,
   display: 'flex',
   alignItems: 'center',

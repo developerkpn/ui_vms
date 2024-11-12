@@ -19,6 +19,8 @@ import Cookies from 'js-cookie';
 import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
 import KpnLogo from '../../images/kpn-logo-3.svg?react';
 import KpnNav from '../../images/kpn-logo.svg?react';
+import ResetPasswordDialog from './ResetPasswordDialog';
+import SnackbarProvider from 'src/provider/SnackbarProvider';
 
 const drawerWidth = 240;
 
@@ -84,10 +86,11 @@ const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' 
 export default function MiniDrawer() {
   const theme = useTheme();
   const location = useLocation();
-  // const { session, setSession } = useSession();
+  const { session, is_reset_pwd } = useSession();
   const axiosPrivate = useAxiosPrivate();
 
   const [open, setOpen] = useState(false);
+  const [openDialog, setOpenDialog] = useState(true);
   const [navCol, setNavcol] = useState({
     head: '',
     state: false,
@@ -145,6 +148,8 @@ export default function MiniDrawer() {
     return <Navigate to="/login" />;
   }
 
+  // if (Cookies.get('role') === 'VENDOR' && Cookies.get('is'))
+
   return (
     <Box sx={{ display: 'flex' }}>
       <AppBar position="fixed" open={open}>
@@ -185,8 +190,11 @@ export default function MiniDrawer() {
       </Drawer>
       <Box
         component="main"
-        sx={{ flexGrow: 1, p: 3, height: 530, width: open ? `calc(94% - ${drawerWidth}px)` : '94%' }}
+        sx={{ flexGrow: 1, p: 3, height: '94vh', width: open ? `calc(94% - ${drawerWidth}px)` : '94%' }}
       >
+        {session.role === 'VENDOR' && (is_reset_pwd == 'false' || !is_reset_pwd) && openDialog && (
+          <ResetPasswordDialog open={openDialog} setOpen={setOpenDialog} />
+        )}
         <DrawerHeader />
         <Outlet />
       </Box>

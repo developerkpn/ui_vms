@@ -1,5 +1,6 @@
 import { Controller } from 'react-hook-form';
 import { Autocomplete, TextField } from '@mui/material';
+import TextFieldDirty from '../templates/TextFieldDirty';
 
 export default function AutoCompleteSelect({
   name,
@@ -13,13 +14,15 @@ export default function AutoCompleteSelect({
   rules,
   t,
   helperText,
+  dirty,
+  sx,
 }) {
   return (
     <Controller
       name={name}
       control={control}
       rules={rules}
-      render={({ field: { onChange, value, ref }, fieldState: { error } }) => {
+      render={({ field: { onChange, value, ref }, fieldState: { error, isDirty } }) => {
         let helpertext;
         if (t) {
           helpertext = error ? t(error.message) : t(helperText);
@@ -52,8 +55,16 @@ export default function AutoCompleteSelect({
             readOnly={readOnly}
             disabled={disabled}
             renderInput={(params) => (
-              <TextField {...params} label={label} error={error} inputRef={ref} helperText={helpertext} />
+              <TextFieldDirty
+                {...params}
+                label={label}
+                error={error}
+                inputRef={ref}
+                helperText={helpertext}
+                isDirty={isDirty && dirty}
+              />
             )}
+            sx={sx}
           />
         );
       }}

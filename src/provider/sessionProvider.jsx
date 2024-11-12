@@ -6,6 +6,7 @@ const SessionContext = createContext();
 
 const SessionProvider = ({ children }) => {
   const [accessToken, _setAccessToken] = useState(Cookies.get('accessToken') ?? '');
+  const [is_reset_pwd, _setIsResetPWD] = useState(Cookies.get('is_reset_pwd') ?? '');
   const [session, setSession_] = useState({
     fullname: Cookies.get('fullname') ?? '',
     username: Cookies.get('username') ?? '',
@@ -25,6 +26,7 @@ const SessionProvider = ({ children }) => {
     Cookies.set('user_id', data.user_id);
     Cookies.set('role', data.role);
     Cookies.set('groupid', data.groupid);
+    Cookies.set('is_reset_pwd', data.is_reset_pwd);
     localStorage.setItem('permission', JSON.stringify(data.permission));
     localStorage.setItem('menu', JSON.stringify(data.menu));
     setSession_({
@@ -35,15 +37,23 @@ const SessionProvider = ({ children }) => {
       user_id: data.user_id,
       role: data.role,
       permission: data.permission,
+      is_reset_pwd: data.is_reset_pwd,
       groupid: data.groupid,
       menu: data.menu,
     });
     _setAccessToken(data.accessToken);
+    _setIsResetPWD(data.is_reset_pwd);
   }, []);
 
   const setAccessToken = useCallback((act) => {
     _setAccessToken(act);
   }, []);
+
+  const setIsResetPWD = useCallback(() => {
+    _setIsResetPWD(true);
+    Cookies.set('is_reset_pwd', true);
+  }, []);
+
   const logOut = useCallback(() => {
     localStorage.clear();
     Cookies.remove('fullname');
@@ -54,6 +64,7 @@ const SessionProvider = ({ children }) => {
     Cookies.remove('accessToken');
     Cookies.remove('groupid');
     Cookies.remove('menu');
+    Cookies.remove('is_reset_pwd');
   }, []);
 
   const getPermission = useCallback((page) => {
@@ -84,13 +95,24 @@ const SessionProvider = ({ children }) => {
       Cookies.set('user_id', session.user_id);
       Cookies.set('role', session.role);
       Cookies.set('groupid', session.groupid);
+      Cookies.set('is_reset_pwd', is_reset_pwd);
       localStorage.setItem('permission', JSON.stringify(session.permission));
       localStorage.setItem('menu', JSON.stringify(session.menu));
     }
   }, [session]);
 
   const contextValue = useMemo(
-    () => ({ session, setSession, logOut, getPermission, getMenu, accessToken, setAccessToken }),
+    () => ({
+      session,
+      setSession,
+      logOut,
+      getPermission,
+      getMenu,
+      accessToken,
+      setAccessToken,
+      is_reset_pwd,
+      setIsResetPWD,
+    }),
     [session]
   );
 

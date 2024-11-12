@@ -1,5 +1,7 @@
 import { TextField, Tooltip } from '@mui/material';
 import { Controller } from 'react-hook-form';
+import { useState, useEffect } from 'react';
+import TextFieldDirty from '../templates/TextFieldDirty';
 
 export const TextFieldComp = ({
   control,
@@ -8,6 +10,7 @@ export const TextFieldComp = ({
   rules,
   valueovr,
   readOnly,
+  dirty,
   onChangeovr,
   toUpperCase,
   toLowerCase,
@@ -17,10 +20,21 @@ export const TextFieldComp = ({
   tooltip,
   multiline,
   disabled,
+  arrayDisabled,
   t,
   maxLength,
   sx,
 }) => {
+  const [is_disabled, setDisabled] = useState(false);
+  useEffect(() => {
+    if (Array.isArray(arrayDisabled)) {
+      if (arrayDisabled.includes(name)) setDisabled(true);
+    } else if (typeof disabled === 'boolean' && disabled) {
+      {
+        setDisabled(true);
+      }
+    }
+  }, [disabled, arrayDisabled]);
   return (
     <>
       <Controller
@@ -28,7 +42,7 @@ export const TextFieldComp = ({
         control={control}
         rules={rules}
         defaultValue={valueovr}
-        render={({ field: { onChange, value, ref }, fieldState: { error } }) => {
+        render={({ field: { onChange, value, ref }, fieldState: { error, isDirty } }) => {
           let helpertext;
           if (t !== undefined) {
             helpertext = error ? t(error.message) : t(helperText);
@@ -37,7 +51,8 @@ export const TextFieldComp = ({
           }
           return (
             <Tooltip title={tooltip} disableHoverListener={!tooltip} followCursor enterDelay={1000}>
-              <TextField
+              <TextFieldDirty
+                isDirty={isDirty && dirty}
                 helperText={helpertext}
                 error={!!error}
                 onChange={(e) => {
@@ -82,7 +97,7 @@ export const TextFieldComp = ({
                 inputProps={{ readOnly: readOnly }}
                 fullWidth
                 multiline={multiline}
-                disabled={disabled}
+                disabled={is_disabled}
                 sx={sx}
               />
             </Tooltip>

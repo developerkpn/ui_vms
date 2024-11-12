@@ -70,6 +70,7 @@ const RejectDialog = ({ control, data_ven }) => {
         control={control}
         sx={{ width: '50rem' }}
         rules={{ required: 'Please insert this field' }}
+        multiline
       />
     </Box>
   );
@@ -135,16 +136,16 @@ export default function TableParentVerif() {
     if (is_valid) {
       try {
         const { data } = await axiosPrivate.post('/vendor/verif', {
-          verified: 1,
+          verified: 0,
           ven_id: values.ven_id,
           reject_notes: getValues('remarks'),
         });
-        openSnackBar('success', data.message);
+        openSnackbar('success', data.message);
         setOpenDialog((prev) => ({ ...prev, state: false }));
         setRefresh(true);
       } catch (error) {
         console.error(error);
-        openSnackBar('error', error.response.data.message);
+        openSnackbar('error', error.response.data.message);
       }
     }
   };

@@ -1,6 +1,7 @@
 import { Controller } from 'react-hook-form';
 import { PatternFormat } from 'react-number-format';
-import { TextField, Tooltip, InputAdornment } from '@mui/material';
+import { TextField, Tooltip, InputAdornment, styled } from '@mui/material';
+import TextFieldDirty from '../templates/TextFieldDirty';
 
 export default function PatternFieldComp({
   name,
@@ -18,13 +19,15 @@ export default function PatternFieldComp({
   helperText,
   disabled,
   useplaceholder,
+  dirty,
+  sx,
 }) {
   return (
     <Controller
       name={name}
       control={control}
       rules={rules}
-      render={({ field, fieldState: { error } }) => {
+      render={({ field, fieldState: { error, isDirty } }) => {
         let helpertext;
         if (t) {
           helpertext = error ? t(error.message) : t(helperText);
@@ -35,6 +38,7 @@ export default function PatternFieldComp({
           <Tooltip title={tooltip} disableHoverListener={!tooltip} followCursor enterDelay={1000}>
             <span>
               <PatternFormat
+                sx={sx}
                 value={field.value}
                 format={format}
                 mask={mask}
@@ -48,8 +52,9 @@ export default function PatternFieldComp({
                 label={label}
                 error={error}
                 inputRef={field.ref}
-                customInput={TextField}
+                customInput={TextFieldDirty}
                 patternChar={patternChar}
+                isDirty={isDirty && dirty}
                 inputProps={{
                   readOnly: readOnly,
                   disabled: disabled,

@@ -73,10 +73,8 @@ const UploadButton = forwardRef(function UploadButton(
   }, [iniData]);
 
   useEffect(() => {
-    console.log('t changed');
     if (fileStaged.length > 0) {
       const covtData = fileStaged.map((item) => ({ ...item, desc_file: item.desc_file }));
-      console.log(covtData);
       setFileStaged(covtData);
       sendDataParent(covtData);
     }

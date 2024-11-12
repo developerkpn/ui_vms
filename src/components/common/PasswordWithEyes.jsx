@@ -1,5 +1,5 @@
 import { Visibility, VisibilityOff } from '@mui/icons-material';
-import { FormControl, InputLabel, OutlinedInput, InputAdornment, IconButton } from '@mui/material';
+import { FormControl, InputLabel, OutlinedInput, InputAdornment, IconButton, FormHelperText } from '@mui/material';
 import { Controller } from 'react-hook-form';
 import { useState } from 'react';
 
@@ -41,6 +41,7 @@ export const PasswordWithEyes = ({ control, label, name, rules }) => {
               }
               label={label}
             />
+            <FormHelperText error={!!error}>{error && error.message}</FormHelperText>
           </FormControl>
         )}
       />

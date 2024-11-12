@@ -40,7 +40,8 @@
     "uuid": "^10.0.0",
     "vite-plugin-svgr": "^4.2.0",
     "vite-tsconfig-paths": "^5.0.1",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "zustand": "^5.0.1"
   },
   "scripts": {
     "dev": "vite",

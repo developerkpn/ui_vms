@@ -1,6 +1,7 @@
 import { FormControl, InputLabel, MenuItem, Select, FormHelperText, Tooltip, ListSubheader } from '@mui/material';
 import { Controller } from 'react-hook-form';
 import { useEffect, useRef, useState } from 'react';
+import SelectDirty from '../templates/SelectDirty';
 
 export default function SelectComp({
   name,
@@ -15,6 +16,8 @@ export default function SelectComp({
   tooltip,
   t,
   helperText,
+  dirty,
+  sx,
 }) {
   const generateSingleOptions = () => {
     if (!Array.isArray(options)) {
@@ -54,9 +57,9 @@ export default function SelectComp({
   }, [runTimeout]);
 
   return (
-    <FormControl fullWidth disabled={disabled}>
+    <FormControl fullWidth sx={sx} disabled={disabled}>
       <Controller
-        render={({ field: { onChange, value, ref }, fieldState: { error } }) => {
+        render={({ field: { onChange, value, ref }, fieldState: { error, isDirty } }) => {
           // if (disabled) {
           //   value = '';
           // }
@@ -77,12 +80,13 @@ export default function SelectComp({
                 open={openTooltip}
               >
                 <div>
-                  <Select
+                  <SelectDirty
                     fullWidth
                     error={!!error}
                     label={label}
                     value={value}
                     inputRef={ref}
+                    isDirty={isDirty && dirty}
                     onChange={(e) => {
                       onChange(e);
                       if (onChangeovr != undefined) {
@@ -102,7 +106,7 @@ export default function SelectComp({
                     }}
                   >
                     {generateSingleOptions()}
-                  </Select>
+                  </SelectDirty>
                 </div>
               </Tooltip>
               <FormHelperText error={!!error}>{helpertext}</FormHelperText>
