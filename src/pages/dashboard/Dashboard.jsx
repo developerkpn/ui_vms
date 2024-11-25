@@ -190,7 +190,7 @@ export default function MiniDrawer() {
       </Drawer>
       <Box
         component="main"
-        sx={{ flexGrow: 1, p: 3, height: '94vh', width: open ? `calc(94% - ${drawerWidth}px)` : '94%' }}
+        sx={{ flexGrow: 1, p: 3, height: '90vh', width: open ? `calc(94% - ${drawerWidth}px)` : '94%' }}
       >
         {session.role === 'VENDOR' && (is_reset_pwd == 'false' || !is_reset_pwd) && openDialog && (
           <ResetPasswordDialog open={openDialog} setOpen={setOpenDialog} />

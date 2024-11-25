@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 // import PaginationActionButton from "./PaginationActionButton";
 
 export default function TableSimple({ rowsData, sx, columns, meta }) {
-  const col = useMemo(() => columns, []);
+  const col = columns;
   const table = useReactTable({
     data: rowsData,
     columns: col,

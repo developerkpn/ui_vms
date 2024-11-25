@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Delete as DeleteIcon, Undo, Download, Preview, UploadFile } from '@mui/icons-material';
+import { Delete as DeleteIcon, Undo, Download, Preview, UploadFile, InfoOutlined } from '@mui/icons-material';
 import TableSimple from 'src/components/table/TableSimple';
 import { createColumnHelper } from '@tanstack/react-table';
 import {
@@ -89,7 +89,7 @@ const UndoStage = ({ onClickFun }) => {
   );
 };
 
-export default function VenFileTablev2({ initFiles, setValue, getValues, errors, ...props }) {
+export default function VenFileTablev2({ initFiles, setValue, getValues, errors, fileDisabled, ...props }) {
   const theme = useTheme();
   const axiosPrivate = useAxiosPrivate();
   const { openSnackbar } = useSnackBar();
@@ -97,6 +97,7 @@ export default function VenFileTablev2({ initFiles, setValue, getValues, errors,
   const [isLoad, setLoad] = useState(false);
   const [selectedFileType, setSelFileType] = useState('');
   const [disabledBtn, setDisabledBtn] = useState(false);
+  const [disabledFile, setDisableFile] = useState(false);
   const files = useFileStore((state) => state.files);
   const setFiles = useFileStore((state) => state.setFiles);
   const fileTypes = useFileStore((state) => state.fileTypes);
@@ -108,7 +109,12 @@ export default function VenFileTablev2({ initFiles, setValue, getValues, errors,
   const deleteFile = useFileStore((state) => state.deleteFile);
   const delStgFiles = useFileStore((state) => state.delStgFiles);
   const setFileTypes = useFileStore((state) => state.setFileTypes);
-  // console.log(isallow);
+
+  useEffect(() => {
+    if (fileDisabled) {
+      setDisableFile(true);
+    }
+  }, [fileDisabled]);
 
   useEffect(() => {
     if (initFiles) {
@@ -146,6 +152,9 @@ export default function VenFileTablev2({ initFiles, setValue, getValues, errors,
         cell: ({ row }) => {
           const curMethod = row.original.method;
           let functionAction;
+          if (disabledFile) {
+            return;
+          }
           if (row.original.source !== 'local') {
             if (row.original.method === 'new') {
               functionAction = async () => {
@@ -194,8 +203,19 @@ export default function VenFileTablev2({ initFiles, setValue, getValues, errors,
           }
         },
       }),
+      columnHelper.accessor('method', {
+        header: <InfoOutlined />,
+        cell: ({ getValue }) => {
+          if (getValue() == 'delete') {
+            return 'Will be deleted';
+          } else if (getValue() == 'new') {
+            return 'New data / Replacement';
+          }
+          return '';
+        },
+      }),
     ],
-    []
+    [disabledFile]
   );
 
   const handleChangeFileTypeUpload = (value) => {
@@ -261,7 +281,7 @@ export default function VenFileTablev2({ initFiles, setValue, getValues, errors,
               startIcon={<UploadFile />}
               variant="outlined"
               sx={{ width: 300 }}
-              disabled={disabledBtn}
+              disabled={disabledBtn || disabledFile}
             >
               Set File
               <input

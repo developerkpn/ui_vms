@@ -1,6 +1,7 @@
 import { Controller } from 'react-hook-form';
 import { Autocomplete, TextField } from '@mui/material';
 import TextFieldDirty from '../templates/TextFieldDirty';
+import { useState, useEffect } from 'react';
 
 export default function AutoCompleteSelect({
   name,
@@ -17,6 +18,23 @@ export default function AutoCompleteSelect({
   dirty,
   sx,
 }) {
+  const [is_disabled, setDisabled] = useState(false);
+  useEffect(() => {
+    if (Array.isArray(disabled)) {
+      if (disabled.includes(name)) {
+        setDisabled(true);
+      } else {
+        setDisabled(false);
+      }
+    } else {
+      setDisabled(false);
+    }
+    if (typeof disabled == 'boolean' && disabled) {
+      setDisabled(true);
+    } else {
+      setDisabled(false);
+    }
+  }, [disabled]);
   return (
     <Controller
       name={name}
@@ -53,7 +71,7 @@ export default function AutoCompleteSelect({
             autoSelect={freeSolo}
             fullWidth
             readOnly={readOnly}
-            disabled={disabled}
+            disabled={is_disabled}
             renderInput={(params) => (
               <TextFieldDirty
                 {...params}

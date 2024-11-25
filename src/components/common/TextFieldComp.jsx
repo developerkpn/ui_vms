@@ -20,21 +20,27 @@ export const TextFieldComp = ({
   tooltip,
   multiline,
   disabled,
-  arrayDisabled,
   t,
   maxLength,
   sx,
 }) => {
   const [is_disabled, setDisabled] = useState(false);
   useEffect(() => {
-    if (Array.isArray(arrayDisabled)) {
-      if (arrayDisabled.includes(name)) setDisabled(true);
-    } else if (typeof disabled === 'boolean' && disabled) {
-      {
+    if (Array.isArray(disabled)) {
+      if (disabled.includes(name)) {
         setDisabled(true);
+      } else {
+        setDisabled(false);
       }
+    } else {
+      setDisabled(false);
     }
-  }, [disabled, arrayDisabled]);
+    if (typeof disabled == 'boolean' && disabled) {
+      setDisabled(true);
+    } else {
+      setDisabled(false);
+    }
+  }, [disabled]);
   return (
     <>
       <Controller

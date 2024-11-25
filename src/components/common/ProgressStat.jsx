@@ -4,6 +4,7 @@ import PropTypes from 'prop-types';
 
 const Paper = styled(MUIPaper)(() => ({
   width: 'fit-content',
+  padding: '0.3rem',
   height: 40,
   display: 'flex',
   alignItems: 'center',

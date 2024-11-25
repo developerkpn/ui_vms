@@ -24,9 +24,11 @@ import { useNavigate } from 'react-router-dom';
 import ProgressStat from 'src/components/common/ProgressStat';
 import { LoadingButton } from '@mui/lab';
 import moment from 'moment';
+import ListSAPProgress from './ListSAPProgress';
 
 const overrides = {
   '& .MuiDataGrid-main': {},
+  maxHeigth: '100%',
 };
 
 function RefreshTable(props) {
@@ -47,7 +49,12 @@ function RefreshTable(props) {
 export default function ListTicket() {
   // const load = useLoaderData();
   const { getPermission } = useSession();
-  const [perm, setPerm] = useState();
+  const [perm, setPerm] = useState({
+    Table: getPermission('Ticket Request'),
+    INIT: getPermission('Initial Form'),
+    CREA: getPermission('Creation Form'),
+    FINA: getPermission('Final Form'),
+  });
   const [ticket, setTicket] = useState();
   const [openModal, setOpenmodal] = useState(false);
   const [btnTicket, setBtn] = useState(false);
@@ -60,6 +67,34 @@ export default function ListTicket() {
   const [refreshBtn, setRefreshbtn] = useState(true);
   const axiosPrivate = useAxiosPrivate();
   const navigate = useNavigate();
+
+  const showTicket = async (ticketState, controller) => {
+    const response = await axiosPrivate.get(
+      `/ticket/?is_active=${filterAct}&ticket_state=${
+        ticket_state.length === 0 ? ticketState.join(',') : ticket_state.join(',')
+      }`,
+      {
+        signal: controller.signal,
+      }
+    );
+    const result = response.data.data;
+    const load = result.data.map((item) => ({
+      id: item.token,
+      is_active: item.is_active,
+      ticket_num: item.ticket_id,
+      updated_at: moment(item.updated_at).format('DD/MM/YYYY T HH:mm:ss'),
+      updated_by: item.updated_by,
+      date_ticket: moment(item.created_at).format('DD/MM/YYYY T HH:mm:ss'),
+      assignee: item.email,
+      cur_pos: item.cur_pos,
+      status_ticket: item.status_ticket,
+      vendor_name: item.name_1,
+      vendor_code: item.ven_code,
+      ticket_state: item.ticket_state,
+      is_expired: item.is_expired,
+    }));
+    setTicket(load);
+  };
 
   const tickets = async (controller) => {
     let permission = {};
@@ -80,36 +115,15 @@ export default function ListTicket() {
         ticketState.push("'FINA'");
       }
       setTicketstate(ticketState);
-      const response = await axiosPrivate.get(
-        `/ticket/?is_active=${filterAct}&ticket_state=${
-          ticket_state.length === 0 ? ticketState.join(',') : ticket_state.join(',')
-        }`,
-        {
-          signal: controller.signal,
-        }
-      );
-      const result = response.data.data;
-      const load = result.data.map((item) => ({
-        id: item.token,
-        is_active: item.is_active,
-        ticket_num: item.ticket_id,
-        updated_at: moment(item.updated_at).format('DD/MM/YYYY T HH:mm:ss'),
-        updated_by: item.updated_by,
-        date_ticket: moment(item.created_at).format('DD/MM/YYYY T HH:mm:ss'),
-        assignee: item.email,
-        cur_pos: item.cur_pos,
-        status_ticket: item.status_ticket,
-        vendor_name: item.name_1,
-        vendor_code: item.ven_code,
-        ticket_state: item.ticket_state,
-        is_expired: item.is_expired,
-      }));
-      setTicket(load);
-      if (refreshBtn) {
-        setRefreshbtn(false);
+      if (typeof filterAct == 'boolean') {
+        await showTicket(ticketState, controller);
       }
     } catch (error) {
       console.error(error);
+    } finally {
+      if (refreshBtn) {
+        setRefreshbtn(false);
+      }
     }
   };
 
@@ -418,40 +432,41 @@ export default function ListTicket() {
   );
 
   return (
-    <Box sx={{ height: '100%', width: '100%' }}>
-      {ticket !== undefined ? (
-        <>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-            <Box sx={{ display: 'flex', gap: 2, width: '100%' }}>
-              <FormControl>
-                <Select
-                  sx={{ width: '10em' }}
-                  id={'filterAct'}
-                  value={filterAct}
-                  onChange={(e) => {
-                    setFilteract(!filterAct);
-                    setRefreshbtn(true);
-                  }}
-                >
-                  <MenuItem value={true}>Active</MenuItem>
-                  <MenuItem value={false}>Inactive</MenuItem>
-                </Select>
-              </FormControl>
-              <RefreshTable setRefreshbtn={buttonRefreshAct} isLoading={refreshBtn} sx={{ mb: 3, height: '3.5rem' }} />
-            </Box>
-            {perm.Table.create && (
-              <Button
-                variant="contained"
-                sx={{ width: 180, height: 50, my: 2 }}
-                onClick={() => {
-                  setOpenmodal(true);
-                }}
-              >
-                Create New Vendor
-              </Button>
-            )}
-          </Box>
-          <Box sx={{ width: '100%', height: '100%' }}>
+    <Box sx={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+        <Box sx={{ display: 'flex', gap: 2, width: '100%' }}>
+          <FormControl>
+            <Select
+              sx={{ width: '10em' }}
+              id={'filterAct'}
+              value={filterAct}
+              onChange={(e) => {
+                setFilteract(e.target.value);
+                setRefreshbtn(true);
+              }}
+            >
+              <MenuItem value={true}>Active</MenuItem>
+              <MenuItem value={false}>Inactive</MenuItem>
+              <MenuItem value={'SAP'}>O/S SAP Push</MenuItem>
+            </Select>
+          </FormControl>
+          <RefreshTable setRefreshbtn={buttonRefreshAct} isLoading={refreshBtn} sx={{ mb: 3, height: '3.5rem' }} />
+        </Box>
+        {perm.Table.create && (
+          <Button
+            variant="contained"
+            sx={{ width: 180, height: 50, my: 2 }}
+            onClick={() => {
+              setOpenmodal(true);
+            }}
+          >
+            Create New Vendor
+          </Button>
+        )}
+      </Box>
+      {ticket !== undefined && typeof filterAct == 'boolean' && (
+        <Box sx={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}>
+          <Box sx={{ width: '100%', height: '88%' }}>
             <DataGrid
               sx={overrides}
               rows={ticket}
@@ -462,8 +477,9 @@ export default function ListTicket() {
               hideFooterPagination
             />
           </Box>
-        </>
-      ) : (
+        </Box>
+      )}
+      {ticket === undefined && (
         <Box>
           <Skeleton animation="wave" height={100} />
           <Skeleton animation="wave" height={100} />
@@ -472,6 +488,7 @@ export default function ListTicket() {
           <Skeleton animation="wave" height={100} />
         </Box>
       )}
+      {filterAct == 'SAP' && <ListSAPProgress refreshBtn={refreshBtn} setRefreshBtn={setRefreshbtn} />}
 
       <ModalCreateTicket
         open={openModal}

@@ -2,6 +2,7 @@ import { Controller } from 'react-hook-form';
 import { PatternFormat } from 'react-number-format';
 import { TextField, Tooltip, InputAdornment, styled } from '@mui/material';
 import TextFieldDirty from '../templates/TextFieldDirty';
+import { useState, useEffect } from 'react';
 
 export default function PatternFieldComp({
   name,
@@ -22,6 +23,23 @@ export default function PatternFieldComp({
   dirty,
   sx,
 }) {
+  const [is_disabled, setDisabled] = useState(false);
+  useEffect(() => {
+    if (Array.isArray(disabled)) {
+      if (disabled.includes(name)) {
+        setDisabled(true);
+      } else {
+        setDisabled(false);
+      }
+    } else {
+      setDisabled(false);
+    }
+    if (typeof disabled == 'boolean' && disabled) {
+      setDisabled(true);
+    } else {
+      setDisabled(false);
+    }
+  }, [disabled]);
   return (
     <Controller
       name={name}
@@ -57,7 +75,7 @@ export default function PatternFieldComp({
                 isDirty={isDirty && dirty}
                 inputProps={{
                   readOnly: readOnly,
-                  disabled: disabled,
+                  disabled: is_disabled,
                   placeholder: useplaceholder && format.replace(/#/g, '_'),
                 }}
                 helperText={helpertext}

@@ -707,7 +707,7 @@ function RefactorFormVendorPage() {
       CREA: permissions.CREA.update && MgrAllow,
       FINA: permissions.FINA.update,
     };
-  }, [loader_data]);
+  }, [loader_data, session, getPermission]);
 
   const countries = useRef([{ value: '', label: '' }]);
   const [currencies, setCurr] = useState([]);
@@ -1869,6 +1869,7 @@ function RefactorFormVendorPage() {
                         borderColor: theme.palette.grey[400],
                         borderRadius: '20px',
                         padding: 3,
+                        mt: '16px',
                       }}
                     >
                       <p
@@ -2039,6 +2040,7 @@ function RefactorFormVendorPage() {
                         borderColor: theme.palette.grey[400],
                         borderRadius: '20px',
                         padding: 3,
+                        mt: '16px',
                       }}
                     >
                       <p

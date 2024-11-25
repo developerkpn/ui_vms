@@ -19,6 +19,24 @@ export default function SelectComp({
   dirty,
   sx,
 }) {
+  const [is_disabled, setDisabled] = useState(false);
+  useEffect(() => {
+    if (Array.isArray(disabled)) {
+      if (disabled.includes(name)) {
+        setDisabled(true);
+      } else {
+        setDisabled(false);
+      }
+    } else {
+      setDisabled(false);
+    }
+    if (typeof disabled == 'boolean' && disabled) {
+      setDisabled(true);
+    } else {
+      setDisabled(false);
+    }
+  }, [disabled]);
+
   const generateSingleOptions = () => {
     if (!Array.isArray(options)) {
       let optionsHTML = [];
@@ -57,7 +75,7 @@ export default function SelectComp({
   }, [runTimeout]);
 
   return (
-    <FormControl fullWidth sx={sx} disabled={disabled}>
+    <FormControl fullWidth sx={sx} disabled={is_disabled}>
       <Controller
         render={({ field: { onChange, value, ref }, fieldState: { error, isDirty } }) => {
           // if (disabled) {

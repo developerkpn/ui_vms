@@ -17,8 +17,6 @@ export default function AutoSelectPurOrg({ name, label, control, rules, company,
   const [isLoading, setLoading] = useState(false);
 
   const fetchData = async (limit, offset, company, q) => {
-    console.log('fetchData runs');
-    console.log(limit, offset, company, q);
     if (company !== '') {
       setLoading(true);
       try {

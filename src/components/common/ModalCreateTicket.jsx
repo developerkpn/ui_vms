@@ -24,10 +24,10 @@ import SelectCompNoCont from './SelectCompNoCont';
 
 const ticket_type = [
   { value: 'UPS', label: 'UPSTREAM' },
-  // {
-  //   value: 'DWS',
-  //   label: 'DOWNSTREAM',
-  // },
+  {
+    value: 'DWS',
+    label: 'DOWNSTREAM',
+  },
 ];
 
 export default function ModalCreateTicket({ open, onClose, popUp, onClick, refresh }) {

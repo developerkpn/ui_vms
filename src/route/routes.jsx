@@ -1,7 +1,8 @@
 import { Navigate, createBrowserRouter } from 'react-router-dom';
 import axios from 'axios';
 import { lazy } from 'react';
-import VendorLandingPage from 'src/pages/vendor/VendorLandingPage';
+const OSTicketReqEdit = lazy(() => import('src/pages/reqedit/OSTicketReqEdit'));
+const VendorLandingPage = lazy(() => import('src/pages/vendor/VendorLandingPage'));
 const VendorUsers = lazy(() => import('src/pages/vendor/VendorUsers'));
 const VerificationPage = lazy(() => import('src/pages/verification/VerificationPage'));
 // import ErrorPage from '../pages/ErrorPage';
@@ -141,6 +142,10 @@ export const routes = createBrowserRouter([
       {
         path: 'editreq/form',
         element: <FormReqEditDet />,
+      },
+      {
+        path: 'editreq',
+        element: <OSTicketReqEdit />,
       },
     ],
   },

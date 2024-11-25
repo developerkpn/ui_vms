@@ -4,7 +4,7 @@ import { TextFieldComp } from 'src/components/common/TextFieldComp';
 import PatternFieldComp from 'src/components/common/PatternFieldComp';
 import SelectComp from 'src/components/common/SelectComp';
 import { useSearchParams } from 'react-router-dom';
-import { Box, Backdrop, CircularProgress } from '@mui/material';
+import { Box, Backdrop, CircularProgress, Skeleton } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
 import { useTheme } from '@mui/material/styles';
 import VenFileTablev2 from './VenFileTablev2';
@@ -17,6 +17,7 @@ import useFileStore from 'src/store/useFileStore';
 import { MapperPayloadReqEdit } from 'src/helper/Mapper';
 import { useNavigate } from 'react-router-dom';
 import useTimeout from 'src/hooks/useTimeout';
+import { useSession } from 'src/provider/sessionProvider';
 
 export default function FormReqEditDet() {
   const { t } = useTranslation();
@@ -27,6 +28,8 @@ export default function FormReqEditDet() {
   const theme = useTheme();
   const [id, setId] = useState('');
   const [disabled, setDisabled] = useState([]);
+  const [fileDisabled, setFileDisabled] = useState(false);
+  const [ticketNum, setTicketnum] = useState();
   const [phoneNumber, setPhoneNumber] = useState('+XX');
   const [payterm, setPayterm] = useState([]);
   const [cities, setCities] = useState([]);
@@ -35,6 +38,7 @@ export default function FormReqEditDet() {
   const [isLoading, setLoading] = useState(false);
   const axiosPrivate = useAxiosPrivate();
   const { openSnackbar } = useSnackBar();
+  const { session } = useSession();
   const setFileTypes = useFileStore((state) => state.setFileTypes);
   const fileChanged = useFileStore((state) => state.changesFiles);
   const setAlltoServer = useFileStore((state) => state.setAlltoServer);
@@ -88,8 +92,8 @@ export default function FormReqEditDet() {
       files: [],
     },
   });
-
   useEffect(() => {
+    //init data
     (async () => {
       try {
         const { data } = await axiosPrivate.get(`/ticeddet/view?id=${searchParams.get('id')}`);
@@ -98,7 +102,24 @@ export default function FormReqEditDet() {
         const stg = data.vendor.detail_staged;
         const files = data.vendor.files;
         const changes = data.vendor.changes;
+        const id_user = data.ticket.id_user;
         setInitFiles(files);
+        setTicketnum(data.ticket.ticket_num);
+        if (!id_user.includes(session.user_id) && data.ticket.submitted) {
+          setDisabled(true);
+          setFileDisabled(true);
+        } else if (data.ticket.disabled_input.length > 0) {
+          if (data.ticket.disabled_input[0] === 'all') {
+            setDisabled(true);
+            setFileDisabled(true);
+          } else {
+            setDisabled(data.ticket.disabled_input);
+            if (data.ticket.disabled_input.includes('file')) {
+              setFileDisabled(true);
+            }
+          }
+        }
+
         let defValFile = {};
         for (const file of files) {
           defValFile[file.file_type] = file.file_name;
@@ -253,8 +274,10 @@ export default function FormReqEditDet() {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 2, my: 2 }}>
         <h3>Edit Detail Request</h3>
+        {!ticketNum && <Skeleton variant="rectangular" width={'10rem'} />}
+        {ticketNum && <h3>{ticketNum}</h3>}
       </Box>
       <HeaderSection text="Company Detail" />
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, p: 2, backgroundColor: theme.palette.common.white }}>
@@ -262,6 +285,7 @@ export default function FormReqEditDet() {
           name="telf1"
           label={'Telephone Number'}
           useplaceholder
+          disabled={disabled}
           control={control}
           format={phoneNumber}
           isNumString={false}
@@ -272,6 +296,7 @@ export default function FormReqEditDet() {
           name="fax"
           label={'Handphone Number'}
           useplaceholder
+          disabled={disabled}
           control={control}
           format={phoneNumber}
           isNumString={false}
@@ -281,7 +306,7 @@ export default function FormReqEditDet() {
         <TextFieldComp
           name="email"
           label="Email *"
-          arrayDisabled={disabled}
+          disabled={disabled}
           control={control}
           rules={{
             required: 'Please insert this field',
@@ -303,6 +328,7 @@ export default function FormReqEditDet() {
           control={control}
           rules={{ maxLength: { value: 500, message: 'Max 500 Character' } }}
           sx={{ maxWidth: '30rem' }}
+          disabled={disabled}
           dirty
         />
         <TextFieldComp
@@ -311,6 +337,7 @@ export default function FormReqEditDet() {
           control={control}
           rules={{ maxLength: { value: 500, message: 'Max 500 Character' } }}
           sx={{ maxWidth: '30rem' }}
+          disabled={disabled}
           dirty
         />
         <TextFieldComp
@@ -319,6 +346,7 @@ export default function FormReqEditDet() {
           control={control}
           rules={{ maxLength: { value: 500, message: 'Max 500 Character' } }}
           sx={{ maxWidth: '30rem' }}
+          disabled={disabled}
           dirty
         />
         <TextFieldComp
@@ -327,6 +355,7 @@ export default function FormReqEditDet() {
           control={control}
           rules={{ maxLength: { value: 500, message: 'Max 500 Character' } }}
           sx={{ maxWidth: '30rem' }}
+          disabled={disabled}
           dirty
         />
       </Box>
@@ -342,6 +371,7 @@ export default function FormReqEditDet() {
             maxLength: { value: 300, message: 'Max 300 Character' },
           }}
           sx={{ maxWidth: '30rem' }}
+          disabled={disabled}
           dirty
         />
         <TextFieldComp
@@ -355,6 +385,7 @@ export default function FormReqEditDet() {
           }}
           tooltip={'Nama dari pihak vendor yang mengisi form'}
           sx={{ maxWidth: '30rem' }}
+          disabled={disabled}
           dirty
         />
         <PatternFieldComp
@@ -371,6 +402,7 @@ export default function FormReqEditDet() {
             'Gunakan format kode telfon internasional'
           }
           sx={{ maxWidth: '30rem' }}
+          disabled={disabled}
           dirty
         />
         <TextFieldComp
@@ -388,6 +420,7 @@ export default function FormReqEditDet() {
           }}
           tooltip={'Alamat email pihak vendor yang berhubungan dengan KPN'}
           sx={{ maxWidth: '30rem' }}
+          disabled={disabled}
           dirty
         />
         <TextFieldComp
@@ -405,6 +438,7 @@ export default function FormReqEditDet() {
           }}
           tooltip={'Email finance dari pihak vendor'}
           sx={{ maxWidth: '30rem' }}
+          disabled={disabled}
           dirty
         />
       </Box>
@@ -452,6 +486,7 @@ export default function FormReqEditDet() {
               pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
             }}
             toUpperCase={true}
+            disabled={disabled}
             dirty
           />
           <TextFieldComp
@@ -463,6 +498,7 @@ export default function FormReqEditDet() {
               pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character` },
             }}
             toUpperCase={true}
+            disabled={disabled}
             dirty
           />
           <TextFieldComp
@@ -474,6 +510,7 @@ export default function FormReqEditDet() {
               pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character` },
             }}
             toUpperCase={true}
+            disabled={disabled}
             dirty
           />
           <TextFieldComp
@@ -485,6 +522,7 @@ export default function FormReqEditDet() {
               pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character` },
             }}
             toUpperCase={true}
+            disabled={disabled}
             dirty
           />
         </Box>
@@ -499,6 +537,7 @@ export default function FormReqEditDet() {
           }}
           freeSolo={true}
           sx={{ maxWidth: '30rem' }}
+          disabled={disabled}
           dirty
         />
         <PatternFieldComp
@@ -511,6 +550,7 @@ export default function FormReqEditDet() {
           }}
           format="#####"
           isNumString={false}
+          disabled={disabled}
           dirty
         />
       </Box>
@@ -558,6 +598,7 @@ export default function FormReqEditDet() {
               pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
             }}
             toUpperCase={true}
+            disabled={disabled}
             dirty
           />
           <TextFieldComp
@@ -569,6 +610,7 @@ export default function FormReqEditDet() {
               pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character` },
             }}
             toUpperCase={true}
+            disabled={disabled}
             dirty
           />
           <TextFieldComp
@@ -580,6 +622,7 @@ export default function FormReqEditDet() {
               pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character` },
             }}
             toUpperCase={true}
+            disabled={disabled}
             dirty
           />
           <TextFieldComp
@@ -591,6 +634,7 @@ export default function FormReqEditDet() {
               pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character` },
             }}
             toUpperCase={true}
+            disabled={disabled}
             dirty
           />
         </Box>
@@ -605,6 +649,7 @@ export default function FormReqEditDet() {
           }}
           freeSolo={true}
           sx={{ maxWidth: '30rem' }}
+          disabled={disabled}
           dirty
         />
         <PatternFieldComp
@@ -617,6 +662,7 @@ export default function FormReqEditDet() {
           }}
           format="#####"
           isNumString={false}
+          disabled={disabled}
           dirty
         />
       </Box>
@@ -664,6 +710,7 @@ export default function FormReqEditDet() {
               pattern: { value: /^[^,]*$/, message: t(`Please fill without ',' (comma) character`) },
             }}
             toUpperCase={true}
+            disabled={disabled}
             dirty
           />
           <TextFieldComp
@@ -675,6 +722,7 @@ export default function FormReqEditDet() {
               pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character` },
             }}
             toUpperCase={true}
+            disabled={disabled}
             dirty
           />
           <TextFieldComp
@@ -686,6 +734,7 @@ export default function FormReqEditDet() {
               pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character` },
             }}
             toUpperCase={true}
+            disabled={disabled}
             dirty
           />
           <TextFieldComp
@@ -697,6 +746,7 @@ export default function FormReqEditDet() {
               pattern: { value: /^[^,]*$/, message: `Please fill without ',' (comma) character` },
             }}
             toUpperCase={true}
+            disabled={disabled}
             dirty
           />
         </Box>
@@ -711,6 +761,7 @@ export default function FormReqEditDet() {
           }}
           freeSolo={true}
           sx={{ maxWidth: '30rem' }}
+          disabled={disabled}
           dirty
         />
         <PatternFieldComp
@@ -723,6 +774,7 @@ export default function FormReqEditDet() {
           }}
           format="#####"
           isNumString={false}
+          disabled={disabled}
           dirty
         />
       </Box>
@@ -742,6 +794,7 @@ export default function FormReqEditDet() {
             required: 'Please insert this field',
           }}
           sx={{ maxWidth: '20rem' }}
+          disabled={disabled}
           dirty
         />
         <SelectComp
@@ -755,6 +808,7 @@ export default function FormReqEditDet() {
           }}
           tooltip={t('Jangka waktu pembayaran')}
           sx={{ maxWidth: '30rem' }}
+          disabled={disabled}
           dirty
         />
       </Box>
@@ -765,6 +819,7 @@ export default function FormReqEditDet() {
         setValue={setValue}
         errors={errors?.files}
         initFiles={initFiles}
+        fileDisabled={fileDisabled}
       />
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 4, mt: 1, gap: 2 }}>
         <LoadingButton
