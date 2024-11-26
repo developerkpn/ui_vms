@@ -2221,7 +2221,6 @@ function RefactorFormVendorPage() {
                         )
                       }
                       rules={{
-                        required: 'Please insert this field',
                         pattern: {
                           value: /^[0-9.-]+$/,
                           message: 'format not matched. only numbers (0-9), point (.), and hyphen (-)',
@@ -2234,6 +2233,7 @@ function RefactorFormVendorPage() {
                           value: 21,
                           message: 'Mohon isi dengan lengkap',
                         },
+                        required: watch('ispkp') == true ? 'Please insert this field' : false,
                       }}
                     />
                   </Grid>
