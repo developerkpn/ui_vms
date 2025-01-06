@@ -164,7 +164,7 @@ const UploadButton = forwardRef(function UploadButton(
     <>
       <Stack spacing={2}>
         <Box style={{ display: 'flex', gap: 3, alignContent: 'center' }}>
-          <p style={{ margin: '0 0 0 0', color: 'red' }}>Maximal File Size : 10 Mb</p>
+          <p style={{ margin: '0 0 0 0', color: 'red' }}>Maximal File Size : 2 Mb</p>
         </Box>
         <Box sx={{ display: 'flex', gap: 3, alignContent: 'center', pb: 2 }}>
           <p>{t('Attachment File Guide')} :</p>
