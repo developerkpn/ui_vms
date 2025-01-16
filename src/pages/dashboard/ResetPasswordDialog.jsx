@@ -4,16 +4,16 @@ import { LoadingButton } from '@mui/lab';
 import { PasswordWithEyes } from 'src/components/common/PasswordWithEyes';
 import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
 import { useSnackBar } from 'src/provider/SnackbarProvider';
-import { useSession } from 'src/provider/sessionProvider';
+import useCheckResetPWD from 'src/store/useCheckResetPWD';
 import { useState } from 'react';
 import { useTheme } from '@mui/material/styles';
 
 export default function ResetPasswordDialog({ open, setOpen }) {
   const theme = useTheme();
   const axiosPrivate = useAxiosPrivate();
+  const setIsResetPWD = useCheckResetPWD((state) => state.setIsResetPWD);
   const [loading, setLoading] = useState(false);
   const { openSnackbar } = useSnackBar();
-  const { setIsResetPWD } = useSession();
   const { handleSubmit, control } = useForm({
     defaultValues: {
       password: '',
@@ -28,7 +28,7 @@ export default function ResetPasswordDialog({ open, setOpen }) {
       });
 
       openSnackbar('success', data.message);
-      setIsResetPWD();
+      setIsResetPWD(true);
       setOpen(false);
     } catch (error) {
       console.error(error);

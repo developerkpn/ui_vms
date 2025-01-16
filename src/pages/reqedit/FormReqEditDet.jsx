@@ -17,11 +17,12 @@ import useFileStore from 'src/store/useFileStore';
 import { MapperPayloadReqEdit } from 'src/helper/Mapper';
 import { useNavigate } from 'react-router-dom';
 import useTimeout from 'src/hooks/useTimeout';
-import { useSession } from 'src/provider/sessionProvider';
+import useSessionStore from 'src/store/useSessionStore';
 
 export default function FormReqEditDet() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const user_id = useSessionStore((state) => state.user_id);
   const { setHookTimeout } = useTimeout();
   const ticketHeader = useRef();
   const [searchParams] = useSearchParams();
@@ -38,7 +39,6 @@ export default function FormReqEditDet() {
   const [isLoading, setLoading] = useState(false);
   const axiosPrivate = useAxiosPrivate();
   const { openSnackbar } = useSnackBar();
-  const { session } = useSession();
   const setFileTypes = useFileStore((state) => state.setFileTypes);
   const fileChanged = useFileStore((state) => state.changesFiles);
   const setAlltoServer = useFileStore((state) => state.setAlltoServer);
@@ -105,7 +105,7 @@ export default function FormReqEditDet() {
         const id_user = data.ticket.id_user;
         setInitFiles(files);
         setTicketnum(data.ticket.ticket_num);
-        if (!id_user.includes(session.user_id) && data.ticket.submitted) {
+        if (!id_user.includes(user_id) && data.ticket.submitted) {
           setDisabled(true);
           setFileDisabled(true);
         } else if (data.ticket.disabled_input.length > 0) {

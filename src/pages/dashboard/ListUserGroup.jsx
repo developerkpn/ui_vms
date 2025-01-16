@@ -12,15 +12,12 @@ import {
 } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useSession } from 'src/provider/sessionProvider';
 import TableLayout from 'src/components/common/TableLayout';
-import axios from 'axios';
 import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
 
 export default function ListUserGroup() {
   const axiosPrivate = useAxiosPrivate();
   const columns = ['User Group', 'Date'];
-  const { session } = useSession();
   const navigate = useNavigate();
   const [colLength, setColLength] = useState(0);
   const [secGroup, setSec] = useState();

@@ -22,6 +22,7 @@ import { useSnackBar } from 'src/provider/SnackbarProvider';
 import { useNavigate, Link } from 'react-router-dom';
 import RefreshButton from '../common/RefreshButton';
 import { useSession } from 'src/provider/sessionProvider';
+import usePermissionStore from 'src/store/userPermissionStore';
 
 const ThumbnailVendor = ({ data_ven }) => {
   return (
@@ -84,7 +85,8 @@ export default function TableParentVerif() {
   const [data_verif, setDataVerif] = useState([]);
   const navigate = useNavigate();
   const [refresh, _setRefresh] = useState(false);
-  const { getPermission } = useSession();
+  // const { getPermission } = useSession();
+  const permission = usePermissionStore((state) => state.permission);
   const [successModal, setScsModal] = useState(false);
   const [openDialog, setOpenDialog] = useState({ state: false, action: '' });
   const [selected, setSelected] = useState({});
@@ -258,7 +260,7 @@ export default function TableParentVerif() {
   }, [refresh]);
 
   useEffect(() => {
-    const perm = getPermission('Vendor Verification');
+    const perm = permission['Vendor Verification'];
     if (!perm.create) {
       navigate('/dashboard/ticket');
     }

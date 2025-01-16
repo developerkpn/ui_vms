@@ -19,10 +19,9 @@ import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Edit, Link, Visibility, Delete, Refresh, Update } from '@mui/icons-material';
 import ModalCreateTicket from 'src/components/common/ModalCreateTicket';
-import { useSession } from 'src/provider/sessionProvider';
+import usePermissionStore from 'src/store/userPermissionStore';
 import { useNavigate } from 'react-router-dom';
 import ProgressStat from 'src/components/common/ProgressStat';
-import { LoadingButton } from '@mui/lab';
 import moment from 'moment';
 import ListSAPProgress from './ListSAPProgress';
 
@@ -47,13 +46,12 @@ function RefreshTable(props) {
 }
 
 export default function ListTicket() {
-  // const load = useLoaderData();
-  const { getPermission } = useSession();
+  const permission = usePermissionStore((state) => state.permission);
   const [perm, setPerm] = useState({
-    Table: getPermission('Ticket Request'),
-    INIT: getPermission('Initial Form'),
-    CREA: getPermission('Creation Form'),
-    FINA: getPermission('Final Form'),
+    Table: permission['Ticket Request'],
+    INIT: permission['Initial Form'],
+    CREA: permission['Creation Form'],
+    FINA: permission['Final Form'],
   });
   const [ticket, setTicket] = useState();
   const [openModal, setOpenmodal] = useState(false);
@@ -97,21 +95,21 @@ export default function ListTicket() {
   };
 
   const tickets = async (controller) => {
-    let permission = {};
-    permission['INIT'] = getPermission('Initial Form');
-    permission['CREA'] = getPermission('Creation Form');
-    permission['FINA'] = getPermission('Final Form');
+    let permissiontemp = {};
+    permissiontemp['INIT'] = permission['Initial Form'];
+    permissiontemp['CREA'] = permission['Creation Form'];
+    permissiontemp['FINA'] = permission['Final Form'];
     try {
       let ticketState = [];
       // axios.defaults.headers.common.Authorization =
       //   'Bearer ' + (Cookies.get('accessToken') === undefined ? '' : Cookies.get('accessToken'));
-      if (permission.INIT?.read) {
+      if (permissiontemp.INIT?.read) {
         ticketState.push("'INIT'");
       }
-      if (permission.CREA?.read) {
+      if (permissiontemp.CREA?.read) {
         ticketState.push("'CREA'");
       }
-      if (permission.FINA?.read) {
+      if (permissiontemp.FINA?.read) {
         ticketState.push("'FINA'");
       }
       setTicketstate(ticketState);
@@ -129,22 +127,22 @@ export default function ListTicket() {
 
   useEffect(() => {
     const controller = new AbortController();
-    if (refreshBtn) {
+    if (refreshBtn && Object.keys(permission).length !== 0) {
       tickets(controller);
     }
     return () => {
       controller.abort();
     };
-  }, [filterAct, deleted, refreshBtn]);
+  }, [filterAct, deleted, refreshBtn, permission]);
 
   useEffect(() => {
-    let permission = {};
-    permission['Table'] = getPermission('Ticket Request');
-    permission['INIT'] = getPermission('Initial Form');
-    permission['CREA'] = getPermission('Creation Form');
-    permission['FINA'] = getPermission('Final Form');
-    setPerm(permission);
-  }, []);
+    let permissiontemp = {};
+    permissiontemp['Table'] = permission['Ticket Request'];
+    permissiontemp['INIT'] = permission['Initial Form'];
+    permissiontemp['CREA'] = permission['Creation Form'];
+    permissiontemp['FINA'] = permission['Final Form'];
+    setPerm(permissiontemp);
+  }, [permission]);
 
   const handleOnClose = () => {
     setOpenmodal(false);
@@ -452,7 +450,7 @@ export default function ListTicket() {
           </FormControl>
           <RefreshTable setRefreshbtn={buttonRefreshAct} isLoading={refreshBtn} sx={{ mb: 3, height: '3.5rem' }} />
         </Box>
-        {perm.Table.create && (
+        {perm.Table?.create && (
           <Button
             variant="contained"
             sx={{ width: 180, height: 50, my: 2 }}

@@ -1,7 +1,6 @@
 import { useForm } from 'react-hook-form';
 import { Box, Button, Tab, Tabs, Dialog } from '@mui/material';
 import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
-import { useSession } from 'src/provider/sessionProvider';
 import { useCallback, useEffect, useState } from 'react';
 import DetailTab from './DetailTab';
 import DetailBank from './DetailBank';
@@ -11,14 +10,15 @@ import { useSnackBar } from 'src/provider/SnackbarProvider';
 import useTimeout from 'src/hooks/useTimeout';
 import OutstandingRequestEdit from './OutstandingRequestEdit';
 import { LoadingButton } from '@mui/lab';
+import useSessionStore from 'src/store/useSessionStore';
 
 export default function VendorLandingPage() {
   const axiosPrivate = useAxiosPrivate();
+  const user_id = useSessionStore((state) => state.user_id);
   const { openSnackbar } = useSnackBar();
   const [isloading, setLoading] = useState(false);
   const { setHookTimeout } = useTimeout();
   const navigate = useNavigate();
-  const { session } = useSession();
   const [openDialog, setOpenDialog] = useState(false);
   const [verTab, setVer] = useState({
     detail: '0',
@@ -39,7 +39,7 @@ export default function VendorLandingPage() {
           setLoading(true);
           try {
             const { data } = await axiosPrivate.post(`/ticeddet/neweditdet`, {
-              ven_id: session.user_id,
+              ven_id: user_id,
             });
             openSnackbar('success', data.message);
             setHookTimeout(() => navigate(`/dashboard/editreq/form?id=${data.data.id_ticket}`), 500);
@@ -55,7 +55,7 @@ export default function VendorLandingPage() {
           break;
       }
     },
-    [session]
+    [user_id]
   );
 
   const { control, getValues, reset, watch } = useForm({
@@ -84,7 +84,7 @@ export default function VendorLandingPage() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await axiosPrivate.get(`/vendor/simple?ven_id=${session.user_id}`);
+      const { data } = await axiosPrivate.get(`/vendor/simple?ven_id=${user_id}`);
       reset({
         ...data.detail,
         files: data.files,
@@ -95,7 +95,7 @@ export default function VendorLandingPage() {
         bank: data.version.bank,
       });
     })();
-  }, []);
+  }, [user_id]);
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 2, height: '100%' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

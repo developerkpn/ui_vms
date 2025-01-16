@@ -3,18 +3,21 @@ import NavHead from './NavHead';
 import { List } from '@mui/material';
 import Collapse from '@mui/material/Collapse';
 import NavCollapse from './NavCollapse';
-import { useSession } from 'src/provider/sessionProvider';
+import usePermissionStore from 'src/store/userPermissionStore';
+import useMenuStore from 'src/store/useMenuStore';
 import React from 'react';
 
 function NavSection({ menu, collapsemen, navmen, onUpNavCol, onUpNavMenu }) {
   const onClickNavHead = (item) => {
     onUpNavCol(item);
   };
-  const { getPermission, getMenu } = useSession();
+  const menu_sess = useMenuStore((state) => state.menu);
+  console.log(menu_sess);
+  const permission = usePermissionStore((state) => state.permission);
   return (
     <List>
-      {Object.values(getMenu()).map((item) => {
-        if (getPermission(item.text)?.read === true) {
+      {Object.values(menu_sess).map((item) => {
+        if (permission[item.text]?.read === true) {
           return (
             <div key={`div-${item.key}`}>
               <NavHead
@@ -35,7 +38,7 @@ function NavSection({ menu, collapsemen, navmen, onUpNavCol, onUpNavMenu }) {
               <NavCollapse parent={item.key} curstate={collapsemen}>
                 <List>
                   {item.children.map((child) => {
-                    if (getPermission(child.text)?.read)
+                    if (permission[child.text]?.read)
                       return (
                         <NavItem
                           key={child.key}

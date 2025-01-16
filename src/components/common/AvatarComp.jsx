@@ -1,9 +1,12 @@
 import { Avatar, IconButton, Menu, MenuItem, Backdrop, CircularProgress, Box, Typography } from '@mui/material';
 import { useState } from 'react';
-import { useSession } from 'src/provider/sessionProvider';
+import useSessionStore from 'src/store/useSessionStore';
 import { useNavigate, redirect } from 'react-router-dom';
 export default function AvatarComp() {
-  const { session, logOut } = useSession();
+  const fullname = useSessionStore((state) => state.fullname);
+  const user_id = useSessionStore((state) => state.user_id);
+  const username = useSessionStore((state) => state.username);
+  const resetSessionStore = useSessionStore((state) => state.resetSessionStore);
   const [loader, setLoader] = useState(false);
   const navigate = useNavigate();
 
@@ -15,7 +18,7 @@ export default function AvatarComp() {
     setAnchorel(null);
   };
   const handleLogout = () => {
-    logOut();
+    resetSessionStore();
     setLoader(true);
     setTimeout(() => {
       navigate('/login');
@@ -23,14 +26,14 @@ export default function AvatarComp() {
   };
   const handleUserInfo = () => {
     setAnchorel(null);
-    navigate(`../../dashboard/account/edit?iduser=${session.user_id}`, { replace: true, state: { page: 'userinfo' } });
+    navigate(`../../dashboard/account/edit?iduser=${user_id}`, { replace: true, state: { page: 'userinfo' } });
   };
   return (
     <>
       <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-        <Typography alignItems={'center'}>Welcome, {session.fullname?.split(' ')[0]}</Typography>
+        <Typography alignItems={'center'}>Welcome, {fullname.split(' ')[0]}</Typography>
         <IconButton onClick={handleMenu}>
-          <Avatar>{session.username?.slice(0, 2).toUpperCase()}</Avatar>
+          <Avatar>{username.slice(0, 2).toUpperCase()}</Avatar>
         </IconButton>
       </Box>
       <Menu
@@ -44,9 +47,9 @@ export default function AvatarComp() {
         <MenuItem sx={{ width: '10rem' }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
             <IconButton onClick={handleMenu}>
-              <Avatar>{session.username?.slice(0, 2).toUpperCase()}</Avatar>
+              <Avatar>{username.slice(0, 2).toUpperCase()}</Avatar>
             </IconButton>
-            <Typography>{session.fullname?.split(' ').slice(0, 2).join(' ')}</Typography>
+            <Typography>{fullname.split(' ').slice(0, 2).join(' ')}</Typography>
           </Box>
         </MenuItem>
         <MenuItem onClick={handleLogout} sx={{ width: '10rem' }}>

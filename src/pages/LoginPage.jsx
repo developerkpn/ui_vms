@@ -7,14 +7,18 @@ import { Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import axios from 'axios';
-import { useSession } from 'src/provider/sessionProvider';
+import useSessionStore from 'src/store/useSessionStore';
+import useAccessTokStore from 'src/store/useAccessTokStore';
+import useCheckResetPWD from 'src/store/useCheckResetPWD';
+import usePermissionStore from 'src/store/userPermissionStore';
+import useMenuStore from 'src/store/useMenuStore';
 import CircularProgress from '@mui/material/CircularProgress';
 import SvgIcon from '@mui/material/SvgIcon';
 import { PasswordWithEyes } from 'src/components/common/PasswordWithEyes';
 import imgbg from '../images/gama-tower.jpg';
 import KpnNav from '../images/kpn-logo.svg?react';
 import { LoadingButton } from '@mui/lab';
-import Cookies from 'js-cookie';
+// import Cookies from 'js-cookie';
 
 const defaultValue = {
   Username: '',
@@ -23,12 +27,16 @@ const defaultValue = {
 };
 export default function LoginPage() {
   const matches = useMediaQuery('(max-width:380px)');
+  const setSessionStore = useSessionStore((state) => state.setSessionStore);
+  const setAccessToken = useAccessTokStore((state) => state.setAccessToken);
+  const setIsResetPWD = useCheckResetPWD((state) => state.setIsResetPWD);
+  const setPermission = usePermissionStore((state) => state.setPermission);
+  const setMenu = useMenuStore((state) => state.setMenu);
   const [btnClicked, setBtnclicked] = useState();
   const { handleSubmit, control } = useForm({ defaultValues: defaultValue });
   const [openLoad, setOpenload] = useState(false);
   const [dirForm, setDirform] = useState({ state: 'login', html: 'User with form link ?' });
   const navigate = useNavigate();
-  const { setSession } = useSession();
   const onSubmit = async (data) => {
     setBtnclicked(true);
     setOpenload(true);
@@ -41,7 +49,20 @@ export default function LoginPage() {
           password: data.Password,
         });
         const response = logindata.data;
-        setSession(response);
+        // setSession(response);
+        // console.log(response);
+        setSessionStore({
+          fullname: response.fullname,
+          username: response.username,
+          user_id: response.user_id,
+          email: response.email,
+          role: response.role,
+          groupid: response.groupid,
+        });
+        setMenu(response.menu);
+        setPermission(response.permission);
+        setAccessToken(response.accessToken);
+        setIsResetPWD(response.is_reset_pwd);
         alert('Successfull login');
         setTimeout(() => {
           if (response.role !== 'VENDOR') {

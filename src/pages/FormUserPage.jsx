@@ -9,7 +9,8 @@ import dayjs from 'dayjs';
 import DatePickerComp from 'src/components/common/DatePickerComp';
 import { useSearchParams, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { LoadingButton } from '@mui/lab';
-import { useSession } from 'src/provider/sessionProvider';
+// import { useSession } from 'src/provider/sessionProvider';
+import useSessionStore from 'src/store/useSessionStore';
 
 export default function FormUserPage() {
   const [btnClicked, setBtnclicked] = useState(false);
@@ -17,8 +18,9 @@ export default function FormUserPage() {
   const axiosPrivate = useAxiosPrivate();
   const [searchParams] = useSearchParams();
   const [userId, setUserid] = useState('');
-  const { session, getPermission } = useSession();
-  const allowUpdate = getPermission('User').update;
+  const user_id = useSessionStore((state) => state.user_id);
+  const permission = useSessionStore((state) => state.permission);
+  const allowUpdate = permission['User'].update;
   const navigate = useNavigate();
   const {
     handleSubmit,
@@ -139,8 +141,8 @@ export default function FormUserPage() {
 
   useEffect(() => {
     let userid = searchParams.get('iduser');
-    if (!getPermission('User').update && searchParams.get('iduser') !== session.user_id) {
-      userid = session.user_id;
+    if (!permission['User'].update && searchParams.get('iduser') !== user_id) {
+      userid = user_id;
     }
     getUserData(userid);
   }, [location.state]);
@@ -167,7 +169,7 @@ export default function FormUserPage() {
       const submitDatauser = await axiosPrivate.post(`/user/submit`, subUserDt);
       setBtnclicked(false);
       alert(submitDatauser.data.message);
-      if (getPermission('User').update) {
+      if (permission['User'].update) {
         navigate('../users');
       } else {
         navigate('../ticket');
@@ -178,8 +180,8 @@ export default function FormUserPage() {
     }
   };
 
-  if (!getPermission('User').update && searchParams.get('iduser') !== session.user_id) {
-    return <Navigate to={`../../dashboard/account/edit?iduser=${session.user_id}`} />;
+  if (!permission['User'].update && searchParams.get('iduser') !== user_id) {
+    return <Navigate to={`../../dashboard/account/edit?iduser=${user_id}`} />;
   }
   return (
     <Container>

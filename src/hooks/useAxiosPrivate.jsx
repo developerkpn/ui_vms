@@ -1,12 +1,11 @@
 import { axiosPrivate } from 'src/api/axios';
 import { useEffect } from 'react';
 import useRefreshToken from './useRefreshToken';
-import { useSession } from 'src/provider/sessionProvider';
-import Cookies from 'js-cookie';
+import useAccessTokStore from 'src/store/useAccessTokStore';
 
 const useAxiosPrivate = () => {
   const refresh = useRefreshToken();
-  const { accessToken } = useSession();
+  const accessToken = useAccessTokStore((state) => state.accessToken);
 
   useEffect(() => {
     const requestIntercept = axiosPrivate.interceptors.request.use(
@@ -36,7 +35,7 @@ const useAxiosPrivate = () => {
       axiosPrivate.interceptors.request.eject(requestIntercept);
       axiosPrivate.interceptors.response.eject(responseIntercept);
     };
-  }, [accessToken, refresh]);
+  }, [accessToken]);
 
   return axiosPrivate;
 };

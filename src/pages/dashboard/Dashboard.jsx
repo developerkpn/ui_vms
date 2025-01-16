@@ -14,13 +14,16 @@ import AvatarComp from 'src/components/common/AvatarComp';
 import { Outlet, Link, useLocation, Navigate } from 'react-router-dom';
 import NavSection from 'src/components/nav/NavSection';
 import { Menu } from 'src/_mock/Menu';
-import { useSession } from 'src/provider/sessionProvider';
 import Cookies from 'js-cookie';
 import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
 import KpnLogo from '../../images/kpn-logo-3.svg?react';
 import KpnNav from '../../images/kpn-logo.svg?react';
 import ResetPasswordDialog from './ResetPasswordDialog';
-import SnackbarProvider from 'src/provider/SnackbarProvider';
+import useSessionStore from 'src/store/useSessionStore';
+import useCheckResetPWD from 'src/store/useCheckResetPWD';
+import usePermissionStore from 'src/store/userPermissionStore';
+import useMenuStore from 'src/store/useMenuStore';
+import useAccessTokStore from 'src/store/useAccessTokStore';
 
 const drawerWidth = 240;
 
@@ -86,8 +89,14 @@ const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' 
 export default function MiniDrawer() {
   const theme = useTheme();
   const location = useLocation();
-  const { session, is_reset_pwd } = useSession();
+  const setSessionStore = useSessionStore((state) => state.setSessionStore);
+  const setIsResetPWD = useCheckResetPWD((state) => state.setIsResetPWD);
+  const is_reset_pwd = useCheckResetPWD((state) => state.is_reset_pwd);
+  const setPermission = usePermissionStore((state) => state.setPermission);
+  const setMenu = useMenuStore((state) => state.setMenu);
+  const role = useSessionStore((state) => state.role);
   const axiosPrivate = useAxiosPrivate();
+  const accessToken = useAccessTokStore((state) => state.accessToken);
 
   const [open, setOpen] = useState(false);
   const [openDialog, setOpenDialog] = useState(true);
@@ -97,29 +106,27 @@ export default function MiniDrawer() {
   });
   const [navMenu, setNavmenu] = useState('');
 
-  // useEffect(() => {
-  //   const controller = new AbortController();
-  //   if (Cookies.get('accessToken')) {
-  //     const getAuthorization = async () => {
-  //       try {
-  //         const getAuth = await axiosPrivate.post(
-  //           `/user/authorization`,
-  //           {
-  //             group_id: session.groupid,
-  //           },
-  //           { signal: controller.signal }
-  //         );
-  //         setSession({ ...session, ['permission']: getAuth.data });
-  //       } catch (error) {
-  //         console.error(error);
-  //       }
-  //     };
-  //     getAuthorization();
-  //   }
-  //   return () => {
-  //     controller.abort();
-  //   };
-  // }, []);
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await axiosPrivate.post(`/user/getsess`);
+        console.log(data);
+        setSessionStore({
+          fullname: data.fullname,
+          username: data.username,
+          user_id: data.user_id,
+          email: data.email,
+          role: data.role,
+          groupid: data.groupid,
+        });
+        setIsResetPWD(data.is_reset_pwd);
+        setPermission(data.permission);
+        setMenu(data.menu);
+      } catch (error) {
+        console.error(error);
+      }
+    })();
+  }, []);
 
   const handleDrawerOpen = useCallback(() => {
     setOpen(true);
@@ -144,7 +151,7 @@ export default function MiniDrawer() {
     setNavmenu(menu);
   }, []);
 
-  if (Cookies.get('accessToken') === undefined || Cookies.get('accessToken') === '') {
+  if (!accessToken || accessToken === '') {
     return <Navigate to="/login" />;
   }
 
@@ -192,7 +199,7 @@ export default function MiniDrawer() {
         component="main"
         sx={{ flexGrow: 1, p: 3, height: '90vh', width: open ? `calc(94% - ${drawerWidth}px)` : '94%' }}
       >
-        {session.role === 'VENDOR' && (is_reset_pwd == 'false' || !is_reset_pwd) && openDialog && (
+        {role === 'VENDOR' && (is_reset_pwd == 'false' || !is_reset_pwd) && openDialog && (
           <ResetPasswordDialog open={openDialog} setOpen={setOpenDialog} />
         )}
         <DrawerHeader />

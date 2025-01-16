@@ -13,17 +13,20 @@ import {
   Alert,
 } from '@mui/material';
 import { DataGrid, GridToolbar } from '@mui/x-data-grid';
-import { useEffect, useRef, useState } from 'react';
-import axios from 'axios';
+import { useEffect, useState } from 'react';
 import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
-import { useSession } from 'src/provider/sessionProvider';
+import usePermissionStore from 'src/store/userPermissionStore';
 import LoadingButton from '@mui/lab/LoadingButton';
 import RefreshButton from 'src/components/common/RefreshButton';
+import useSessionStore from 'src/store/useSessionStore';
 
 export default function ListVendor() {
   const axiosPrivate = useAxiosPrivate();
-  const { session, getPermission } = useSession();
-  const perm = getPermission('Vendor');
+  const email = useSessionStore((state) => state.email);
+  const user_id = useSessionStore((state) => state.user_id);
+  const permission = usePermissionStore((state) => state.permission);
+
+  const perm = permission['Vendor'];
   const overrides = {
     '& .MuiDataGrid-main': {
       width: 0,
@@ -80,8 +83,8 @@ export default function ListVendor() {
       ven_code: row.ven_code,
       ven_name: row.ven_name,
       reason: row.act_remark,
-      requestor: session.email,
-      requestor_id: session.user_id,
+      requestor: email,
+      requestor_id: user_id,
       is_active: row.is_active,
     });
   };
@@ -170,7 +173,7 @@ export default function ListVendor() {
       type: 'actions',
       flex: 0.1,
       renderCell: (item) => {
-        if (perm.create) {
+        if (perm?.create) {
           if (item.row.ticket_id == null) {
             if (item.row.is_active == true) {
               return (

@@ -4,7 +4,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import ThemeProvider from './theme';
 
 import { routes } from './route/routes';
-import AuthProvider from './provider/sessionProvider';
+// import AuthProvider from './provider/sessionProvider';
 import SnackbarProvider from './provider/SnackbarProvider';
 import { Suspense } from 'react';
 import LoadingSuspense from './components/loadingscreen/Loading';
@@ -19,11 +19,11 @@ function App() {
         <HelmetProvider>
           <ThemeProvider>
             <CssBaseline />
-            <AuthProvider>
-              <SnackbarProvider>
-                <RouterProvider router={routes} />
-              </SnackbarProvider>
-            </AuthProvider>
+            {/* <AuthProvider> */}
+            <SnackbarProvider>
+              <RouterProvider router={routes} />
+            </SnackbarProvider>
+            {/* </AuthProvider> */}
           </ThemeProvider>
         </HelmetProvider>
       </Suspense>

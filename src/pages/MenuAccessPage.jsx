@@ -6,7 +6,8 @@ import { useSearchParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
-import { useSession } from 'src/provider/sessionProvider';
+import usePermissionStore from 'src/store/userPermissionStore';
+import useSessionStore from 'src/store/useSessionStore';
 import LoadingButton from '@mui/lab/LoadingButton';
 
 export default function MenuAccessPage() {
@@ -14,7 +15,10 @@ export default function MenuAccessPage() {
   let dtAccess = [];
   const [btnClicked, setBtnclick] = useState(false);
   const [searchParams] = useSearchParams();
-  const { session, setSession } = useSession();
+  // const { session, setSession } = useSession();
+  const groupid = useSessionStore((state) => state.groupid);
+  const permission = usePermissionStore((state) => state.permission);
+  const setPermission = usePermissionStore((state) => state.setPermission);
   const defaultValues = {
     groupname: '',
   };
@@ -23,14 +27,15 @@ export default function MenuAccessPage() {
     setBtnclick(true);
     const insertedDt = {
       groupname: data.groupname,
-      groupid: groupid ? groupid : '',
+      groupid: groupid_param ? groupid_param : '',
       accessmtx: dtAccess,
     };
     const getAuthorization = async () => {
       const getAuth = await axiosPrivate.post(`/user/authorization`, {
-        group_id: session.groupid,
+        group_id: groupid,
       });
-      setSession({ ...session, ['permission']: getAuth.data });
+      setPermission(getAuth.data);
+      // setSession({ ...session, ['permission']: getAuth.data });
     };
     try {
       const submission = await axiosPrivate.post(`/user/secmtx/submit`, insertedDt);
@@ -47,14 +52,14 @@ export default function MenuAccessPage() {
   };
   const [dtMenu, setdtMenu] = useState([]);
   const dataMenu = dtMenu;
-  const groupid = searchParams.get('idgroup');
+  const groupid_param = searchParams.get('idgroup');
   useEffect(() => {
     const controller = new AbortController();
     const getSecMtx = async () => {
       const secMtx = await axiosPrivate.post(
         `/user/secmtx`,
         {
-          groupid: groupid ? groupid : '',
+          groupid: groupid_param ? groupid_param : '',
         },
         { signal: controller.signal }
       );

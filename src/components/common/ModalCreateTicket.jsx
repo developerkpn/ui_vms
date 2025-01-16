@@ -16,7 +16,7 @@ import {
 import { Link } from '@mui/icons-material';
 import axios from 'axios';
 import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
-import { useSession } from 'src/provider/sessionProvider';
+import useSessionStore from 'src/store/useSessionStore';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { LoadingButton } from '@mui/lab';
@@ -32,7 +32,7 @@ const ticket_type = [
 
 export default function ModalCreateTicket({ open, onClose, popUp, onClick, refresh }) {
   const axiosPrivate = useAxiosPrivate();
-  const { session } = useSession();
+  const user_id = useSessionStore((state) => state.user_id);
   const navigate = useNavigate();
   const [link, setLink] = useState('');
   const [btnClicked, setBtnclicked] = useState(false);
@@ -69,7 +69,7 @@ export default function ModalCreateTicket({ open, onClose, popUp, onClick, refre
       setBtnclicked(true);
       try {
         const response = await axiosPrivate.post(`/ticket/new`, {
-          user_id: session.user_id,
+          user_id: user_id,
           to_who: param,
           ticket_type: ttype,
         });

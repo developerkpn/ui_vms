@@ -19,15 +19,13 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   TextField,
-  FormControlLabel,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { useGridApiRef } from '@mui/x-data-grid';
+import useSessionStore from 'src/store/useSessionStore';
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import UploadButton from 'src/components/common/UploadButton';
 import { useLoaderData, useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
-import { useSession } from 'src/provider/sessionProvider';
 import { TextFieldComp } from 'src/components/common/TextFieldComp';
 import SelectComp from 'src/components/common/SelectComp';
 import CheckboxComp from 'src/components/common/CheckboxComp';
@@ -46,6 +44,7 @@ import useTogglePanel, { FormTab } from 'src/hooks/useTogglePanel';
 
 import RejectLog from 'src/components/common/RejectLog';
 import VenBankTableRefactor from 'src/components/FormVendor/VenBankTableRefactor';
+import usePermissionStore from 'src/store/userPermissionStore';
 
 const ventypeList = {
   '3RD_PARTY': [
@@ -77,7 +76,7 @@ const ventypeList = {
 
 function RefactorFormVendorPage() {
   const theme = useTheme();
-  const apiRef = useGridApiRef();
+  const role = useSessionStore((state) => state.role);
   const predata = useLoaderData();
   const axiosPrivate = useAxiosPrivate();
 
@@ -676,7 +675,7 @@ function RefactorFormVendorPage() {
   // }, [t, i18n.language]);
 
   const navigate = useNavigate();
-  const { session, getPermission } = useSession();
+  const permission = usePermissionStore((state) => state.permission);
   const ticketState = useMemo(() => loader_data?.ticketState, [loader_data]);
   const is_active = useMemo(() => loader_data.data?.is_active, [loader_data]);
   const countrycode = useRef(loader_data.data?.country);
@@ -685,15 +684,15 @@ function RefactorFormVendorPage() {
     let permissions = {};
     let MgrAllow = true;
     if (['MGRPRC', 'MGRDWS', 'MGRPRCDWS'].includes(loader_data.cur_pos)) {
-      MgrAllow = ['MGR', 'ADMIN'].includes(session.role);
+      MgrAllow = ['MGR', 'ADMIN'].includes(role);
     }
     if (is_active) {
       if (loader_data.permission != undefined) {
         permissions = loader_data.permission;
       } else {
-        permissions.INIT = getPermission('Initial Form');
-        permissions.CREA = getPermission('Creation Form');
-        permissions.FINA = getPermission('Final Form');
+        permissions.INIT = permission['Initial Form'];
+        permissions.CREA = permission['Creation Form'];
+        permissions.FINA = permission['Final Form'];
       }
     } else {
       permissions = {
@@ -703,11 +702,11 @@ function RefactorFormVendorPage() {
       };
     }
     return {
-      INIT: permissions.INIT.update,
-      CREA: permissions.CREA.update && MgrAllow,
-      FINA: permissions.FINA.update,
+      INIT: permissions.INIT?.update,
+      CREA: permissions.CREA?.update && MgrAllow,
+      FINA: permissions.FINA?.update,
     };
-  }, [loader_data, session, getPermission]);
+  }, [loader_data, permission]);
 
   const countries = useRef([{ value: '', label: '' }]);
   const [currencies, setCurr] = useState([]);
@@ -1137,7 +1136,7 @@ function RefactorFormVendorPage() {
     }
 
     const jsonSend = {
-      role: session.role === undefined ? 'VENDOR' : session.role,
+      role: role === undefined ? 'VENDOR' : role,
       is_draft: is_draft.current,
       ticket_id: loader_data.ticket_id,
       remarks: value.remarks,
@@ -1150,7 +1149,7 @@ function RefactorFormVendorPage() {
     try {
       setLoading(true);
       let submit;
-      if (session.role === undefined || predata.type !== 'form') {
+      if (role === undefined || predata.type !== 'form') {
         submit = await axios.post(`${import.meta.env.VITE_URL_LOC}/ticket/newform/submit`, jsonSend);
         // console.log('submitting...');
       } else {

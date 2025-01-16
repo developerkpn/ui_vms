@@ -15,7 +15,7 @@ import {
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { useState, forwardRef, useEffect } from 'react';
 import VenFileTable from '../FormVendor/VenFileTable';
-import { useSession } from 'src/provider/sessionProvider';
+import useSessionStore from 'src/store/useSessionStore';
 import { LoadingButton } from '@mui/lab';
 import { Help } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
@@ -41,7 +41,7 @@ const UploadButton = forwardRef(function UploadButton(
   },
   ref
 ) {
-  const { session } = useSession();
+  const user_id = useSessionStore((state) => state.user_id);
   const [typeFile, setTypeFile] = useState(0);
   const [openTooltip, setOpenTooltip] = useState(false);
   const [statUpload, setStatUpload] = useState({ stat: false, type: '', message: '' });
@@ -122,7 +122,7 @@ const UploadButton = forwardRef(function UploadButton(
       });
       form.append('method', 'insert');
       form.append('file_type', inTypes[typeFile].key);
-      form.append('created_by', session.user_id);
+      form.append('created_by', user_id);
       form.append('desc_file', inTypes[typeFile].value);
       form.append('ven_id', idParent);
       const response = await fetch(`${import.meta.env.VITE_URL_LOC}/vendor/uploadTemp`, {

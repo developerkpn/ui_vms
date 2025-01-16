@@ -11,9 +11,8 @@ import {
   Skeleton,
 } from '@mui/material';
 import { useEffect, useState } from 'react';
-import { useSession } from 'src/provider/sessionProvider';
+import useSessionStore from 'src/store/useSessionStore';
 import TableLayout from 'src/components/common/TableLayout';
-import axios from 'axios';
 import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
 import { LoadingButton } from '@mui/lab';
 import RefreshButton from 'src/components/common/RefreshButton';
@@ -22,7 +21,7 @@ export default function ListReqStat() {
   const axiosPrivate = useAxiosPrivate();
   const [btnClicked, setBtnclicked] = useState();
   const columns = ['Ticket Number', 'Date', 'Requestor', 'Request', 'Vendor Code', 'Vendor Name'];
-  const { session } = useSession();
+  const user_id = useSessionStore((state) => state.user_id);
   const [btnState, setBtn] = useState(['accept']);
   const [refreshBtn, setRefresh] = useState(true);
   const [reload, setReload] = useState(true);
@@ -77,7 +76,7 @@ export default function ListReqStat() {
     try {
       const jsonSend = {
         ticketid: id,
-        session: session.user_id,
+        session: user_id,
         action: action,
       };
       const processReq = await axiosPrivate.post(`/reqstat/process`, jsonSend);

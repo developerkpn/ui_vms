@@ -5,7 +5,7 @@ import AutoCompleteSelect from './AutoCompleteSelect';
 import { useEffect, useRef, useState } from 'react';
 import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
 import axios from 'axios';
-import { useSession } from 'src/provider/sessionProvider';
+import useSessionStore from 'src/store/useSessionStore';
 import { LoadingButton } from '@mui/lab';
 
 export default function ModalCreateBank({
@@ -24,7 +24,7 @@ export default function ModalCreateBank({
   setValue,
   fieldName,
 }) {
-  const { session } = useSession();
+  const user_id = useSessionStore((state) => state.user_id);
   const axiosPrivate = useAxiosPrivate();
   const defaultvalue = {
     swiftcode: '',
@@ -68,7 +68,7 @@ export default function ModalCreateBank({
       const submitForm = await axiosPrivate.post(`/master/addbank`, {
         ...values,
         type: typepost,
-        created_by: session.user_id,
+        created_by: user_id,
         source: 'form',
       });
       const newValue = {
