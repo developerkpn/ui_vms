@@ -6,8 +6,10 @@ import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
 import { useSnackBar } from 'src/provider/SnackbarProvider';
 import { useSession } from 'src/provider/sessionProvider';
 import { useState } from 'react';
+import { useTheme } from '@mui/material/styles';
 
 export default function ResetPasswordDialog({ open, setOpen }) {
+  const theme = useTheme();
   const axiosPrivate = useAxiosPrivate();
   const [loading, setLoading] = useState(false);
   const { openSnackbar } = useSnackBar();
@@ -37,7 +39,7 @@ export default function ResetPasswordDialog({ open, setOpen }) {
   };
   return (
     <>
-      <Dialog open={open}>
+      <Dialog open={open} sx={{ zIndex: theme.zIndex.drawer - 1 }}>
         <DialogTitle>
           <Box sx={{ display: 'flex', flexDirection: 'column' }}>
             <h3>Set New Password</h3>

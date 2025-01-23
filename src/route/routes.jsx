@@ -1,6 +1,7 @@
 import { Navigate, createBrowserRouter } from 'react-router-dom';
 import axios from 'axios';
 import { lazy } from 'react';
+import ESubmissionDir from 'src/pages/dashboard/ESubmissionDir';
 const OSTicketReqEdit = lazy(() => import('src/pages/reqedit/OSTicketReqEdit'));
 const VendorLandingPage = lazy(() => import('src/pages/vendor/VendorLandingPage'));
 const VendorUsers = lazy(() => import('src/pages/vendor/VendorUsers'));
@@ -81,10 +82,10 @@ export const routes = createBrowserRouter([
     },
     errorElement: <ErrorPage />,
     children: [
-      {
-        path: '',
-        element: <VendorLandingPage />,
-      },
+      // {
+      //   path: '',
+      //   element: <VendorLandingPage />,
+      // },
       {
         path: 'form/:token',
         element: <RefactorFormVendorPage />,
@@ -146,6 +147,10 @@ export const routes = createBrowserRouter([
       {
         path: 'editreq',
         element: <OSTicketReqEdit />,
+      },
+      {
+        path: 'esubmission',
+        element: <ESubmissionDir />,
       },
     ],
   },
