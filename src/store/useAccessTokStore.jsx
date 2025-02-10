@@ -11,6 +11,11 @@ const useAccessTokStore = create(
             accessToken: token,
           });
         },
+        logout: () => {
+          set({
+            accessToken: '',
+          });
+        },
       };
     },
     {

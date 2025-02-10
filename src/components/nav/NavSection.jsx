@@ -12,7 +12,6 @@ function NavSection({ menu, collapsemen, navmen, onUpNavCol, onUpNavMenu }) {
     onUpNavCol(item);
   };
   const menu_sess = useMenuStore((state) => state.menu);
-  console.log(menu_sess);
   const permission = usePermissionStore((state) => state.permission);
   return (
     <List>

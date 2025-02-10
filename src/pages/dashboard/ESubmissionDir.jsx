@@ -1,11 +1,11 @@
 import React, { useEffect } from 'react';
 import { Box, Button } from '@mui/material';
-import { useSession } from 'src/provider/sessionProvider';
+import useSessionStore from 'src/store/useSessionStore';
 
 export default function ESubmissionDir() {
-  const { session } = useSession();
+  const username = useSessionStore((state) => state.username);
   const directTo = () => {
-    window.open(`https://${window.location.hostname}/esubmission/login?username=${session.username}`);
+    window.open(`https://${window.location.hostname}/esubmission/login?username=${username}`);
   };
   useEffect(() => {
     directTo();

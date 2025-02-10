@@ -2740,7 +2740,7 @@ function RefactorFormVendorPage() {
                     handleSubmit((value) => {
                       // console.log(value);
                       is_draft.current = false;
-                      if (isTender && ticketState === 'CREA' && isValid && bank_valid.current) {
+                      if (isTender && ticketState === 'CREA' && isValid) {
                         setConfOpen(true);
                       } else {
                         submitForm(value);
@@ -2805,7 +2805,7 @@ function RefactorFormVendorPage() {
           handleConfirm={confirmActionFun}
           onCloseConf={modalConfclose}
           sx={{ zIndex: (theme) => theme.zIndex.drawer - 2 }}
-          confirmText={t(`You're about to send this form to CEO/CFO, are you sure ?`)}
+          confirmText={`You're about to send this form to CEO/CFO, are you sure ?`}
           t={t}
         />
       </Container>

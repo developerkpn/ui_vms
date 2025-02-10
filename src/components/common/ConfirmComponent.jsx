@@ -24,7 +24,7 @@ export default function ConfirmComponent({ open, handleConfirm, onCloseConf, sx,
         }}
       >
         <Typography textAlign={'center'} variant="h4">
-          {confirmText}
+          {props.t(confirmText)}
         </Typography>
       </Box>
       <DialogActions>

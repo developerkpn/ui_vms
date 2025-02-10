@@ -2,11 +2,15 @@ import { Avatar, IconButton, Menu, MenuItem, Backdrop, CircularProgress, Box, Ty
 import { useState } from 'react';
 import useSessionStore from 'src/store/useSessionStore';
 import { useNavigate, redirect } from 'react-router-dom';
+import useAccessTokStore from 'src/store/useAccessTokStore';
+
 export default function AvatarComp() {
   const fullname = useSessionStore((state) => state.fullname);
   const user_id = useSessionStore((state) => state.user_id);
   const username = useSessionStore((state) => state.username);
   const resetSessionStore = useSessionStore((state) => state.resetSessionStore);
+  const logout = useAccessTokStore((state) => state.logout);
+
   const [loader, setLoader] = useState(false);
   const navigate = useNavigate();
 
@@ -20,6 +24,7 @@ export default function AvatarComp() {
   const handleLogout = () => {
     resetSessionStore();
     setLoader(true);
+    logout();
     setTimeout(() => {
       navigate('/login');
     }, 1000);

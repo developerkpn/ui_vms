@@ -1,6 +1,6 @@
 import { ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useMemo } from 'react';
 
 const getIcon = (icon) => {
   // add as many icons as you need
@@ -29,7 +29,7 @@ export default function NavHead({ keyhead, text, icon, curstate, upNav }) {
     upNav(item);
   };
 
-  const SelectedIcon = getIcon(icon);
+  const SelectedIcon = useMemo(() => getIcon(icon), [icon]);
   return (
     <ListItem disablePadding key={`item-${keyhead}`} sx={{ display: 'block' }}>
       <ListItemButton key={`button-${keyhead}`} onClick={updateNavcol(keyhead)} selected={keyhead === curstate.head}>
