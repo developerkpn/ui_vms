@@ -1390,7 +1390,7 @@ function RefactorFormVendorPage() {
                       t={t}
                       rules={{
                         required: 'Please insert this field',
-                        maxLength: { value: 300, message: 'Max 300 Character' },
+                        maxLength: { value: 35, message: 'Max 35 Character' },
                       }}
                       onChangeovr={funChgname}
                       toUpperCase={true}
