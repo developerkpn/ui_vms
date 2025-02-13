@@ -248,7 +248,7 @@ export default function TableParentVerif() {
         setDataVerif(data.data);
       } catch (error) {
         console.error(error);
-        toast.error(error.response.data.message);
+        openSnackbar('error', error.response.data.message);
       } finally {
         if (refresh) {
           setRefresh(false);
