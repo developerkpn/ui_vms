@@ -22,9 +22,9 @@ const useRefreshToken = () => {
       // Object.keys(Cookies.get()).map((item) => {
       //   Cookies.remove(item);
       // });
-      // setTimeout(() => {
-      //   window.location.replace(`${window.location.hostname}/login`);
-      // }, 100);
+      setTimeout(() => {
+        window.location.replace(`/login`);
+      }, 100);
     }
   };
 
