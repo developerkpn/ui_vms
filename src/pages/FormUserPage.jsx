@@ -3,7 +3,7 @@ import SelectComp from 'src/components/common/SelectComp';
 import { TextFieldComp } from 'src/components/common/TextFieldComp';
 import { PasswordWithEyes } from 'src/components/common/PasswordWithEyes';
 import { useForm } from 'react-hook-form';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
 import dayjs from 'dayjs';
 import DatePickerComp from 'src/components/common/DatePickerComp';
@@ -11,6 +11,7 @@ import { useSearchParams, useNavigate, Navigate, useLocation } from 'react-route
 import { LoadingButton } from '@mui/lab';
 // import { useSession } from 'src/provider/sessionProvider';
 import useSessionStore from 'src/store/useSessionStore';
+import usePermissionStore from 'src/store/userPermissionStore';
 
 export default function FormUserPage() {
   const [btnClicked, setBtnclicked] = useState(false);
@@ -19,8 +20,9 @@ export default function FormUserPage() {
   const [searchParams] = useSearchParams();
   const [userId, setUserid] = useState('');
   const user_id = useSessionStore((state) => state.user_id);
-  const permission = useSessionStore((state) => state.permission);
-  const allowUpdate = permission['User'].update;
+  const permission = usePermissionStore((state) => state.permission);
+  console.log(permission);
+  const allowUpdate = useMemo(() => permission['User']?.update ?? false, [permission]);
   const navigate = useNavigate();
   const {
     handleSubmit,
@@ -141,11 +143,11 @@ export default function FormUserPage() {
 
   useEffect(() => {
     let userid = searchParams.get('iduser');
-    if (!permission['User'].update && searchParams.get('iduser') !== user_id) {
+    if (permission && !permission['User']?.update && searchParams.get('iduser') !== user_id) {
       userid = user_id;
     }
     getUserData(userid);
-  }, [location.state]);
+  }, [location.state, permission]);
 
   const submitUser = async (data) => {
     setBtnclicked(true);
@@ -169,7 +171,7 @@ export default function FormUserPage() {
       const submitDatauser = await axiosPrivate.post(`/user/submit`, subUserDt);
       setBtnclicked(false);
       alert(submitDatauser.data.message);
-      if (permission['User'].update) {
+      if (permission && permission['User']?.update) {
         navigate('../users');
       } else {
         navigate('../ticket');
@@ -180,7 +182,7 @@ export default function FormUserPage() {
     }
   };
 
-  if (!permission['User'].update && searchParams.get('iduser') !== user_id) {
+  if (permission && !permission['User']?.update && searchParams.get('iduser') !== user_id) {
     return <Navigate to={`../../dashboard/account/edit?iduser=${user_id}`} />;
   }
   return (

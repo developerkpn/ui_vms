@@ -30,7 +30,6 @@ export default function AvatarComp() {
     }, 1000);
   };
   const handleUserInfo = () => {
-    setAnchorel(null);
     navigate(`../../dashboard/account/edit?iduser=${user_id}`, { replace: true, state: { page: 'userinfo' } });
   };
   return (
