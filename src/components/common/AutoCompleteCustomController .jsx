@@ -1,8 +1,8 @@
-import { Autocomplete, TextField, createFilterOptions, Tooltip } from '@mui/material';
-import { Controller } from 'react-hook-form';
+import { Autocomplete, TextField, createFilterOptions, Tooltip } from "@mui/material";
+import { Controller } from "react-hook-form";
 
 export default function AutoCompleteCustomController(params) {
-  const newAddModal = (e) => {
+  const newAddModal = e => {
     params.newAddModal(e.inputValue);
   };
   const filter = createFilterOptions();
@@ -16,12 +16,13 @@ export default function AutoCompleteCustomController(params) {
           return (
             <Autocomplete
               disabled={params.is_local || params.disabled}
+              readOnly={params.is_local || params.readOnly}
               tabIndex={params.tabIndex}
               name={params.name}
               options={params.options}
               value={value}
               onChange={(ev, e) => {
-                if (typeof e === 'string') {
+                if (typeof e === "string") {
                   setTimeout(() => {
                     newAddModal(e);
                   });
@@ -31,14 +32,14 @@ export default function AutoCompleteCustomController(params) {
                   onChange(e);
                 }
               }}
-              onClose={(ev) => {
+              onClose={ev => {
                 ev.preventDefault();
               }}
               filterOptions={(options, param) => {
                 console.log(options);
                 console.log(param);
                 const filtered = filter(options, param);
-                if (param.inputValue !== '' && params.addnew) {
+                if (param.inputValue !== "" && params.addnew) {
                   filtered.push({
                     inputValue: param.inputValue,
                     label: `Add "${param.inputValue}"`,
@@ -46,11 +47,11 @@ export default function AutoCompleteCustomController(params) {
                 }
                 return filtered;
               }}
-              getOptionLabel={(option) => {
-                if (typeof option === 'string') {
+              getOptionLabel={option => {
+                if (typeof option === "string") {
                   return option;
                 }
-                if (params.option_type === 'value') {
+                if (params.option_type === "value") {
                   return option.value;
                 }
                 if (option.inputValue) {
@@ -61,8 +62,8 @@ export default function AutoCompleteCustomController(params) {
               renderOption={(props, option) => <li {...props}>{option.label}</li>}
               isOptionEqualToValue={(option, value) => option.id === value.id}
               fullWidth
-              componentsProps={{ popper: { style: { width: 'fit-content' } } }}
-              renderInput={(paramb) => (
+              componentsProps={{ popper: { style: { width: "fit-content" } } }}
+              renderInput={paramb => (
                 <Tooltip title={params?.tooltip} placement="top">
                   <TextField
                     {...paramb}

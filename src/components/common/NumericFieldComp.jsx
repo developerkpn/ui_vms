@@ -1,6 +1,6 @@
-import { Controller } from 'react-hook-form';
-import { NumericFormat } from 'react-number-format';
-import { TextField } from '@mui/material';
+import { Controller } from "react-hook-form";
+import { NumericFormat } from "react-number-format";
+import { TextField } from "@mui/material";
 
 export default function NumericFieldComp({
   name,
@@ -13,6 +13,8 @@ export default function NumericFieldComp({
   disabled,
   t,
   helperText,
+  thousandSeparator = true,
+  allowLeadingZeros = false,
 }) {
   return (
     <>
@@ -20,7 +22,10 @@ export default function NumericFieldComp({
         control={control}
         name={name}
         rules={rules}
-        render={({ field: { onChange, value, ref }, fieldState: { error } }) => {
+        render={({
+          field: { onChange, value, ref },
+          fieldState: { error },
+        }) => {
           let helpertext;
           if (t) {
             helpertext = error ? t(error.message) : t(helperText);
@@ -32,11 +37,12 @@ export default function NumericFieldComp({
               onChange={onChange}
               value={value}
               label={label}
-              thousandSeparator
+              thousandSeparator={thousandSeparator}
+              allowLeadingZeros={allowLeadingZeros}
               inputRef={ref}
               helperText={helpertext}
               customInput={TextField}
-              prefix={`${currency} `}
+              prefix={currency && `${currency} `}
               error={error}
               fullWidth
               inputProps={{

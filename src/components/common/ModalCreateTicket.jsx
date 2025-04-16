@@ -65,37 +65,27 @@ export default function ModalCreateTicket({ open, onClose, popUp, onClick, refre
   };
 
   const handlegenticket = (param) => async () => {
-    if (ttype !== '') {
-      setBtnclicked(true);
-      try {
-        const response = await axiosPrivate.post(`/ticket/new`, {
-          user_id: user_id,
-          to_who: param,
-          ticket_type: ttype,
-        });
-        const createdTicket = response.data;
-        if (param === 'VENDOR') {
-          setLink(`${location.protocol}/${location.host}/${createdTicket.data.link}`);
-          setFormStat({
-            stat: true,
-            message: 'Success generate ticket',
-            type: 'success',
-          });
-          setBtnclicked(false);
-          refresh();
-        } else {
-          navigate(`../form/${createdTicket.data.token}`);
-        }
-      } catch (err) {
-        setBtnclicked(false);
-        alert(err);
-      }
-    } else {
-      setFormStat({
-        stat: true,
-        message: 'Please provide ticket type',
-        type: 'error',
+    setBtnclicked(true);
+    try {
+      const response = await axiosPrivate.post(`/ticket/new`, {
+        type_ticket: param,
       });
+      const createdTicket = response.data;
+      if (param === 'new_vendor') {
+        setLink(`${location.protocol}/${location.host}/${createdTicket.data.link}`);
+        setFormStat({
+          stat: true,
+          message: 'Success generate ticket',
+          type: 'success',
+        });
+        setBtnclicked(false);
+        refresh();
+      } else {
+        navigate(`../form/${createdTicket.data.token}`);
+      }
+    } catch (err) {
+      setBtnclicked(false);
+      alert(err);
     }
   };
   const handleClickLink = async (e) => {
@@ -133,17 +123,14 @@ export default function ModalCreateTicket({ open, onClose, popUp, onClick, refre
           <Typography sx={{ mb: 7 }} variant="h5">
             Create New Form Request Ticket
           </Typography>
-          <SelectCompNoCont
-            options={ticket_type}
-            value={ttype}
-            label="Business Unit"
-            sx={{ width: '20rem' }}
-            onChangeovr={changeTType}
-          />
-          <Button disabled={btnClicked} sx={{ height: 80, width: 400, mb: 2 }} onClick={handlegenticket('VENDOR')}>
+          <Button disabled={btnClicked} sx={{ height: 80, width: 400, mb: 2 }} onClick={handlegenticket('new_vendor')}>
             {btnClicked ? <CircularProgress /> : 'By Vendor'}
           </Button>
-          <Button disabled={btnClicked} sx={{ height: 80, width: 400, mb: 2 }} onClick={handlegenticket('PROC')}>
+          <Button
+            disabled={btnClicked}
+            sx={{ height: 80, width: 400, mb: 2 }}
+            onClick={handlegenticket('new_vendor_fr_usr')}
+          >
             {btnClicked ? <CircularProgress /> : 'By User'}
           </Button>
           <FormControl sx={{ mt: 5, mb: 1, width: 780 }} variant="outlined">

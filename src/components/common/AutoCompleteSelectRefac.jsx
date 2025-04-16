@@ -2,7 +2,6 @@ import { Controller } from "react-hook-form";
 import { Autocomplete, TextField } from "@mui/material";
 import TextFieldDirty from "../templates/TextFieldDirty";
 import { useState, useEffect } from "react";
-import debounce from "lodash/debounce";
 
 export default function AutoCompleteSelect({
   name,
@@ -41,10 +40,10 @@ export default function AutoCompleteSelect({
       name={name}
       control={control}
       rules={rules}
-      render={({ field: { onChange, value, ref }, fieldState: { error, isDirty } }) => {
-        const value_onchange = debounce(value => {
-          onChange(value);
-        }, 500);
+      render={({
+        field: { onChange, value, ref },
+        fieldState: { error, isDirty },
+      }) => {
         let helpertext;
         if (t) {
           helpertext = error ? t(error.message) : t(helperText);
@@ -65,19 +64,30 @@ export default function AutoCompleteSelect({
                   onChange(newValue?.toUpperCase());
                 }
               } else {
-                onChange(newValue);
+                onChange(
+                  typeof newValue == "string" ? newValue : newValue?.value
+                );
               }
             }}
-            value={value}
+            value={
+              options.find(option => {
+                return value == option.value;
+              }) ?? null
+            }
+            getOptionLabel={option =>
+              typeof option === "string" ? option : option.label
+            }
+            onInputChange={(_, data, reason) => {
+              console.log(reason);
+              console.log(data);
+              // if (data) onChange(data);
+              if (reason == "clear") {
+                onChange("");
+              }
+            }}
             error={error}
             options={options}
             freeSolo={freeSolo}
-            onInputChange={e => {
-              const target = e?.target;
-              if (freeSolo && e) {
-                value_onchange(e.target?.value?.toUpperCase());
-              }
-            }}
             fullWidth
             readOnly={readOnly}
             disabled={is_disabled}

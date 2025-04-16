@@ -24,9 +24,10 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import useSessionStore from "src/store/useSessionStore";
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import UploadButton from "src/components/common/UploadButton";
-import { useLoaderData, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import { TextFieldComp } from "src/components/common/TextFieldComp";
+import SwitchComponent from "src/components/common/SwitchComponent";
 import SelectComp from "src/components/common/SelectComp";
 import CheckboxComp from "src/components/common/CheckboxComp";
 import NumericFieldComp from "src/components/common/NumericFieldComp";
@@ -45,6 +46,7 @@ import useTogglePanel, { FormTab } from "src/hooks/useTogglePanel";
 import RejectLog from "src/components/common/RejectLog";
 import VenBankTableRefactor from "src/components/FormVendor/VenBankTableRefactor";
 import usePermissionStore from "src/store/userPermissionStore";
+import { useFormCreateNew } from "./create_new/DirectFormCreateNew";
 
 const ventypeList = {
   "3RD_PARTY": [
@@ -75,10 +77,12 @@ const ventypeList = {
 };
 
 function RefactorFormVendorPage() {
+  const data_form = useFormCreateNew();
   const theme = useTheme();
   const role = useSessionStore(state => state.role);
   const emp_role_id = useSessionStore(state => state.emp_role_id);
-  const predata = useLoaderData();
+  const bu_id = useSessionStore(state => state.bu_id);
+  const dept_id = useSessionStore(state => state.dept_id);
   const axiosPrivate = useAxiosPrivate();
   const [field_rule, setFieldRule] = useState({
     condition: "enabled",
@@ -116,6 +120,7 @@ function RefactorFormVendorPage() {
     postal_sppkp: "",
     city_sppkp: "",
     ispkp: false,
+    is_new_npwp: false,
     npwp: "",
     paymthd: "",
     payterm: "",
@@ -129,7 +134,6 @@ function RefactorFormVendorPage() {
     is_tender: false,
     is_priority: false,
     vendorcode: "",
-    ppn_type: "VAT_11",
     remarks_readOnly: "",
     limit: "",
     search_term: "",
@@ -206,18 +210,17 @@ function RefactorFormVendorPage() {
   );
 
   useEffect(() => {
-    const type = predata.type;
-    const tokenform = predata.token;
+    if (Object.keys(data_form).length == 0) {
+      return;
+    }
+    const data = data_form;
     const controller = new AbortController();
-
-    async function formLoader(token) {
-      // axios.defaults.headers.common.Authorization =
-      //   'Bearer ' + (Cookies.get('accessToken') === undefined ? '' : Cookies.get('accessToken'));
-      const response = await axiosPrivate.get(`/ticket/form/${token}`, {
-        signal: controller.signal,
-      });
-      const data = response.data.data;
-      if (emp_role_id == data.emp_role_id) {
+    (async () => {
+      //set fields permission
+      if (
+        (emp_role_id == data.emp_role_id && bu_id == data.bu_id && dept_id == data.dept_id) ||
+        (emp_role_id == "" && data.emp_role_id == "VENDOR")
+      ) {
         if (data.enabled_input && data.enabled_input.length > 0) {
           setFieldRule({
             condition: "enabled",
@@ -230,11 +233,13 @@ function RefactorFormVendorPage() {
           });
         }
       }
+
       const { data: bankInit } = await axiosPrivate.get(
-        `/vendor/bank/${data.ven_id === null ? data.ticket_ven_id : data.ven_id}`,
+        `/vendor/bank/${data_form.ven_id === null ? data.ticket_ven_id : data.ven_id}`,
         { signal: controller.signal }
       );
-      const resultBank = bankInit.data.data;
+      const resultBank = bankInit.data;
+
       const valueForm = {
         emailRequestor: data.email_proc ? data.email_proc : "",
         deptRequestor: data.dep_proc ? data.dep_proc : "",
@@ -264,10 +269,10 @@ function RefactorFormVendorPage() {
         fax: data.fax ? data.fax : "",
         email: data.email ? data.email : "",
         ispkp: data.is_pkp ? data.is_pkp : false,
+        is_new_npwp: data.is_new_npwp ?? false,
         npwp: data.npwp ? data.npwp : "",
         paymthd: data.pay_mthd ? data.pay_mthd : "",
         payterm: data.pay_term ? data.pay_term : "I30",
-        ppn_type: data.ppn_type ? data.ppn_type : "VAT_11",
         company: data.company ? data.company : "",
         purchorg: data.purch_org ? { value: data.purch_org, label: data.purch_org } : null,
         vengroup: data.ven_group ? data.ven_group : "",
@@ -311,152 +316,12 @@ function RefactorFormVendorPage() {
             file_name: item.account_statement_letter,
             file_id: item.account_statement_letter_id,
           },
-          passbook: item.passbook && { file_name: item.passbook, file_id: item.passbook_id },
-        })),
-        bunit: data.bunit,
-      };
-
-      if (valueForm.name1 === "") {
-        setCheckex(true);
-        toggle({ type: FormTab.RestrictForm });
-      } else {
-        setCheckex(false);
-        toggle({ type: FormTab.OpenForm });
-      }
-
-      setLoaderdata({
-        ticket_id: data.ticket_id,
-        ticket_num: data.ticket_num,
-        ven_id: data.ven_id === null ? data.ticket_ven_id : data.ven_id,
-        ticketState: data.ticket_state,
-        ticket_type: data.approval_type,
-        data: valueForm,
-        cur_pos: data.cur_pos,
-        approval_pos: data.approval_pos,
-        logrej_counter: data.counter,
-      });
-      setChgComp(data.company || null);
-    }
-
-    async function newformLoader(token) {
-      const response = await axiosPrivate.get(`/ticket/newform/${token}`, {
-        signal: controller.signal,
-      });
-      toggle({ type: FormTab.OpenForm });
-      const data = response.data.data;
-      if (emp_role_id == data.emp_role_id) {
-        if (data.enabled_input.length > 0) {
-          setFieldRule({
-            condition: "enabled",
-            fields: data.enabled_input,
-          });
-        } else if (data.disabled_input.length > 0) {
-          setFieldRule({
-            condition: "disabled",
-            fields: data.disabled_input,
-          });
-        }
-      }
-      const { data: bankInit } = await axiosPrivate.get(
-        `/vendor/bank/${data.ven_id === null ? data.ticket_ven_id : data.ven_id}`,
-        { signal: controller.signal }
-      );
-      const resultBank = bankInit.data.data;
-      const valueForm = {
-        emailRequestor: data.email_proc ? data.email_proc : "",
-        deptRequestor: data.dep_proc ? data.dep_proc : "",
-        titlecomp: data.title ? data.title : "",
-        localovs: data.local_ovs ? data.local_ovs : "",
-        name1: data["name_1"] ? data["name_1"] : "",
-        country: data.country ? data.country : "",
-        street: data.street ? data.street : "",
-        street2: data.street2 ? data.street2 : "",
-        street3: data.street3 ?? "",
-        street4: data.street4 ?? "",
-        postal: data.postal ? data.postal : "",
-        city: data.city ? data.city : "",
-        street_sppkp: data.street_sppkp ?? "",
-        street2_sppkp: data.street2_sppkp ?? "",
-        street3_sppkp: data.street3_sppkp ?? "",
-        street4_sppkp: data.street4_sppkp ?? "",
-        postal_sppkp: data.postal_sppkp ?? "",
-        city_sppkp: data.city_sppkp ?? "",
-        street_npwp: data.street_npwp ?? "",
-        street2_npwp: data.street2_npwp ?? "",
-        street3_npwp: data.street3_npwp ?? "",
-        street4_npwp: data.street4_npwp ?? "",
-        postal_npwp: data.postal_npwp ?? "",
-        city_npwp: data.city_npwp ?? "",
-        telf: data.telf1 ? data.telf1 : "",
-        fax: data.fax ? data.fax : "",
-        email: data.email ? data.email : "",
-        ispkp: data.is_pkp ? data.is_pkp : false,
-        npwp: data.npwp ? data.npwp : "",
-        paymthd: data.pay_mthd ? data.pay_mthd : "",
-        payterm: data.pay_term ? data.pay_term : "I30",
-        ppn_type: data.ppn_type ? data.ppn_type : "VAT_11",
-        company: data.company ? data.company : "",
-        purchorg: data.purch_org ? { value: data.purch_org, label: data.purch_org } : null,
-        vengroup: data.ven_group ? data.ven_group : "",
-        venacc: data.ven_acc ? data.ven_acc : "",
-        ventype: data.ven_type ? data.ven_type : "",
-        currency: data.lim_curr ? data.lim_curr : "",
-        description: data.description ? data.description : "",
-        is_tender: data.is_tender ? data.is_tender : false,
-        is_priority: data.is_priority ? data.is_priority : false,
-        vendorcode: data.ven_code ? data.ven_code : data.header,
-        remarks_readOnly: data.remarks ? data.remarks : "",
-        remarks: "",
-        limit: data.limit_vendor ? data.limit_vendor : "",
-        reject_by: data.reject_by ? data.reject_by : "",
-        is_active: data.ticket_stat,
-        search_term: data.search_term ? data.search_term : "",
-        website_url: data.website_url ?? "",
-        ig_link: data.ig_link ?? "",
-        fb_link: data.fb_link ?? "",
-        twt_link: data.twt_link ?? "",
-        nama_direktur: data.nama_direktur ?? "",
-        nama_pic: data.nama_pic ?? "",
-        no_telf_pic: data.no_telf_pic ?? "",
-        email_pic: data.email_pic ?? "",
-        email_fin: data.email_fin ?? "",
-        bank: resultBank.map(item => ({
-          id: item.id,
-          bank_country: { value: item.country, label: item.country },
-          bank_id: item.bank_id
-            ? { value: item.bank_id, label: `${item.bank_name} (${item.bank_code})` }
-            : null,
-          bank_curr: item.bank_curr ? { value: item.bank_curr, label: item.bank_curr } : null,
-          bank_acc: item.bank_acc,
-          acc_hold: item.acc_hold,
-          account_statement_letter: item.account_statement_letter && {
-            file_name: item.account_statement_letter,
-            file_id: item.account_statement_letter_id,
+          passbook: item.passbook && {
+            file_name: item.passbook,
+            file_id: item.passbook_id,
           },
-          passbook: item.passbook && { file_name: item.passbook, file_id: item.passbook_id },
         })),
         bunit: data.bunit,
-      };
-
-      const perm = {
-        INIT: {
-          create: false,
-          read: false,
-          update: true,
-          delete: false,
-        },
-        CREA: {
-          create: false,
-          read: false,
-          update: false,
-          delete: false,
-        },
-        FINA: {
-          create: false,
-          read: false,
-          update: false,
-          delete: false,
-        },
       };
 
       if (valueForm.name1 === "") {
@@ -474,23 +339,17 @@ function RefactorFormVendorPage() {
         ticketState: data.ticket_state,
         ticket_type: data.approval_type,
         data: valueForm,
-        permission: perm,
         cur_pos: data.cur_pos,
         approval_pos: data.approval_pos,
         logrej_counter: data.counter,
       });
       setChgComp(data.company || null);
-    }
+    })();
 
-    if (type === "form") {
-      formLoader(tokenform);
-    } else {
-      newformLoader(tokenform);
-    }
     return () => {
       controller.abort();
     };
-  }, [emp_role_id]);
+  }, [emp_role_id, data_form]);
   const [chgComp, setChgComp] = useState();
   const [chgCountry, setChgCty] = useState(loader_data.data?.country);
   const [chgVengrp, setVengrp] = useState(loader_data.data?.vengroup);
@@ -506,7 +365,7 @@ function RefactorFormVendorPage() {
   const [checkIsExist, setCheckex] = useState(true);
   const [openAlert, setOpenAlert] = useState(false);
   const [isTender, setTender] = useState(loader_data.data?.is_tender);
-  const [btnClicked, setBtnclick] = useState(false);
+  const [btnClicked, setBtnclick] = useState(true);
   const [modalRejectopen, setModalopen] = useState(false);
   const [modalConfirmopen, setConfOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState(false);
@@ -600,23 +459,26 @@ function RefactorFormVendorPage() {
     setComptitle(item);
   }, []);
 
-  const funChgname = useCallback(item => {
-    if (item != compName && item !== "") {
-      setCheckex(true);
-      toggle({ type: FormTab.RestrictForm });
-      setBtnclick(true);
-      setCompname(item);
-    } else if (item == compName && item !== "") {
-      setCheckex(false);
-      toggle({ type: FormTab.OpenForm });
-      setBtnclick(false);
-    } else {
-      setCheckex(true);
-      toggle({ type: FormTab.RestrictForm });
-      setBtnclick(true);
-      setCompname(item);
-    }
-  }, []);
+  const funChgname = useCallback(
+    item => {
+      if (item != compName && item !== "") {
+        setCheckex(true);
+        toggle({ type: FormTab.RestrictForm });
+        setBtnclick(true);
+        setCompname(item);
+      } else if (item == compName && item !== "") {
+        setCheckex(false);
+        toggle({ type: FormTab.OpenForm });
+        setBtnclick(false);
+      } else {
+        setCheckex(true);
+        toggle({ type: FormTab.RestrictForm });
+        setBtnclick(true);
+        setCompname(item);
+      }
+    },
+    [compName]
+  );
 
   const modalRejectclose = useCallback(() => {
     setModalopen(false);
@@ -651,12 +513,12 @@ function RefactorFormVendorPage() {
         try {
           unregister("file_atth");
           const { data } = await axiosPrivate.get(
-            `/master/filetype?title=${compTitle}&localovs=${chgLocal}&curpos=${ticketState}`,
+            `/master/filetype?title=${compTitle}&ventype=${chgLocal}&bu_id=${data_form.bu_ticket_type}&curpos=${data_form.emp_role_id}`,
             {
               signal: controller.signal,
             }
           );
-          data.forEach(item => {
+          data.data.forEach(item => {
             if (isTender && item.file_code == "A010") {
               register(`file_atth.${item.file_code}`, {
                 required: item.file_type,
@@ -677,18 +539,20 @@ function RefactorFormVendorPage() {
             }
           });
           setFileType(
-            data.map(item => {
+            data.data.map(item => {
               if (isTender && item.file_code == "A010") {
                 return {
                   key: item.file_code,
                   value: `${t(item.file_type)} * `,
                   help: langCode === "id" ? item.help : item.helpen,
+                  need_exp_date: item.need_exp_date,
                 };
               }
               return {
                 key: item.file_code,
                 value: `${t(item.file_type)} ${item.is_mandatory ? "*" : ""}`,
                 help: langCode === "id" ? item.help : item.helpen,
+                need_exp_date: item.need_exp_date,
               };
             })
           );
@@ -700,7 +564,7 @@ function RefactorFormVendorPage() {
     return () => {
       controller.abort();
     };
-  }, [compTitle, langCode, chgLocal, loader_data, t, isTender, fields, initDataFile]);
+  }, [compTitle, langCode, chgLocal, loader_data, t, isTender, fields, initDataFile, data_form]);
 
   useEffect(() => {
     const firstError = Object.keys(errors).reduce((field, a) => {
@@ -732,34 +596,6 @@ function RefactorFormVendorPage() {
   const is_active = useMemo(() => loader_data.data?.is_active, [loader_data]);
   const countrycode = useRef(loader_data.data?.country);
 
-  const UPDATE = useMemo(() => {
-    let permissions = {};
-    let MgrAllow = true;
-    if (["MGRPRC", "MGRDWS", "MGRPRCDWS"].includes(loader_data.cur_pos)) {
-      MgrAllow = ["MGR", "ADMIN"].includes(role);
-    }
-    if (is_active) {
-      if (loader_data.permission != undefined) {
-        permissions = loader_data.permission;
-      } else {
-        permissions.INIT = permission["Initial Form"];
-        permissions.CREA = permission["Creation Form"];
-        permissions.FINA = permission["Final Form"];
-      }
-    } else {
-      permissions = {
-        INIT: { create: false, read: false, update: false, delete: false },
-        CREA: { create: false, read: false, update: false, delete: false },
-        FINA: { create: false, read: false, update: false, delete: false },
-      };
-    }
-    return {
-      INIT: permissions.INIT?.update,
-      CREA: permissions.CREA?.update && MgrAllow,
-      FINA: permissions.FINA?.update,
-    };
-  }, [loader_data, permission]);
-
   const countries = useRef([{ value: "", label: "" }]);
   const [currencies, setCurr] = useState([]);
   const allCurr = useRef([]);
@@ -767,7 +603,6 @@ function RefactorFormVendorPage() {
   const banks = useRef([{ value: "", label: "" }]);
   const payterm = useRef([{ value: "", label: "" }]);
   const comps = useRef([{ value: "", label: "" }]);
-  const ppn_type = useRef([{ value: "", label: "" }]);
   const uploadButRef = useRef(null);
   const onLoad = useRef(false);
 
@@ -904,7 +739,9 @@ function RefactorFormVendorPage() {
 
     const getCurr = async () => {
       try {
-        const curr = await axiosPrivate.get(`/master/curr`, { signal: controller.signal });
+        const curr = await axiosPrivate.get(`/master/curr`, {
+          signal: controller.signal,
+        });
         const response = curr.data;
         const result = response.data;
         setCurr(
@@ -927,7 +764,9 @@ function RefactorFormVendorPage() {
 
     const getBanks = async () => {
       try {
-        const banksData = await axiosPrivate.get(`/master/banksap`, { signal: controller.signal });
+        const banksData = await axiosPrivate.get(`/master/banksap`, {
+          signal: controller.signal,
+        });
         const response = banksData.data;
         const result = response.data;
         banks.current = result;
@@ -939,7 +778,9 @@ function RefactorFormVendorPage() {
 
     const getCompany = async () => {
       try {
-        const compsData = await axiosPrivate.get(`/master/company`, { signal: controller.signal });
+        const compsData = await axiosPrivate.get(`/master/company`, {
+          signal: controller.signal,
+        });
         const response = compsData.data;
         const result = response.data;
         comps.current = result.data;
@@ -977,16 +818,6 @@ function RefactorFormVendorPage() {
       }
     };
 
-    const getPPNType = async () => {
-      try {
-        const { data } = await axiosPrivate.get(`/master/getvat`);
-        const data_vat = data.data;
-        ppn_type.current = data_vat.map(item => ({ value: item.ppn_code, label: item.ppn_desc }));
-      } catch (error) {
-        console.error(error);
-      }
-    };
-
     if (loader_data.ven_id !== "") {
       (async () => {
         setLoading(true);
@@ -997,7 +828,6 @@ function RefactorFormVendorPage() {
         await getInitDataFile(controller);
         await getCompany();
         await getPayterm();
-        await getPPNType();
         setLoading(false);
       })();
     }
@@ -1126,13 +956,13 @@ function RefactorFormVendorPage() {
       telf1: value.telf.trim().split(/-/)[1],
       fax: value.fax.trim().split(/-/)[1],
       email: value.email,
+      is_new_npwp: value.is_new_npwp,
       is_pkp: value.ispkp,
       is_tender: value.is_tender,
       is_priority: value.is_priority,
       npwp: value.npwp.trim(),
       pay_mthd: value.paymthd,
       pay_term: value.payterm,
-      ppn_type: value.ppn_type,
       company: value.company,
       purch_org: value.purchorg?.value,
       ven_acc: value.venacc,
@@ -1200,7 +1030,7 @@ function RefactorFormVendorPage() {
     try {
       setLoading(true);
       let submit;
-      if (role === undefined || predata.type !== "form") {
+      if (role === undefined || data_form.type !== "form") {
         submit = await axios.post(
           `${import.meta.env.VITE_URL_LOC}/ticket/newform/submit`,
           jsonSend
@@ -1212,10 +1042,9 @@ function RefactorFormVendorPage() {
       }
       const response = submit.data;
       setFormStat({ stat: true, type: "success", message: response.message });
-      console.log("done");
       if (!is_draft.current) {
         setTimeout(() => {
-          if (UPDATE.INIT) {
+          if (data_form.emp_role_id == "VENDOR") {
             navigate(0);
           } else {
             navigate("../../dashboard/ticket");
@@ -1244,7 +1073,14 @@ function RefactorFormVendorPage() {
   return (
     <>
       <Container maxWidth="xl">
-        <Box sx={{ height: 120, display: "flex", justifyContent: "center", alignItems: "center" }}>
+        <Box
+          sx={{
+            height: 120,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
           <Typography variant="h4" gutterBottom>
             {`Form Vendor Registration ${loader_data.ticket_num}`}
           </Typography>
@@ -1498,7 +1334,10 @@ function RefactorFormVendorPage() {
                         t={t}
                         rules={{
                           required: "Please insert this field",
-                          maxLength: { value: 100, message: "Max 100 Character" },
+                          maxLength: {
+                            value: 100,
+                            message: "Max 100 Character",
+                          },
                         }}
                         toUpperCase={true}
                         tooltip={t("Akronim atau istilah pencarian yang akan digunakan di SAP")}
@@ -1544,7 +1383,9 @@ function RefactorFormVendorPage() {
                       label={t("URL Website")}
                       control={control}
                       disabled={checkFieldRule("website_url")}
-                      rules={{ maxLength: { value: 500, message: "Max 500 Character" } }}
+                      rules={{
+                        maxLength: { value: 500, message: "Max 500 Character" },
+                      }}
                     />
                   </Grid>
                   <Grid item xs={6}>
@@ -1554,7 +1395,9 @@ function RefactorFormVendorPage() {
                       label={t("Instagram")}
                       control={control}
                       disabled={checkFieldRule("ig_link")}
-                      rules={{ maxLength: { value: 500, message: "Max 500 Character" } }}
+                      rules={{
+                        maxLength: { value: 500, message: "Max 500 Character" },
+                      }}
                     />
                   </Grid>
                   <Grid item xs={6}>
@@ -1564,7 +1407,9 @@ function RefactorFormVendorPage() {
                       label={t("Facebook")}
                       control={control}
                       disabled={checkFieldRule("fb_link")}
-                      rules={{ maxLength: { value: 500, message: "Max 500 Character" } }}
+                      rules={{
+                        maxLength: { value: 500, message: "Max 500 Character" },
+                      }}
                     />
                   </Grid>
                   <Grid item xs={6}>
@@ -1574,7 +1419,9 @@ function RefactorFormVendorPage() {
                       label={t("Twitter")}
                       control={control}
                       disabled={checkFieldRule("twt_link")}
-                      rules={{ maxLength: { value: 500, message: "Max 500 Character" } }}
+                      rules={{
+                        maxLength: { value: 500, message: "Max 500 Character" },
+                      }}
                     />
                   </Grid>
                 </Grid>
@@ -1743,7 +1590,13 @@ function RefactorFormVendorPage() {
                       >
                         {t("Alamat") + " *"}
                       </p>
-                      <p style={{ fontSize: "8pt", margin: "0", color: theme.palette.grey[600] }}>
+                      <p
+                        style={{
+                          fontSize: "8pt",
+                          margin: "0",
+                          color: theme.palette.grey[600],
+                        }}
+                      >
                         {`Max 50 ${t("Karakter")} ${t(
                           `Please fill without ',' (comma) character`
                         )} ${t(`Mohon dilanjutkan ke kolom berikutnya jika tidak cukup`)}`}
@@ -1910,7 +1763,13 @@ function RefactorFormVendorPage() {
                       >
                         {t("Alamat") + " *"}
                       </p>
-                      <p style={{ fontSize: "8pt", margin: "0", color: theme.palette.grey[600] }}>
+                      <p
+                        style={{
+                          fontSize: "8pt",
+                          margin: "0",
+                          color: theme.palette.grey[600],
+                        }}
+                      >
                         {`Max 50 ${t("Karakter")} ${t(
                           `Please fill without ',' (comma) character`
                         )} ${t(`Mohon dilanjutkan ke kolom berikutnya jika tidak cukup`)}`}
@@ -2221,35 +2080,72 @@ function RefactorFormVendorPage() {
                       onChangeovr={funChgIsPTKP}
                     />
                   </Grid>
-                  <Grid item xs={9}></Grid>
-                  <Grid item xs={4}>
-                    <PatternFieldComp
-                      name="npwp"
-                      t={t}
-                      helperText={"Mohon input hanya nominal tanpa karakter spesial"}
-                      label={t("Tax Number") + " *"}
-                      useplaceholder
-                      format="##.###.###.#-###.###"
-                      mask={"_"}
+                  <Grid item xs={12}></Grid>
+                  <Grid item xs={2}>
+                    <SwitchComponent
+                      name="is_new_npwp"
                       control={control}
-                      disabled={checkFieldRule("npwp")}
-                      rules={{
-                        pattern: {
-                          value: /^[0-9.-]+$/,
-                          message:
-                            "format not matched. only numbers (0-9), point (.), and hyphen (-)",
-                        },
-                        minLength: {
-                          value: 20,
-                          message: "Karakter tidak cukup",
-                        },
-                        maxLength: {
-                          value: 21,
-                          message: "Mohon isi dengan lengkap",
-                        },
-                        required: watch("ispkp") == true ? "Please insert this field" : false,
-                      }}
+                      frontlabel={"16 Digit"}
+                      backlabel={"Old"}
+                      disabled={checkFieldRule("is_new_npwp")}
                     />
+                  </Grid>
+                  <Grid item xs={4}>
+                    {watch("is_new_npwp") == true && (
+                      <NumericFieldComp
+                        name="npwp"
+                        t={t}
+                        disabled={checkFieldRule("npwp")}
+                        rules={{
+                          required: watch("is_pkp") == true ? "Please insert this field" : false,
+                          minLength: {
+                            value: 16,
+                            message: "Isi 16 digit",
+                          },
+                          maxLength: {
+                            value: 16,
+                            message: "Isi 16 digit",
+                          },
+                        }}
+                        label={t("Tax Number") + " *"}
+                        control={control}
+                        thousandSeparator={false}
+                        allowLeadingZeros={true}
+                      />
+                    )}
+                    {watch("is_new_npwp") == false && (
+                      <PatternFieldComp
+                        name="npwp"
+                        t={t}
+                        helperText={"Mohon input hanya nominal tanpa karakter spesial"}
+                        label={t("Tax Number") + " *"}
+                        useplaceholder
+                        format="##.###.###.#-###.###"
+                        mask={"_"}
+                        control={control}
+                        disabled={
+                          checkFieldRule("npwp") ||
+                          watch("ventype") == "OVERSEAS" ||
+                          watch("ventype") == "INTERCOMPANY"
+                        }
+                        rules={{
+                          pattern: {
+                            value: /^[0-9.-]+$/,
+                            message:
+                              "format not matched. only numbers (0-9), point (.), and hyphen (-)",
+                          },
+                          minLength: {
+                            value: 20,
+                            message: "Karakter tidak cukup",
+                          },
+                          maxLength: {
+                            value: 21,
+                            message: "Mohon isi dengan lengkap",
+                          },
+                          required: watch("is_pkp") == true ? "Please insert this field" : false,
+                        }}
+                      />
+                    )}
                   </Grid>
                   <Grid item xs={3}>
                     <SelectComp
@@ -2276,33 +2172,6 @@ function RefactorFormVendorPage() {
                       control={control}
                       options={payterm.current}
                       disabled={checkFieldRule("payterm")}
-                      rules={{
-                        required: "Please insert this field",
-                      }}
-                      tooltip={t("Jangka waktu pembayaran")}
-                    />
-                  </Grid>
-                  <Grid item xs={4}>
-                    <SelectComp
-                      name="ppn_type"
-                      t={t}
-                      label={t("VAT Type") + " *"}
-                      control={control}
-                      options={ppn_type.current}
-                      disabled={checkFieldRule("ppn_type")}
-                      rules={{
-                        required: "Please insert this field",
-                      }}
-                    />
-                  </Grid>
-                  <Grid item xs={4}>
-                    <SelectComp
-                      name="ppn_type"
-                      t={t}
-                      label={t("VAT Type") + " *"}
-                      control={control}
-                      options={ppn_type.current}
-                      disabled={checkField}
                       rules={{
                         required: "Please insert this field",
                       }}
@@ -2735,9 +2604,15 @@ function RefactorFormVendorPage() {
             </Accordion>
           )}
 
-          <Box sx={{ width: "100%", display: "flex", justifyContent: "space-between" }}>
+          <Box
+            sx={{
+              width: "100%",
+              display: "flex",
+              justifyContent: "space-between",
+            }}
+          >
             <Box>
-              {loader_data.permission === undefined && (
+              {data_form.emp_role_id !== "VENDOR" && (
                 <Button
                   sx={{ height: 50, width: 100, margin: 2 }}
                   color="error"

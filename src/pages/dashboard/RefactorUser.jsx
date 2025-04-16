@@ -3,10 +3,18 @@ import { useState, useEffect } from 'react';
 import { Box, Button, Typography, Tooltip, IconButton } from '@mui/material';
 import { DoDisturb, Edit, SystemUpdate } from '@mui/icons-material';
 import { useNavigate } from 'react-router';
-import { DataGrid } from '@mui/x-data-grid';
+import { DataGrid, GridToolbarContainer, GridToolbarQuickFilter } from '@mui/x-data-grid';
 import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
 
 const header = ['Full Name', 'Username', 'Email', 'User Group', 'Role', 'Date Created', 'Date Expired'];
+
+const Toolbar = () => {
+  return (
+    <GridToolbarContainer>
+      <GridToolbarQuickFilter />
+    </GridToolbarContainer>
+  );
+};
 
 export default function User() {
   const axiosPrivate = useAxiosPrivate();
@@ -178,6 +186,12 @@ export default function User() {
               paginationModel: {
                 pageSize: 5,
               },
+            },
+          }}
+          slots={{ toolbar: Toolbar }}
+          slotProps={{
+            toolbar: {
+              showQuickFilter: true,
             },
           }}
         />

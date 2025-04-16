@@ -11,14 +11,17 @@ import {
   Snackbar,
   Alert as MuiAlert,
   Tooltip,
-} from '@mui/material';
-import UploadFileIcon from '@mui/icons-material/UploadFile';
-import { useState, forwardRef, useEffect } from 'react';
-import VenFileTable from '../FormVendor/VenFileTable';
-import useSessionStore from 'src/store/useSessionStore';
-import { LoadingButton } from '@mui/lab';
-import { Help } from '@mui/icons-material';
-import { useTheme } from '@mui/material/styles';
+} from "@mui/material";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
+import { useState, forwardRef, useEffect, useRef, useMemo } from "react";
+import VenFileTable from "../FormVendor/VenFileTable";
+import useSessionStore from "src/store/useSessionStore";
+import { LoadingButton } from "@mui/lab";
+import { Help } from "@mui/icons-material";
+import { useTheme } from "@mui/material/styles";
+import ModalDocumentExpDate from "./ModalDocumentExpDate";
+import useAxiosPrivate from "src/hooks/useAxiosPrivate";
+import { useSnackBar } from "src/provider/SnackbarProvider";
 
 const Alert = forwardRef(function Alert(props, ref) {
   return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
@@ -41,19 +44,31 @@ const UploadButton = forwardRef(function UploadButton(
   },
   ref
 ) {
-  const user_id = useSessionStore((state) => state.user_id);
+  const inputFileRef = useRef(null);
+  const user_id = useSessionStore(state => state.user_id);
+  const [tempFile, setTempFile] = useState(null);
   const [typeFile, setTypeFile] = useState(0);
   const [openTooltip, setOpenTooltip] = useState(false);
-  const [statUpload, setStatUpload] = useState({ stat: false, type: '', message: '' });
+  const [statUpload, setStatUpload] = useState({
+    stat: false,
+    type: "",
+    message: "",
+  });
   const [fileStaged, setFileStaged] = useState([]);
-  const inTypes = [{ key: 'pleaseSelect', value: 'Please Select Item' }, ...inputTypes];
+  const inTypes = useMemo(
+    () => [{ key: "pleaseSelect", value: "Please Select Item" }, ...inputTypes],
+    [inputTypes]
+  );
   const [btnClicked, setBtnclick] = useState(false);
-  const [titleTooltip, setTooltip] = useState({ index: 0, value: '' });
+  const [titleTooltip, setTooltip] = useState({ index: 0, value: "" });
   const theme = useTheme();
+  const [openExpModal, setExpModal] = useState(false);
+  const axiosPrivate = useAxiosPrivate();
+  const { openSnackbar } = useSnackBar();
 
-  const sendDataParent = (file_ven) => {
+  const sendDataParent = file_ven => {
     let items = [];
-    file_ven.map((item) => {
+    file_ven.map(item => {
       let temp = { ...item, desc_file: item.desc_file };
       delete temp.id;
       items.push(temp);
@@ -62,10 +77,19 @@ const UploadButton = forwardRef(function UploadButton(
   };
 
   useEffect(() => {
+    inputFileRef.current.value = null;
+  }, [openExpModal]);
+
+  useEffect(() => {
     if (Object.keys(iniData).length != 0) {
       const covtData = [];
-      iniData.map((item) => {
-        covtData.push({ ...item, method: '', id: item.file_id, desc_file: item.desc_file });
+      iniData.map(item => {
+        covtData.push({
+          ...item,
+          method: "",
+          id: item.file_id,
+          desc_file: item.desc_file,
+        });
       });
       setFileStaged([...covtData]);
       sendDataParent([...covtData]);
@@ -74,24 +98,27 @@ const UploadButton = forwardRef(function UploadButton(
 
   useEffect(() => {
     if (fileStaged.length > 0) {
-      const covtData = fileStaged.map((item) => ({ ...item, desc_file: item.desc_file }));
+      const covtData = fileStaged.map(item => ({
+        ...item,
+        desc_file: item.desc_file,
+      }));
       setFileStaged(covtData);
       sendDataParent(covtData);
     }
-    setTooltip((prev) => ({
+    setTooltip(prev => ({
       index: prev.index,
       value: inTypes[prev.index].help,
     }));
   }, [iniData, t, inputTypes, langCode]);
 
   const handleClose = (event, reason) => {
-    if (reason === 'clickaway') {
+    if (reason === "clickaway") {
       return;
     }
     setStatUpload({ ...statUpload, stat: false });
   };
 
-  const handleUpFromTb = (newItem) => {
+  const handleUpFromTb = newItem => {
     // console.log(newItem);
     setFileStaged(newItem);
     sendDataParent(newItem);
@@ -99,61 +126,71 @@ const UploadButton = forwardRef(function UploadButton(
 
   const openFileGuide = () => {
     window.open(
-      props.ticketState === 'INIT'
+      props.ticketState === "INIT"
         ? `${import.meta.env.VITE_URL_BE}static/ATTACHMENT_GUIDE_VENDOR_WEB_(VENDOR).pdf`
         : `${import.meta.env.VITE_URL_BE}static/ATTACHMENT_GUIDE_VENDOR_WEB_(USER).pdf`
     );
   };
 
-  const handleValidate = (event) => {
+  const handleValidate = event => {
     if (typeFile == 0) {
-      setStatUpload({ stat: true, type: 'error', message: 'Type File not Chosen' });
+      setStatUpload({
+        stat: true,
+        type: "error",
+        message: "Type File not Chosen",
+      });
       event.preventDefault();
       return;
     }
   };
-  const handleUpload = async (event) => {
+  const handleUpload = async event => {
+    console.log(event);
+    const selectedFile = [...event.target.files];
+    console.log(inTypes[typeFile]);
+    if (inTypes[typeFile].need_exp_date) {
+      setTempFile(selectedFile);
+      setExpModal(true);
+      return;
+    }
     setBtnclick(true);
     try {
-      const selectedFile = [...event.target.files];
       let form = new FormData();
       selectedFile.forEach((item, idx) => {
-        form.append('file_atth', item, item.name);
+        form.append("file_atth", item, item.name);
       });
-      form.append('method', 'insert');
-      form.append('file_type', inTypes[typeFile].key);
-      form.append('created_by', user_id);
-      form.append('desc_file', inTypes[typeFile].value);
-      form.append('ven_id', idParent);
-      const response = await fetch(`${import.meta.env.VITE_URL_LOC}/vendor/uploadTemp`, {
-        method: 'POST',
-        body: form,
-      });
-      let items = await response.json();
+      form.append("method", "insert");
+      form.append("file_type", inTypes[typeFile].key);
+      form.append("created_by", user_id);
+      form.append("desc_file", inTypes[typeFile].value);
+      form.append("ven_id", idParent);
+      const { data } = await axiosPrivate.post(`/vendor/uploadTemp`, form);
       // console.log(items);
-      if (items.status == 200) {
-        const dataUploaded = items.data.map((item) => ({ ...item, id: item.file_id, desc_file: t(item.desc_file) }));
-        // console.log(dataUploaded);
-        setFileStaged([...fileStaged, ...dataUploaded]);
-        sendDataParent([...fileStaged, ...dataUploaded]);
-        // console.log(fileStaged);
-        setStatUpload({ stat: true, type: 'success', message: 'File Upload Success' });
-        setBtnclick(false);
-      } else {
-        setStatUpload({ stat: true, type: 'error', message: items.message });
-        setBtnclick(false);
-      }
-      document.getElementById('fileUpload').value = null;
+      const res = data.data;
+      const dataUploaded = {
+        ...res,
+        id: res.file_id,
+        desc_file: t(res.desc_file),
+      };
+      // console.log(dataUploaded);
+      setFileStaged([...fileStaged, dataUploaded]);
+      sendDataParent([...fileStaged, dataUploaded]);
+      // console.log(fileStaged);
+      openSnackbar("success", "File Uploaded");
+      document.getElementById("fileUpload").value = null;
     } catch (err) {
-      setBtnclick(false);
-      setStatUpload({ stat: true, type: 'error', message: err.message });
+      openSnackbar("error", err.response.data.message);
       console.error(err);
+    } finally {
+      setBtnclick(false);
     }
   };
 
-  const handleChangeType = (e) => {
-    if (inTypes[e.target.value].help && inTypes[e.target.value].help !== '') {
-      setTooltip({ index: e.target.value, value: inTypes[e.target.value].help });
+  const handleChangeType = e => {
+    if (inTypes[e.target.value].help && inTypes[e.target.value].help !== "") {
+      setTooltip({
+        index: e.target.value,
+        value: inTypes[e.target.value].help,
+      });
       setOpenTooltip(true);
     } else {
       setOpenTooltip(false);
@@ -163,20 +200,27 @@ const UploadButton = forwardRef(function UploadButton(
   return (
     <>
       <Stack spacing={2}>
-        <Box style={{ display: 'flex', gap: 3, alignContent: 'center' }}>
-          <p style={{ margin: '0 0 0 0', color: 'red' }}>Maximal File Size : 2 Mb</p>
+        <Box style={{ display: "flex", gap: 3, alignContent: "center" }}>
+          <p style={{ margin: "0 0 0 0", color: "red" }}>Maximal File Size : 2 Mb</p>
         </Box>
-        <Box sx={{ display: 'flex', gap: 3, alignContent: 'center', pb: 2 }}>
-          <p>{t('Attachment File Guide')} :</p>
+        <Box sx={{ display: "flex", gap: 3, alignContent: "center", pb: 2 }}>
+          <p>{t("Attachment File Guide")} :</p>
           <Tooltip title={<h4>Attachment File Guide</h4>}>
             <IconButton color="primary" onClick={openFileGuide}>
               <Help fontSize="large" />
             </IconButton>
           </Tooltip>
         </Box>
-        <Box sx={{ height: 50, display: 'flex', alignItems: 'center', gap: 1 }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', width: '100%', boxSizing: 'border-box' }}>
-            <FormControl sx={{ width: '20rem' }}>
+        <Box sx={{ height: 50, display: "flex", alignItems: "center", gap: 1 }}>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              width: "100%",
+              boxSizing: "border-box",
+            }}
+          >
+            <FormControl sx={{ width: "20rem" }}>
               <InputLabel htmlFor="fileType" id="fileType-label">
                 <Typography>Type File</Typography>
               </InputLabel>
@@ -196,7 +240,7 @@ const UploadButton = forwardRef(function UploadButton(
               </Select>
             </FormControl>
             <Tooltip
-              title={<p style={{ fontSize: '10pt' }}>{`${titleTooltip.value}`}</p>}
+              title={<p style={{ fontSize: "10pt" }}>{`${titleTooltip.value}`}</p>}
               open={openTooltip}
               placement="right"
             >
@@ -212,7 +256,15 @@ const UploadButton = forwardRef(function UploadButton(
                   ref={ref}
                 >
                   Upload
-                  <input type="file" id="fileUpload" name="fileUpload" multiple hidden onChange={handleUpload} />
+                  <input
+                    ref={inputFileRef}
+                    type="file"
+                    id="fileUpload"
+                    name="fileUpload"
+                    multiple
+                    hidden
+                    onChange={e => handleUpload(e)}
+                  />
                 </LoadingButton>
               </span>
             </Tooltip>
@@ -222,7 +274,7 @@ const UploadButton = forwardRef(function UploadButton(
           open={statUpload.stat}
           onClose={handleClose}
           autoHideDuration={3000}
-          anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+          anchorOrigin={{ vertical: "top", horizontal: "right" }}
         >
           <Alert severity={statUpload.type} onClose={handleClose}>
             {statUpload.message}
@@ -234,16 +286,31 @@ const UploadButton = forwardRef(function UploadButton(
           isallow={allow}
           isLoad={loadData}
           delFile={deleteFile}
+          open={openExpModal}
+          setOpen={setExpModal}
+          tempFile={tempFile}
+          setTempFile={setTempFile}
           t={t}
         />
         {requiredFiles.length > 0 && (
           <>
-            <p style={{ color: 'red' }}>
-              Files are required : {requiredFiles.map((item) => t(item.message)).join(', ')}
+            <p style={{ color: "red" }}>
+              Files are required : {requiredFiles.map(item => t(item.message)).join(", ")}
             </p>
           </>
         )}
       </Stack>
+      <ModalDocumentExpDate
+        setFileStaged={setFileStaged}
+        sendDataParent={sendDataParent}
+        inTypes={inTypes[typeFile]}
+        idParent={idParent}
+        open={openExpModal}
+        setOpen={setExpModal}
+        tempFile={tempFile}
+        setTempfile={setTempFile}
+        t={t}
+      />
     </>
   );
 });

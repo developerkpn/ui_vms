@@ -24,7 +24,7 @@ export default function TicketInvalid() {
       }}
     >
       <Warning sx={{ fontSize: 100 }} />
-      <Typography variant="h2">{err.response.data.message}</Typography>
+      <Typography variant="h2">{err.response?.data.message || err.response?.message}</Typography>
     </Box>
   );
 }

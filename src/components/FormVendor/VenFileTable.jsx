@@ -1,17 +1,41 @@
-import { DataGrid, GridActionsCellItem } from '@mui/x-data-grid';
-import { useState, forwardRef, useEffect, useMemo, useCallback } from 'react';
-import { Delete as DeleteIcon, Undo, Download, Preview } from '@mui/icons-material';
-import { Alert as MuiAlert, Snackbar, Backdrop, CircularProgress, Skeleton, Tooltip } from '@mui/material';
-import { styled, lighten, darken } from '@mui/material/styles';
-import axios from 'axios';
-import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
-import fileDownload from 'js-file-download';
+import { DataGrid, GridActionsCellItem } from "@mui/x-data-grid";
+import { useState, forwardRef, useEffect, useMemo, useCallback } from "react";
+import {
+  Delete as DeleteIcon,
+  Undo,
+  Download,
+  Preview,
+  EditCalendarOutlined,
+} from "@mui/icons-material";
+import {
+  Alert as MuiAlert,
+  Snackbar,
+  Backdrop,
+  CircularProgress,
+  Skeleton,
+  Tooltip,
+} from "@mui/material";
+import { styled, lighten, darken } from "@mui/material/styles";
+import axios from "axios";
+import useAxiosPrivate from "src/hooks/useAxiosPrivate";
+import fileDownload from "js-file-download";
 
 const Alert = forwardRef(function Alert(props, ref) {
   return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
 });
 
-export default function VenFileTable({ initData, upTable, isallow, isLoad, delFile, ...props }) {
+export default function VenFileTable({
+  initData,
+  upTable,
+  isallow,
+  isLoad,
+  delFile,
+  open,
+  setOpen,
+  tempFile,
+  setTempFile,
+  ...props
+}) {
   const [file_ven, setFile_ven] = useState(initData);
   const [sbarOpen, setSbarOpen] = useState(false);
   const [loaderOpen, setLoaderopen] = useState(false);
@@ -22,7 +46,7 @@ export default function VenFileTable({ initData, upTable, isallow, isLoad, delFi
   useEffect(() => {
     setFile_ven(
       initData
-        .map((item) => ({ ...item, desc_file: props.t(item.desc_file) }))
+        .map(item => ({ ...item, desc_file: props.t(item.desc_file) }))
         .sort((a, b) => {
           if (a.file_type < b.file_type) {
             return -1;
@@ -37,18 +61,18 @@ export default function VenFileTable({ initData, upTable, isallow, isLoad, delFi
 
   // console.log(file_ven);
   const DataGridFile = styled(DataGrid)(() => ({
-    '& .row-idle': {
-      backgroundColor: '#fff',
+    "& .row-idle": {
+      backgroundColor: "#fff",
     },
-    '& .row-delete': {
-      backgroundColor: '#fc8b72',
-      '&:hover': {
-        backgroundColor: lighten('#fc8b72', 0.2),
+    "& .row-delete": {
+      backgroundColor: "#fc8b72",
+      "&:hover": {
+        backgroundColor: lighten("#fc8b72", 0.2),
       },
-      '&.Mui-selected': {
-        backgroundColor: darken('#fc8b72', 0.2),
-        '&:hover': {
-          backgroundColor: lighten('#fc8b72', 0.2),
+      "&.Mui-selected": {
+        backgroundColor: darken("#fc8b72", 0.2),
+        "&:hover": {
+          backgroundColor: lighten("#fc8b72", 0.2),
         },
       },
     },
@@ -59,7 +83,7 @@ export default function VenFileTable({ initData, upTable, isallow, isLoad, delFi
   }, []);
 
   const onCloseBar = useCallback((event, reason) => {
-    if (reason === 'clickaway') {
+    if (reason === "clickaway") {
       return;
     }
 
@@ -73,18 +97,18 @@ export default function VenFileTable({ initData, upTable, isallow, isLoad, delFi
         try {
           for (const item of file_ven) {
             if (item.id === id) {
-              if (item.source == 'ven_file_atth') {
+              if (item.source == "ven_file_atth") {
                 const deletedFile = await fetch(`${import.meta.env.VITE_URL_LOC}/vendor/delfile`, {
-                  method: 'DELETE',
+                  method: "DELETE",
                   headers: {
-                    'Content-Type': 'application/json',
+                    "Content-Type": "application/json",
                   },
                   body: JSON.stringify({ id: id }),
                 });
                 const response = await deletedFile.json();
                 if (response.status == 200) {
                   setFetchStat({
-                    stat: 'success',
+                    stat: "success",
                     message: `file ${response.data.file_name} deleted`,
                   });
                   onDeleteSBar();
@@ -93,16 +117,16 @@ export default function VenFileTable({ initData, upTable, isallow, isLoad, delFi
                 }
               } else {
                 const deletedFile = await fetch(`${import.meta.env.VITE_URL_LOC}/vendor/file`, {
-                  method: 'DELETE',
+                  method: "DELETE",
                   headers: {
-                    'Content-Type': 'application/json',
+                    "Content-Type": "application/json",
                   },
                   body: JSON.stringify({ id: id }),
                 });
                 const response = await deletedFile.json();
                 if (response.status == 200) {
                   setFetchStat({
-                    stat: 'success',
+                    stat: "success",
                     message: `temporary file ${response.data.file_name} deleted`,
                   });
                   onDeleteSBar();
@@ -120,8 +144,8 @@ export default function VenFileTable({ initData, upTable, isallow, isLoad, delFi
         } catch (error) {
           console.error(error);
           setFetchStat({
-            stat: 'error',
-            message: 'error deleting item',
+            stat: "error",
+            message: "error deleting item",
           });
           onDeleteSBar();
         }
@@ -136,10 +160,10 @@ export default function VenFileTable({ initData, upTable, isallow, isLoad, delFi
     ({ id, row }) =>
       () => {
         let pushData = [];
-        file_ven.map((item) => {
+        file_ven.map(item => {
           // console.log(id, item.id);
           if (item.id === id) {
-            pushData.push({ ...item, method: '' });
+            pushData.push({ ...item, method: "" });
           } else {
             pushData.push(item);
           }
@@ -152,100 +176,137 @@ export default function VenFileTable({ initData, upTable, isallow, isLoad, delFi
     [file_ven]
   );
 
+  const handleEditExpDate = useCallback(
+    ({ id, row }) => {
+      setOpen(true);
+      console.log(row);
+      setTempFile({
+        id: id,
+        name: row.file_name,
+        file_type: row.desc_file.replace(/[^a-zA-Z0-9]+/, ""),
+        source: row.source,
+        date: row.expired_date,
+      });
+    },
+    [file_ven]
+  );
+
   const columns = useMemo(
     () => [
       {
-        field: 'desc_file',
-        type: 'string',
-        headerName: props.t('Type'),
+        field: "desc_file",
+        type: "string",
+        headerName: props.t("Type"),
         width: 200,
       },
       {
-        field: 'file_name',
-        type: 'string',
-        headerName: props.t('File Name'),
+        field: "file_name",
+        type: "string",
+        headerName: props.t("File Name"),
         width: 650,
       },
       {
-        field: 'action',
-        type: 'actions',
-        headerName: props.t('Action'),
-        width: 100,
-        cellClassName: 'actions',
-        renderCell: (item) => {
-          const handleDownloadClick = async (item) => {
+        field: "expired_date",
+        type: "string",
+        headerName: props.t("Expired Date"),
+        width: 200,
+      },
+      {
+        field: "action",
+        type: "actions",
+        headerName: props.t("Action"),
+        width: 200,
+        cellClassName: "actions",
+        renderCell: item => {
+          const handleDownloadClick = async item => {
             const fileName = item.row.file_name;
 
             await axiosPrivate
-              .get(`/master/file/${fileName}`, { responseType: 'blob' })
-              .then((response) => {
+              .get(`/master/file/${fileName}`, { responseType: "blob" })
+              .then(response => {
                 fileDownload(response.data, fileName);
                 setFetchStat({
-                  stat: 'success',
+                  stat: "success",
                   message: `file downloaded`,
                 });
                 onDeleteSBar();
               })
-              .catch((err) => {
+              .catch(err => {
                 console.log(err);
                 setFetchStat({
-                  stat: 'error',
+                  stat: "error",
                   message: `error download file`,
                 });
                 onDeleteSBar();
               });
           };
-          const handlePreviewClick = (item) => {
+          const handlePreviewClick = item => {
             const fileName = item.row.file_name;
             window.open(`${import.meta.env.VITE_URL_BE}static/${fileName}`);
           };
-          if (item.row.method == 'delete') {
+          if (item.row.method == "delete") {
             return [
               <GridActionsCellItem
                 key={`undo-${item.id}`}
                 icon={<Undo />}
-                label={props.t('Undo')}
+                label={props.t("Undo")}
                 onClick={handleUndoClick(item)}
               />,
             ];
           } else {
             if (isallow) {
-              return [
-                <Tooltip title={props.t('Delete')} placement="top" key={`delete-${item.id}`}>
+              let returnallow = [
+                <Tooltip title={props.t("Delete")} placement="top" key={`delete-${item.id}`}>
                   <GridActionsCellItem
                     icon={<DeleteIcon />}
-                    label={props.t('Delete')}
+                    label={props.t("Delete")}
                     onClick={() => handleDeleteClick(item)}
                   />
                 </Tooltip>,
-                <Tooltip title={props.t('Download')} placement="top" key={`dwn-${item.id}`}>
+                <Tooltip title={props.t("Download")} placement="top" key={`dwn-${item.id}`}>
                   <GridActionsCellItem
                     icon={<Download />}
-                    label={props.t('Download')}
+                    label={props.t("Download")}
                     onClick={() => handleDownloadClick(item)}
                   />
                 </Tooltip>,
-                <Tooltip title={props.t('Preview')} placement="top" key={`prv-${item.id}`}>
+                <Tooltip title={props.t("Preview")} placement="top" key={`prv-${item.id}`}>
                   <GridActionsCellItem
                     icon={<Preview />}
-                    label={props.t('Preview')}
+                    label={props.t("Preview")}
                     onClick={() => handlePreviewClick(item)}
                   />
                 </Tooltip>,
               ];
+              if (item.row.expired_date != "") {
+                returnallow.push(
+                  <Tooltip
+                    title={props.t("Edit Expiry Date")}
+                    placement="top"
+                    key={`exp-${item.id}`}
+                  >
+                    <GridActionsCellItem
+                      icon={<EditCalendarOutlined />}
+                      label={props.t("Edit Expiry Date")}
+                      onClick={() => handleEditExpDate(item)}
+                    />
+                  </Tooltip>
+                );
+              }
+              return returnallow;
             } else {
               return [
-                <Tooltip title={props.t('Download')} placement="top" key={`dwn-${item.id}`}>
+                <Tooltip title={props.t("Download")} placement="top" key={`dwn-${item.id}`}>
                   <GridActionsCellItem
                     icon={<Download />}
-                    label={props.t('Download')}
+                    label={props.t("Download")}
                     onClick={() => handleDownloadClick(item)}
                   />
                 </Tooltip>,
-                <Tooltip title={props.t('Preview')} placement="top" key={`prv-${item.id}`}>
+                <Tooltip title={props.t("Preview")} placement="top" key={`prv-${item.id}`}>
                   <GridActionsCellItem
                     icon={<Preview />}
-                    label={props.t('Preview')}
+                    label={props.t("Preview")}
                     onClick={() => handlePreviewClick(item)}
                   />
                 </Tooltip>,
@@ -267,11 +328,11 @@ export default function VenFileTable({ initData, upTable, isallow, isLoad, delFi
           autoHeight
           rows={file_ven}
           columns={columns}
-          getRowClassName={(params) => {
-            if (params.row.method == 'delete') {
-              return 'row-delete';
+          getRowClassName={params => {
+            if (params.row.method == "delete") {
+              return "row-delete";
             } else {
-              return 'row-idle';
+              return "row-idle";
             }
           }}
         />
@@ -292,13 +353,13 @@ export default function VenFileTable({ initData, upTable, isallow, isLoad, delFi
         open={sbarOpen}
         autoHideDuration={3000}
         onClose={onCloseBar}
-        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
       >
-        <Alert severity={fetchStat.stat ? fetchStat.stat : 'info'}>
-          {fetchStat.message ? fetchStat.message : 'test'}
+        <Alert severity={fetchStat.stat ? fetchStat.stat : "info"}>
+          {fetchStat.message ? fetchStat.message : "test"}
         </Alert>
       </Snackbar>
-      <Backdrop sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1 }} open={loaderOpen}>
+      <Backdrop sx={{ color: "#fff", zIndex: theme => theme.zIndex.drawer + 1 }} open={loaderOpen}>
         <CircularProgress color="inherit" />
       </Backdrop>
     </>

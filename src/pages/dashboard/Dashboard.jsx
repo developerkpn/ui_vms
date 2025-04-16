@@ -90,6 +90,7 @@ export default function MiniDrawer() {
   const theme = useTheme();
   const location = useLocation();
   const setSessionStore = useSessionStore((state) => state.setSessionStore);
+  const resetSessionStore = useSessionStore((state) => state.resetSessionStore);
   const setIsResetPWD = useCheckResetPWD((state) => state.setIsResetPWD);
   const is_reset_pwd = useCheckResetPWD((state) => state.is_reset_pwd);
   const setPermission = usePermissionStore((state) => state.setPermission);
@@ -115,6 +116,9 @@ export default function MiniDrawer() {
           fullname: data.fullname,
           username: data.username,
           user_id: data.user_id,
+          emp_role_id: data.emp_role_id,
+          dept_id: data.dept_id,
+          bu_id: data.bu_id,
           email: data.email,
           role: data.role,
           groupid: data.groupid,
@@ -123,6 +127,7 @@ export default function MiniDrawer() {
         setPermission(data.permission);
         setMenu(data.menu);
       } catch (error) {
+        resetSessionStore();
         console.error(error);
       }
     })();

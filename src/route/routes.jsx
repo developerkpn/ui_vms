@@ -1,11 +1,13 @@
-import { Navigate, createBrowserRouter } from 'react-router-dom';
-import axios from 'axios';
-import { lazy } from 'react';
-import ESubmissionDir from 'src/pages/dashboard/ESubmissionDir';
-const OSTicketReqEdit = lazy(() => import('src/pages/reqedit/OSTicketReqEdit'));
-const VendorLandingPage = lazy(() => import('src/pages/vendor/VendorLandingPage'));
-const VendorUsers = lazy(() => import('src/pages/vendor/VendorUsers'));
-const VerificationPage = lazy(() => import('src/pages/verification/VerificationPage'));
+import { Navigate, createBrowserRouter } from "react-router-dom";
+import axios from "axios";
+import { lazy } from "react";
+import ESubmissionDir from "src/pages/dashboard/ESubmissionDir";
+import FormVendorClient from "src/pages/dashboard/FormVendorClient";
+const OSTicketReqEdit = lazy(() => import("src/pages/reqedit/OSTicketReqEdit"));
+const VendorLandingPage = lazy(() => import("src/pages/vendor/VendorLandingPage"));
+const VendorUsers = lazy(() => import("src/pages/vendor/VendorUsers"));
+const VerificationPage = lazy(() => import("src/pages/verification/VerificationPage"));
+const DirectFormCreateNew = lazy(() => import("src/pages/create_new/DirectFormCreateNew"));
 // import ErrorPage from '../pages/ErrorPage';
 // import Error404 from 'src/pages/Error404';
 // import LoginPage from 'src/pages/LoginPage';
@@ -22,60 +24,66 @@ const VerificationPage = lazy(() => import('src/pages/verification/VerificationP
 // import TicketInvalid from 'src/pages/TicketInvalid';
 // import ResetPassword from 'src/pages/ResetPassword';
 
-const FormReqEditDet = lazy(() => import('../pages/reqedit/FormReqEditDet'));
-const ErrorPage = lazy(() => import('../pages/ErrorPage'));
-const Error404 = lazy(() => import('src/pages/Error404'));
-const LoginPage = lazy(() => import('src/pages/LoginPage'));
-const Dashboard = lazy(() => import('src/pages/dashboard/Dashboard'));
-const ListTicket = lazy(() => import('src/pages/dashboard/ListTicket'));
-const ListVendor = lazy(() => import('src/pages/dashboard/ListVendor'));
-const ListReqStat = lazy(() => import('src/pages/dashboard/ListReqStat'));
-const FormUserPage = lazy(() => import('src/pages/FormUserPage'));
-const User = lazy(() => import('src/pages/dashboard/RefactorUser'));
-const MenuAccessPage = lazy(() => import('src/pages/MenuAccessPage'));
-const ListUserGroup = lazy(() => import('src/pages/dashboard/ListUserGroup'));
-const RefactorFormVendorPage = lazy(() => import('src/pages/RefactorFormVendorPage'));
-const ListMasterBank = lazy(() => import('src/pages/dashboard/ListMasterBank'));
-const TicketInvalid = lazy(() => import('src/pages/TicketInvalid'));
-const ResetPassword = lazy(() => import('src/pages/ResetPassword'));
+const FormReqEditDet = lazy(() => import("../pages/reqedit/FormReqEditDet"));
+const ErrorPage = lazy(() => import("../pages/ErrorPage"));
+const Error404 = lazy(() => import("src/pages/Error404"));
+const LoginPage = lazy(() => import("src/pages/LoginPage"));
+const Dashboard = lazy(() => import("src/pages/dashboard/Dashboard"));
+const ListTicket = lazy(() => import("src/pages/dashboard/ListTicketv2"));
+const ListVendor = lazy(() => import("src/pages/dashboard/ListVendor"));
+const ListReqStat = lazy(() => import("src/pages/dashboard/ListReqStat"));
+const FormUserPage = lazy(() => import("src/pages/FormUserPage"));
+const User = lazy(() => import("src/pages/dashboard/RefactorUser"));
+const MenuAccessPage = lazy(() => import("src/pages/MenuAccessPage"));
+const ListUserGroup = lazy(() => import("src/pages/dashboard/ListUserGroup"));
+const RefactorFormVendorPage = lazy(() => import("src/pages/RefactorFormVendorPage"));
+const ListMasterBank = lazy(() => import("src/pages/dashboard/ListMasterBank"));
+const TicketInvalid = lazy(() => import("src/pages/TicketInvalid"));
+const ResetPassword = lazy(() => import("src/pages/ResetPassword"));
 
 export const routes = createBrowserRouter([
   {
-    path: 'frm/:formtype/:token',
-    element: <RefactorFormVendorPage />,
-    loader: async ({ params }) => {
-      const checkValid = await axios.post(`${import.meta.env.VITE_URL_LOC}/ticket/checkvalid`, {
-        ticket_id: params.token,
-      });
-      if (checkValid.status === 403) {
-        throw new Response('Ticket is closed', { ticket_id: checkValid.data.message });
-      }
-      return {
-        type: 'new',
-        token: params.token,
-      };
-    },
-    errorElement: <TicketInvalid />,
-  },
-  {
-    path: '/',
+    path: "frm/:formtype/:token",
+    element: <FormVendorClient />,
     children: [
-      { path: '404', element: <Error404 /> },
-      { path: '', element: <Navigate to="login" /> },
+      {
+        path: "",
+        element: <DirectFormCreateNew />,
+        loader: async ({ params }) => {
+          const checkValid = await axios.post(`${import.meta.env.VITE_URL_LOC}/ticket/checkvalid`, {
+            ticket_id: params.token,
+          });
+          if (checkValid.status === 403) {
+            throw new Response("Ticket is closed", { ticket_id: checkValid.data.message });
+          }
+          return {
+            type: "new",
+            token: params.token,
+          };
+        },
+        errorElement: <TicketInvalid />,
+      },
     ],
   },
   {
-    path: 'login',
+    path: "/",
+    children: [
+      { path: "404", element: <Error404 /> },
+      { path: "", element: <Navigate to="login" /> },
+    ],
+  },
+  {
+    path: "login",
     element: <LoginPage />,
     errorElement: <ErrorPage />,
   },
   {
-    path: 'resetpass',
+    path: "resetpass",
     element: <ResetPassword />,
     errorElement: <ErrorPage />,
   },
   {
-    path: 'dashboard',
+    path: "dashboard",
     element: <Dashboard />,
     loader: () => {
       return null;
@@ -87,79 +95,79 @@ export const routes = createBrowserRouter([
       //   element: <VendorLandingPage />,
       // },
       {
-        path: 'form/:token',
-        element: <RefactorFormVendorPage />,
+        path: "form/:token",
+        element: <DirectFormCreateNew />,
         loader: ({ params }) => {
           return {
-            type: 'form',
+            type: "form",
             token: params.token,
           };
         },
       },
       {
-        path: 'ticket',
+        path: "ticket",
         element: <ListTicket />,
       },
       {
-        path: 'vendor',
+        path: "vendor",
         element: <ListVendor />,
       },
       {
-        path: 'ticketreqstat',
+        path: "ticketreqstat",
         element: <ListReqStat />,
       },
       {
-        path: 'users',
+        path: "users",
         element: <User />,
       },
       {
-        path: 'users/create',
+        path: "users/create",
         element: <FormUserPage />,
       },
       {
-        path: 'account/edit',
+        path: "account/edit",
         element: <FormUserPage />,
       },
       {
-        path: 'securitygroup',
+        path: "securitygroup",
         element: <ListUserGroup />,
       },
       {
-        path: 'securitygroup/create',
+        path: "securitygroup/create",
         element: <MenuAccessPage />,
       },
       {
-        path: 'banks',
+        path: "banks",
         element: <ListMasterBank />,
       },
       {
-        path: 'vendorverif',
+        path: "vendorverif",
         element: <VerificationPage />,
       },
       {
-        path: 'usrven',
+        path: "usrven",
         element: <VendorUsers />,
       },
       {
-        path: 'editreq/form',
+        path: "editreq/form",
         element: <FormReqEditDet />,
       },
       {
-        path: 'editreq',
+        path: "editreq",
         element: <OSTicketReqEdit />,
       },
       {
-        path: 'esubmission',
+        path: "esubmission",
         element: <ESubmissionDir />,
       },
     ],
   },
   {
-    path: '*',
+    path: "*",
     element: <Navigate to="login" />,
   },
   {
-    path: 'invalidticket',
+    path: "invalidticket",
     element: <TicketInvalid />,
     errorElement: <ErrorPage />,
   },
