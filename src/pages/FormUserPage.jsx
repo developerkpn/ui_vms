@@ -42,7 +42,10 @@ export default function FormUserPage() {
       email: "",
       password: "",
       role: "",
+      gender: "",
       bu_id: null,
+      bu_id_1: null,
+      bu_id_2: null,
       dept_id: null,
       emp_role_id: null,
       datecreated: dayjs(),
@@ -69,7 +72,10 @@ export default function FormUserPage() {
         usergroup: data.usergroup,
         email: data.email,
         role: data.role,
+        gender: data.gender,
         bu_id: data.bu_id,
+        bu_id_1: data.bu_id_1,
+        bu_id_2: data.bu_id_2,
         dept_id: data.dept_id,
         emp_role_id: data.emp_role_id,
         datecreated: dayjs(data.datecreated),
@@ -215,6 +221,8 @@ export default function FormUserPage() {
       email: data.email,
       role: data.role,
       bu_id: data.bu_id,
+      bu_id_1: data.bu_id_1,
+      bu_id_2: data.bu_id_2,
       dept_id: data.dept_id,
       emp_role_id: data.emp_role_id,
       createddate: data.datecreated.format("YYYY-MM-DD"),
@@ -306,7 +314,19 @@ export default function FormUserPage() {
                 rules={{ required: true }}
               />
             </Grid>
+            <Grid item xs={2}>
+              <SelectComp
+                name="gender"
+                options={[
+                  { value: "M", label: "Male" },
+                  { value: "F", label: "Female" },
+                ]}
+                control={control}
+                label="Gender"
+              />
+            </Grid>
           </Grid>
+          {allowUpdate && location.state?.page !== "userinfo" && (
           {allowUpdate && location.state?.page !== "userinfo" && (
             <Grid container spacing={2}>
               <Grid item xs={6}>
@@ -336,6 +356,13 @@ export default function FormUserPage() {
                   options={manager}
                   disabled={isMgr}
                 />
+                <SelectComp
+                  name="manager"
+                  control={control}
+                  label="Manager"
+                  options={manager}
+                  disabled={isMgr}
+                />
               </Grid>
             </Grid>
           )}
@@ -347,6 +374,23 @@ export default function FormUserPage() {
                   control={control}
                   options={optionBU}
                   label="Business Unit"
+                  rules={{ required: true }}
+                />
+              </Grid>
+              <Grid item xs={6}>
+                <AutoCompleteSelect
+                  name="bu_id_1"
+                  control={control}
+                  options={optionBU}
+                  label="Business Unit 1"
+                />
+              </Grid>
+              <Grid item xs={6}>
+                <AutoCompleteSelect
+                  name="bu_id_2"
+                  control={control}
+                  options={optionBU}
+                  label="Business Unit 2"
                 />
               </Grid>
               <Grid item xs={6}>
@@ -355,6 +399,7 @@ export default function FormUserPage() {
                   control={control}
                   options={optionDept}
                   label="Department"
+                  rules={{ required: true }}
                 />
               </Grid>
               <Grid item xs={6}>
@@ -363,6 +408,7 @@ export default function FormUserPage() {
                   control={control}
                   options={optionEmpRole}
                   label="Employee Role"
+                  rules={{ required: true }}
                 />
               </Grid>
             </Grid>

@@ -88,6 +88,12 @@ function FormVendorCG() {
   const { data: VenType, loading: loadingVentype } = useMasterFetcher({
     link: "/master/cg/ventype",
   });
+  const { data: TitlePIC, loading: loadingPIC } = useMasterFetcher({
+    link: "/master/title",
+  });
+  const { data: BadanUsaha, loading: loadingBUS } = useMasterFetcher({
+    link: "/master/badanus",
+  });
 
   useEffect(() => {
     if (
@@ -97,7 +103,9 @@ function FormVendorCG() {
       loadingPriceTerm ||
       loadingCurr ||
       loadingCountry ||
-      loadingVentype
+      loadingVentype ||
+      loadingPIC ||
+      loadingBUS
     ) {
       setLoading(true);
     } else {
@@ -161,6 +169,22 @@ function FormVendorCG() {
       `,
     }));
   }, [VenType]);
+
+  const TitleOpt = useMemo(() => {
+    return TitlePIC.map(value => ({
+      value: value.title_code,
+      label: `${value.title_name}
+      `,
+    }));
+  }, [TitlePIC]);
+
+  const BadanUsahaOpt = useMemo(() => {
+    return BadanUsaha.map(value => ({
+      value: value.id_badan_usaha,
+      label: `${value.badan_usaha}
+      `,
+    }));
+  }, [BadanUsaha]);
   //reducerFunction
   const { expanded, toggle } = useTogglePanel();
 
@@ -190,6 +214,8 @@ function FormVendorCG() {
     ven_class: "",
     description: "",
     vendorcode: "",
+    badan_usaha: "",
+    pic_title: "",
     // search_term: "", //abbreviation
     website_url: "",
     ig_link: "",
@@ -369,6 +395,8 @@ function FormVendorCG() {
           used_tax: data.used_tax == null || data.used_tax == "" ? "P11A" : data.used_tax,
           is_new_npwp: data.is_new_npwp ?? false,
           ven_class: data.ven_class ?? "",
+          badan_usaha: data.badan_usaha ?? "",
+          pic_title: data.pic_title ?? "",
           bank: resultBank.map(item => ({
             id: item.id,
             bank_country: { value: item.country, label: item.country },
@@ -388,6 +416,10 @@ function FormVendorCG() {
             passbook: item.passbook && {
               file_name: item.passbook,
               file_id: item.passbook_id,
+            },
+            form_dgt: item.form_dgt && {
+              file_name: item.form_dgt,
+              file_id: item.form_dgt_id,
             },
           })),
           bunit: data.bunit,
@@ -670,7 +702,7 @@ function FormVendorCG() {
     return () => {
       controller.abort();
     };
-  }, [loader_data, watch("ventype")]);
+  }, [loader_data, watch("ventype"), checkIsExist]);
 
   const getInitDataFile = useCallback(
     async controller => {
@@ -880,6 +912,8 @@ function FormVendorCG() {
       no_telf_pic: value.no_telf_pic.trim().split(/-/)[1],
       email_pic: value.email_pic.trim(),
       ven_class: value?.ven_class ?? null,
+      badan_usaha: value.badan_usaha,
+      pic_title: value.pic_title,
     };
     let tempBanks = [];
     let ven_bank;
@@ -1136,6 +1170,19 @@ function FormVendorCG() {
                       />
                     </Grid>
                     <Grid item xs={4}></Grid>
+                    <Grid item xs={2}>
+                      <SelectComp
+                        name="badan_usaha"
+                        label={t("Badan Usaha") + " *"}
+                        control={control}
+                        disabled={checkFieldRule("badan_usaha")}
+                        t={t}
+                        rules={{
+                          required: "Please insert this field",
+                        }}
+                        options={BadanUsahaOpt}
+                      />
+                    </Grid>
                     <Grid item xs={4}>
                       <TextFieldComp
                         name="name1"
@@ -1194,7 +1241,7 @@ function FormVendorCG() {
                         </Grid>
                       </>
                     )}
-                    {!checkIsExist && <Grid item xs={6}></Grid>}
+                    {!checkIsExist && <Grid item xs={4}></Grid>}
 
                     <Grid item xs={3}>
                       <PatternFieldComp
@@ -1543,6 +1590,21 @@ function FormVendorCG() {
                         toUpperCase={true}
                         rules={{
                           maxLength: { value: 300, message: "Max 300 Character" },
+                        }}
+                      />
+                    </Grid>
+                    <Grid item xs={6}></Grid>
+                    <Grid item xs={2}>
+                      <SelectComp
+                        options={TitleOpt}
+                        name="pic_title"
+                        t={t}
+                        label={t("Title PIC") + " *"}
+                        control={control}
+                        disabled={checkFieldRule("pic_title")}
+                        toUpperCase={true}
+                        rules={{
+                          required: "Please insert this field",
                         }}
                       />
                     </Grid>
@@ -1963,7 +2025,7 @@ function FormVendorCG() {
                   sx={{ minWidth: "20rem", mt: "1rem", mb: "1rem" }}
                 >
                   <Box sx={{ display: "flex", flexDirection: "column" }}>
-                    {t("Please Download")}
+                    {t("Please Download Kode Etik")}
                     <Link
                       href={
                         langCode === "id"
@@ -1975,28 +2037,10 @@ function FormVendorCG() {
                             }/master/file/Integrity_Pact_Supplier_Vendor_and_Contractor.docx`
                       }
                     >
-                      Link Download File Pakta Integritas
+                      Link Download File Kode Etik
                     </Link>
                   </Box>
                 </Alert>
-                {!checkFieldRule("upload_file") && (
-                  <Alert
-                    severity="warning"
-                    variant="filled"
-                    sx={{ minWidth: "20rem", mt: "1rem", mb: "1rem" }}
-                  >
-                    <Box sx={{ display: "flex", flexDirection: "column" }}>
-                      {t("Please Download Justifikasi")}
-                      <Link
-                        href={`${
-                          import.meta.env.VITE_URL_LOC
-                        }/master/file/Form_VENDOR_LOCAL_JUSTIFIKASI.docx`}
-                      >
-                        Link Download File Form Justifikasi
-                      </Link>
-                    </Box>
-                  </Alert>
-                )}
                 <UploadButton
                   inputTypes={fileType}
                   iniData={initDataFile}

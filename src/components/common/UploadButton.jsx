@@ -81,7 +81,8 @@ const UploadButton = forwardRef(function UploadButton(
   }, [openExpModal]);
 
   useEffect(() => {
-    if (Object.keys(iniData).length != 0) {
+    console.log("reset files");
+    if (Object.keys(iniData).length != 0 && fileStaged.length == 0) {
       const covtData = [];
       iniData.map(item => {
         covtData.push({
@@ -97,7 +98,7 @@ const UploadButton = forwardRef(function UploadButton(
   }, [iniData]);
 
   useEffect(() => {
-    if (fileStaged.length > 0) {
+    if (fileStaged.length != 0) {
       const covtData = fileStaged.map(item => ({
         ...item,
         desc_file: item.desc_file,

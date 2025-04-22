@@ -118,20 +118,36 @@ function VenBankTableRow({
         />
       </TableCell>
       <TableCell>
-        <UploadComponent
-          control={control}
-          tooltip={"Surat yang dikeluarkan vendor beserta tanda tangan direktur perusahaan"}
-          name={`bank.${index}.account_statement_letter`}
-          rules={{ required: "Please insert this field" }}
-          fileType="A001"
-          id={getValues(`bank.${index}.id`)}
-          ven_id={ven_id}
-          t={t}
-          disabled={!is_allow}
-          clearField={clearField}
-          setValue={setValue}
-          is_allow={is_allow}
-        />
+        {watch("ventype") != "OVERSEAS" ? (
+          <UploadComponent
+            control={control}
+            tooltip={"Surat yang dikeluarkan vendor beserta tanda tangan direktur perusahaan"}
+            name={`bank.${index}.account_statement_letter`}
+            rules={{ required: "Please insert this field" }}
+            fileType="A001"
+            id={getValues(`bank.${index}.id`)}
+            ven_id={ven_id}
+            t={t}
+            disabled={!is_allow}
+            clearField={clearField}
+            setValue={setValue}
+            is_allow={is_allow}
+          />
+        ) : (
+          <UploadComponent
+            control={control}
+            name={`bank.${index}.form_dgt`}
+            rules={{ required: "Please insert this field" }}
+            fileType="A012"
+            id={getValues(`bank.${index}.id`)}
+            ven_id={ven_id}
+            t={t}
+            disabled={!is_allow}
+            clearField={clearField}
+            setValue={setValue}
+            is_allow={is_allow}
+          />
+        )}
       </TableCell>
       <TableCell>
         <UploadComponent
@@ -219,7 +235,9 @@ export default function VenBankTableRefactor({
               <TableCell sx={{ width: "10%" }}>{t("Currency")}</TableCell>
               <TableCell sx={{ width: "15%" }}>{t("Bank Account")}</TableCell>
               <TableCell sx={{ width: "18%" }}>{t("Account Holder")}</TableCell>
-              <TableCell sx={{ width: "5%" }}>{t("Account Statement Letter")}</TableCell>
+              <TableCell sx={{ width: "5%" }}>
+                {watch("ventype") != "OVERSEAS" ? t("Account Statement Letter") : t("Form DGT")}
+              </TableCell>
               <TableCell sx={{ width: "5%" }}>{t("Passbook")}</TableCell>
               <TableCell sx={{ width: "2%" }}></TableCell>
             </TableRow>
