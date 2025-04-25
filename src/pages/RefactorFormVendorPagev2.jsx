@@ -134,6 +134,7 @@ function RefactorFormVendorPage() {
     is_tender: false,
     is_priority: false,
     vendorcode: "",
+    ppn_type: "VAT_11",
     remarks_readOnly: "",
     limit: "",
     search_term: "",
@@ -273,6 +274,7 @@ function RefactorFormVendorPage() {
         npwp: data.npwp ? data.npwp : "",
         paymthd: data.pay_mthd ? data.pay_mthd : "",
         payterm: data.pay_term ? data.pay_term : "I30",
+        ppn_type: data.ppn_type ? data.ppn_type : "VAT_11",
         company: data.company ? data.company : "",
         purchorg: data.purch_org ? { value: data.purch_org, label: data.purch_org } : null,
         vengroup: data.ven_group ? data.ven_group : "",
@@ -603,6 +605,7 @@ function RefactorFormVendorPage() {
   const banks = useRef([{ value: "", label: "" }]);
   const payterm = useRef([{ value: "", label: "" }]);
   const comps = useRef([{ value: "", label: "" }]);
+  const ppn_type = useRef([{ value: "", label: "" }]);
   const uploadButRef = useRef(null);
   const onLoad = useRef(false);
 
@@ -818,6 +821,16 @@ function RefactorFormVendorPage() {
       }
     };
 
+    const getPPNType = async () => {
+      try {
+        const { data } = await axiosPrivate.get(`/master/getvat`);
+        const data_vat = data.data;
+        ppn_type.current = data_vat.map(item => ({ value: item.ppn_code, label: item.ppn_desc }));
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
     if (loader_data.ven_id !== "") {
       (async () => {
         setLoading(true);
@@ -828,6 +841,7 @@ function RefactorFormVendorPage() {
         await getInitDataFile(controller);
         await getCompany();
         await getPayterm();
+        await getPPNType();
         setLoading(false);
       })();
     }
@@ -963,6 +977,7 @@ function RefactorFormVendorPage() {
       npwp: value.npwp.trim(),
       pay_mthd: value.paymthd,
       pay_term: value.payterm,
+      ppn_type: value.ppn_type,
       company: value.company,
       purch_org: value.purchorg?.value,
       ven_acc: value.venacc,
@@ -2176,6 +2191,19 @@ function RefactorFormVendorPage() {
                         required: "Please insert this field",
                       }}
                       tooltip={t("Jangka waktu pembayaran")}
+                    />
+                  </Grid>
+                  <Grid item xs={4}>
+                    <SelectComp
+                      name="ppn_type"
+                      t={t}
+                      label={t("VAT Type") + " *"}
+                      control={control}
+                      options={ppn_type.current}
+                      disabled={checkFieldRule("ppn_type")}
+                      rules={{
+                        required: "Please insert this field",
+                      }}
                     />
                   </Grid>
                 </Grid>

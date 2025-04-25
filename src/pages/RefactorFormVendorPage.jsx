@@ -2295,20 +2295,6 @@ function RefactorFormVendorPage() {
                       }}
                     />
                   </Grid>
-                  <Grid item xs={4}>
-                    <SelectComp
-                      name="ppn_type"
-                      t={t}
-                      label={t("VAT Type") + " *"}
-                      control={control}
-                      options={ppn_type.current}
-                      disabled={checkField}
-                      rules={{
-                        required: "Please insert this field",
-                      }}
-                      tooltip={t("Jangka waktu pembayaran")}
-                    />
-                  </Grid>
                 </Grid>
               </AccordionDetails>
             </Accordion>
