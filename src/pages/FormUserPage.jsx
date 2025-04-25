@@ -225,6 +225,7 @@ export default function FormUserPage() {
       bu_id_2: data.bu_id_2,
       dept_id: data.dept_id,
       emp_role_id: data.emp_role_id,
+      gender: data.gender,
       createddate: data.datecreated.format("YYYY-MM-DD"),
       expireddate: data.expireddate.format("YYYY-MM-DD"),
     };
@@ -327,7 +328,6 @@ export default function FormUserPage() {
             </Grid>
           </Grid>
           {allowUpdate && location.state?.page !== "userinfo" && (
-          {allowUpdate && location.state?.page !== "userinfo" && (
             <Grid container spacing={2}>
               <Grid item xs={6}>
                 <SelectComp
@@ -349,13 +349,6 @@ export default function FormUserPage() {
                 />
               </Grid>
               <Grid item xs={6}>
-                <SelectComp
-                  name="manager"
-                  control={control}
-                  label="Manager"
-                  options={manager}
-                  disabled={isMgr}
-                />
                 <SelectComp
                   name="manager"
                   control={control}
