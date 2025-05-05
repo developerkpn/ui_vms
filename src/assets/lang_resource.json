@@ -106,7 +106,9 @@
       "Please insert at least 1": "Mohon isi minimal 1",
       "Karakter": "Karakter",
       "Alasan memilih vendor tersebut menjadi rekanan KPN": "Alasan memilih vendor tersebut menjadi rekanan KPN",
-      "VAT Type": "Tipe PPN"
+      "VAT Type": "Tipe PPN",
+      "Jabatan PIC": "Jabatan PIC",
+      "Jabatan dari pihak vendor yang mengisi form": "Jabatan dari pihak vendor yang mengisi form"
     }
   },
   "en": {
@@ -216,7 +218,9 @@
       "Karakter": "Character",
       "Please insert at least 1": "Please insert at least 1",
       "Alasan memilih vendor tersebut menjadi rekanan KPN": "Reason for choosing vendor as KPN's partner",
-      "VAT Type": "VAT Type"
+      "VAT Type": "VAT Type",
+      "Jabatan PIC": "PIC Function",
+      "Jabatan dari pihak vendor yang mengisi form": "Function of person from vendor who filled the form"
     }
   }
 }

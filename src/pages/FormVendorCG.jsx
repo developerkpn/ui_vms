@@ -300,6 +300,10 @@ function FormVendorCG() {
       clearErrors("npwp");
       trigger("npwp");
     }
+    if (ven_type == "PRIVATE") {
+      setValue("badan_usaha", "");
+      clearErrors("badan_usaha");
+    }
   }, [watch("ventype")]);
 
   useEffect(() => {
@@ -397,6 +401,7 @@ function FormVendorCG() {
           ven_class: data.ven_class ?? "",
           badan_usaha: data.badan_usaha ?? "",
           pic_title: data.pic_title ?? "",
+          pic_jabatan: data.pic_jabatan ?? "",
           bank: resultBank.map(item => ({
             id: item.id,
             bank_country: { value: item.country, label: item.country },
@@ -914,6 +919,7 @@ function FormVendorCG() {
       ven_class: value?.ven_class ?? null,
       badan_usaha: value.badan_usaha,
       pic_title: value.pic_title,
+      pic_jabatan: value.pic_jabatan,
     };
     let tempBanks = [];
     let ven_bank;
@@ -1175,10 +1181,11 @@ function FormVendorCG() {
                         name="badan_usaha"
                         label={t("Badan Usaha") + " *"}
                         control={control}
-                        disabled={checkFieldRule("badan_usaha")}
+                        disabled={checkFieldRule("badan_usaha") || watch("ventype") == "PRIVATE"}
                         t={t}
                         rules={{
-                          required: "Please insert this field",
+                          required:
+                            watch("ventype") != "PRIVATE" ? "Please insert this field" : false,
                         }}
                         options={BadanUsahaOpt}
                       />
@@ -1623,6 +1630,21 @@ function FormVendorCG() {
                         tooltip={t("Nama dari pihak vendor yang mengisi form")}
                       />
                     </Grid>
+                    <Grid item xs={4}>
+                      <TextFieldComp
+                        name="pic_jabatan"
+                        t={t}
+                        label={t("Jabatan PIC") + " *"}
+                        control={control}
+                        disabled={checkFieldRule("nama_pic")}
+                        toUpperCase={true}
+                        rules={{
+                          required: "Please insert this field",
+                          maxLength: { value: 200, message: "Max 200 Character" },
+                        }}
+                        tooltip={t("Jabatan dari pihak vendor yang mengisi form")}
+                      />
+                    </Grid>
                     <Grid item xs={6}>
                       <PatternFieldComp
                         name="no_telf_pic"
@@ -2027,15 +2049,9 @@ function FormVendorCG() {
                   <Box sx={{ display: "flex", flexDirection: "column" }}>
                     {t("Please Download Kode Etik")}
                     <Link
-                      href={
-                        langCode === "id"
-                          ? `${
-                              import.meta.env.VITE_URL_LOC
-                            }/master/file/Kode_Etik_Supplier_Vendor_dan_Kontraktor.doc`
-                          : `${
-                              import.meta.env.VITE_URL_LOC
-                            }/master/file/Integrity_Pact_Supplier_Vendor_and_Contractor.docx`
-                      }
+                      href={`${
+                        import.meta.env.VITE_URL_LOC
+                      }/master/file/Kode_Etik_Supplier_dan_Kontraktor_CG.docx`}
                     >
                       Link Download File Kode Etik
                     </Link>

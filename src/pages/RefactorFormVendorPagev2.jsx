@@ -330,6 +330,7 @@ function RefactorFormVendorPage() {
         setCheckex(true);
         toggle({ type: FormTab.RestrictForm });
       } else {
+        setBtnclick(false);
         setCheckex(false);
         toggle({ type: FormTab.OpenForm });
       }
@@ -1612,7 +1613,7 @@ function RefactorFormVendorPage() {
                           color: theme.palette.grey[600],
                         }}
                       >
-                        {`Max 50 ${t("Karakter")} ${t(
+                        {`Max 35 ${t("Karakter")} ${t(
                           `Please fill without ',' (comma) character`
                         )} ${t(`Mohon dilanjutkan ke kolom berikutnya jika tidak cukup`)}`}
                       </p>
@@ -2209,7 +2210,7 @@ function RefactorFormVendorPage() {
                 </Grid>
               </AccordionDetails>
             </Accordion>
-            {!checkFieldRule("vendetail") && (
+            {(!checkFieldRule("vendetail") || data_form.ticket_stat == false) && (
               <Accordion
                 expanded={expanded.panelVendetail}
                 onChange={e => {

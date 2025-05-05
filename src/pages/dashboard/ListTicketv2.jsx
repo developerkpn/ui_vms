@@ -25,6 +25,7 @@ import ProgressStat from "src/components/common/ProgressStat";
 import moment from "moment";
 import ListSAPProgress from "./ListSAPProgress";
 import useSessionStore from "src/store/useSessionStore";
+import SearchFieldComp from "src/components/common/SearchFieldComp";
 
 const overrides = {
   "& .MuiDataGrid-main": {},
@@ -48,6 +49,7 @@ function RefreshTable(props) {
 
 export default function ListTicket() {
   const permission = usePermissionStore(state => state.permission);
+  const [q, setQ] = useState("");
   const [perm, setPerm] = useState({
     Table: permission["Ticket Request"],
     INIT: permission["Initial Form"],
@@ -71,7 +73,12 @@ export default function ListTicket() {
   const bu_id = useSessionStore(state => state.bu_id);
 
   const showTicket = async controller => {
-    const response = await axiosPrivate.get(`/ticket?is_active=${filterAct}`, {
+    const URLQuery = new URLSearchParams();
+    URLQuery.append("is_active", filterAct);
+    if (q) {
+      URLQuery.append("q", q);
+    }
+    const response = await axiosPrivate.get(`/ticket?${URLQuery.toString()}`, {
       signal: controller.signal,
     });
     const result = response.data.data;
@@ -119,7 +126,9 @@ export default function ListTicket() {
     };
   }, [filterAct, deleted, refreshBtn]);
 
-  useEffect(() => {}, []);
+  useEffect(() => {
+    setRefreshbtn(true);
+  }, [q]);
 
   const handleOnClose = () => {
     setOpenmodal(false);
@@ -392,7 +401,7 @@ export default function ListTicket() {
       }}
     >
       <Box sx={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-        <Box sx={{ display: "flex", gap: 2, width: "100%" }}>
+        <Box sx={{ display: "flex", gap: 2, width: "100%", alignItems: "center" }}>
           <FormControl>
             <Select
               sx={{ width: "10em" }}
@@ -408,6 +417,7 @@ export default function ListTicket() {
               <MenuItem value={"SAP"}>O/S SAP Push</MenuItem>
             </Select>
           </FormControl>
+          <SearchFieldComp setQuery={setQ} placeholder={"Search Vendor Code or Ticket Number..."} />
           <RefreshTable
             setRefreshbtn={buttonRefreshAct}
             isLoading={refreshBtn}
