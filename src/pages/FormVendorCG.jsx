@@ -225,6 +225,7 @@ function FormVendorCG() {
     nama_pic: "",
     no_telf_pic: "",
     email_pic: "",
+    pic_jabatan: "",
     file_atth: {},
     bank: [],
   };
