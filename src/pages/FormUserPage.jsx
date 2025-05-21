@@ -58,29 +58,33 @@ export default function FormUserPage() {
   });
 
   const getUserData = async iduser => {
-    const userDt = await axiosPrivate.get(`/user/show/?iduser=${iduser}`);
-    const data = userDt.data.data;
-    if (data) {
-      setUserid(data.user_id);
-      if (data.role === "MGR") {
-        setisMgr(true);
+    try {
+      const userDt = await axiosPrivate.get(`/user/show/?iduser=${iduser}`);
+      const data = userDt.data.data;
+      if (data) {
+        setUserid(data.user_id);
+        if (data.role === "MGR") {
+          setisMgr(true);
+        }
+        reset({
+          manager: data.mgr_id,
+          fullname: data.fullname,
+          username: data.username,
+          usergroup: data.usergroup,
+          email: data.email,
+          role: data.role,
+          gender: data.gender,
+          bu_id: data.bu_id,
+          bu_id_1: data.bu_id_1,
+          bu_id_2: data.bu_id_2,
+          dept_id: data.dept_id,
+          emp_role_id: data.emp_role_id,
+          datecreated: dayjs(data.datecreated),
+          expireddate: dayjs(data.expireddate),
+        });
       }
-      reset({
-        manager: data.mgr_id,
-        fullname: data.fullname,
-        username: data.username,
-        usergroup: data.usergroup,
-        email: data.email,
-        role: data.role,
-        gender: data.gender,
-        bu_id: data.bu_id,
-        bu_id_1: data.bu_id_1,
-        bu_id_2: data.bu_id_2,
-        dept_id: data.dept_id,
-        emp_role_id: data.emp_role_id,
-        datecreated: dayjs(data.datecreated),
-        expireddate: dayjs(data.expireddate),
-      });
+    } catch (error) {
+      console.error(error);
     }
   };
 
@@ -206,6 +210,7 @@ export default function FormUserPage() {
     if (permission && !permission["User"]?.update && searchParams.get("iduser") !== user_id) {
       userid = user_id;
     }
+    console.log(userid);
     getUserData(userid);
   }, [location.state, permission]);
 
@@ -227,7 +232,7 @@ export default function FormUserPage() {
       emp_role_id: data.emp_role_id,
       gender: data.gender,
       createddate: data.datecreated.format("YYYY-MM-DD"),
-      expireddate: data.expireddate.format("YYYY-MM-DD"),
+      expireddate: data.expireddate ? data.expireddate.format("YYYY-MM-DD") : null,
     };
     if (getFieldState("password").isDirty) {
       subUserDt.password = data.password;
@@ -240,7 +245,7 @@ export default function FormUserPage() {
       if (permission && permission["User"]?.update) {
         navigate("../users");
       } else {
-        navigate("../ticket");
+        navigate("../");
       }
     } catch (error) {
       setBtnclicked(false);
@@ -315,17 +320,19 @@ export default function FormUserPage() {
                 rules={{ required: true }}
               />
             </Grid>
-            <Grid item xs={2}>
-              <SelectComp
-                name="gender"
-                options={[
-                  { value: "M", label: "Male" },
-                  { value: "F", label: "Female" },
-                ]}
-                control={control}
-                label="Gender"
-              />
-            </Grid>
+            {allowUpdate && location.state?.page !== "userinfo" && (
+              <Grid item xs={2}>
+                <SelectComp
+                  name="gender"
+                  options={[
+                    { value: "M", label: "Male" },
+                    { value: "F", label: "Female" },
+                  ]}
+                  control={control}
+                  label="Gender"
+                />
+              </Grid>
+            )}
           </Grid>
           {allowUpdate && location.state?.page !== "userinfo" && (
             <Grid container spacing={2}>

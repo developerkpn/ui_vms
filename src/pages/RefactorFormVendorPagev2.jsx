@@ -2693,7 +2693,7 @@ function RefactorFormVendorPage() {
                     handleSubmit(value => {
                       // console.log(value);
                       is_draft.current = false;
-                      if (isTender && ticketState === "CREA" && isValid) {
+                      if (isTender && emp_role_id == "PROC" && isValid) {
                         setConfOpen(true);
                       } else {
                         submitForm(value);
