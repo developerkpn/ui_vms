@@ -26,6 +26,7 @@ import moment from "moment";
 import ListSAPProgress from "./ListSAPProgress";
 import useSessionStore from "src/store/useSessionStore";
 import SearchFieldComp from "src/components/common/SearchFieldComp";
+import DialogFormConfirmation from "src/components/common/DialogFormConfirmation";
 
 const overrides = {
   "& .MuiDataGrid-main": {},
@@ -46,6 +47,10 @@ function RefreshTable(props) {
     </Tooltip>
   );
 }
+
+const TitleConfirDelete = ({ row }) => {
+  return <h4>Delete Confirmation {row.ticket_num}</h4>;
+};
 
 export default function ListTicket() {
   const permission = usePermissionStore(state => state.permission);
@@ -71,6 +76,9 @@ export default function ListTicket() {
   const emp_role_id = useSessionStore(state => state.emp_role_id);
   const dept_id = useSessionStore(state => state.dept_id);
   const bu_id = useSessionStore(state => state.bu_id);
+  const [modalConf, setModalConf] = useState(false);
+  const [deleteAction, setDeleteAction] = useState();
+  const [selectedRow, setSelectedRow] = useState();
 
   const showTicket = async controller => {
     const URLQuery = new URLSearchParams();
@@ -100,6 +108,7 @@ export default function ListTicket() {
       approval_pos: item.approval_pos,
       bu_id: item.bu_id,
       dept_id_ticket: item.dept_id_ticket,
+      emp_role_id: item.cur_pos,
     }));
     setTicket(load);
   };
@@ -166,6 +175,14 @@ export default function ListTicket() {
     }
   }, []);
 
+  const deleteActionFunc = async row => {
+    const deleteTicket = await axiosPrivate.delete(`/ticket/${row.id}`);
+    setDelete(!deleted);
+    setRefreshbtn(true);
+    alert(`Ticket ${deleteTicket.data.data} is deleted`);
+    setModalConf(false);
+  };
+
   const handleButtonAction = useCallback(
     (type, row) => async e => {
       try {
@@ -184,10 +201,8 @@ export default function ListTicket() {
             setBtn(false);
           }, 1000);
         } else if (type === "Delete") {
-          const deleteTicket = await axiosPrivate.delete(`/ticket/${row.id}`);
-          setDelete(!deleted);
-          setRefreshbtn(true);
-          alert(`Ticket ${deleteTicket.data.data} is deleted`);
+          setModalConf(true);
+          setSelectedRow(row);
         } else if (type === "Extend") {
           if (confirm("Are you sure want to extend ? (+1 day)")) {
             const extendTicket = await axiosPrivate.post(`/ticket/extexp`, {
@@ -338,7 +353,8 @@ export default function ListTicket() {
                 );
               }
             }
-            if (item.row.approval_pos == "0") {
+            if (item.row.approval_pos == "0" || item.row.emp_role_id == "STAFF") {
+              console.log(item.row);
               Buttons.push(
                 <Tooltip key={item.id} title="Delete Ticket">
                   <IconButton onClick={handleButtonAction("Delete", item.row)}>
@@ -492,6 +508,16 @@ export default function ListTicket() {
       <Backdrop sx={{ color: "#fff", zIndex: theme => theme.zIndex.drawer - 2 }} open={loader}>
         <CircularProgress color="inherit" />
       </Backdrop>
+      <DialogFormConfirmation
+        open={modalConf}
+        children={<></>}
+        onYes={deleteActionFunc}
+        onNo={() => {
+          setModalConf(false);
+        }}
+        values={selectedRow}
+        Title={<TitleConfirDelete row={selectedRow} />}
+      />
     </Box>
   );
 }
