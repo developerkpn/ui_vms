@@ -8,6 +8,7 @@ const VendorLandingPage = lazy(() => import("src/pages/vendor/VendorLandingPage"
 const VendorUsers = lazy(() => import("src/pages/vendor/VendorUsers"));
 const VerificationPage = lazy(() => import("src/pages/verification/VerificationPage"));
 const DirectFormCreateNew = lazy(() => import("src/pages/create_new/DirectFormCreateNew"));
+const LookupMaterials = lazy(() => import("src/pages/dashboard/LookupMaterials"));
 // import ErrorPage from '../pages/ErrorPage';
 // import Error404 from 'src/pages/Error404';
 // import LoginPage from 'src/pages/LoginPage';
@@ -159,6 +160,10 @@ export const routes = createBrowserRouter([
       {
         path: "esubmission",
         element: <ESubmissionDir />,
+      },
+      {
+        path: "materials/lookup",
+        element: <LookupMaterials />,
       },
     ],
   },
