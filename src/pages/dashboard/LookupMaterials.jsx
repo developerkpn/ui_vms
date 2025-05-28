@@ -25,8 +25,6 @@ import {
   MenuItem,
   Pagination,
   Select,
-  Tab,
-  Tabs,
   TextField,
   Tooltip,
   Typography,
@@ -46,7 +44,6 @@ export default function LookupMaterials() {
   const axiosPrivate = useAxiosPrivate();
   const [searchQuery, setSearchQuery] = useState("");
   const [materials, setMaterials] = useState([]);
-  const [activeTab, setActiveTab] = useState(0);
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState("");
   const [subGroups, setSubGroups] = useState([]);
@@ -55,7 +52,7 @@ export default function LookupMaterials() {
   const [error, setError] = useState(null);
   const [pagination, setPagination] = useState({
     page: 1,
-    pageSize: 10,
+    pageSize: 5,
     totalCount: 0,
     totalPages: 0,
   });
@@ -85,7 +82,8 @@ export default function LookupMaterials() {
     setError(null);
     try {
       const response = await axiosPrivate.get("/material/groups");
-      setGroups(response.data.data || []);
+      const groupsData = response.data.data || [];
+      setGroups(groupsData);
     } catch (error) {
       console.error("Failed to fetch groups:", error);
       setError("Failed to load material groups. Please try again.");
@@ -104,16 +102,60 @@ export default function LookupMaterials() {
     }
   }, [selectedGroup]);
 
-  // Fetch materials when a subgroup is selected
+  // Fetch initial materials and when search or filters change
   useEffect(() => {
-    if (selectedSubGroup) {
-      fetchMaterialsBySubGroup(selectedSubGroup);
-    } else if (selectedGroup && activeTab === 1) {
-      fetchMaterialsByGroup(selectedGroup);
-    } else if (activeTab === 1) {
-      setMaterials([]);
+    // Reset pagination when filters change
+    setPagination(prev => ({
+      ...prev,
+      page: 1,
+    }));
+
+    fetchMaterials(1);
+  }, [selectedSubGroup, selectedGroup, searchQuery]);
+
+  const fetchMaterials = (page = 1) => {
+    if (searchQuery) {
+      searchMaterials(searchQuery, page);
+    } else if (selectedGroup && selectedSubGroup) {
+      fetchMaterialsBySubGroup(selectedSubGroup, page);
+    } else if (selectedGroup) {
+      fetchMaterialsByGroup(selectedGroup, page);
+    } else {
+      searchMaterials("", page); // Call with empty string to get all materials
     }
-  }, [selectedSubGroup, selectedGroup]);
+  };
+
+  // Search materials using the search endpoint
+  const searchMaterials = useCallback(
+    debounce(async (term, page = 1) => {
+      setLoading(true);
+      setError(null);
+      try {
+        // Build the URL with or without search term
+        let url = `/material/search?page=${page}&pageSize=${pagination.pageSize}`;
+        if (term && term.trim() !== "") {
+          const encodedSearchTerm = encodeURIComponent(term.trim());
+          url += `&q=${encodedSearchTerm}`;
+        }
+
+        const response = await axiosPrivate.get(url);
+        setMaterials(response.data.data || []);
+        setPagination({
+          ...pagination,
+          page,
+          totalCount: response.data.pagination.totalCount,
+          totalPages: response.data.pagination.totalPages,
+        });
+      } catch (error) {
+        console.error("Search failed:", error);
+        setError("Failed to load materials. Please try again.");
+        setMaterials([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 500),
+    [pagination.pageSize, axiosPrivate]
+  );
 
   // Fetch subgroups
   const fetchSubGroups = async groupId => {
@@ -179,128 +221,36 @@ export default function LookupMaterials() {
     }
   };
 
-  // Search materials with debounce
-  const debouncedSearch = useCallback(
-    debounce(async (term, page = 1) => {
-      if (!term || term.trim() === "") {
-        setMaterials([]);
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-      try {
-        const encodedSearchTerm = encodeURIComponent(term.trim());
-        const response = await axiosPrivate.get(
-          `/material/search?q=${encodedSearchTerm}&page=${page}&pageSize=${pagination.pageSize}`
-        );
-        setMaterials(response.data.data || []);
-        setPagination({
-          ...pagination,
-          page,
-          totalCount: response.data.pagination.totalCount,
-          totalPages: response.data.pagination.totalPages,
-        });
-      } catch (error) {
-        console.error("Search failed:", error);
-        setError("Search failed. Please try again.");
-        setMaterials([]);
-      } finally {
-        setLoading(false);
-      }
-    }, 500),
-    [pagination.pageSize]
-  );
-
   // Handle page change
   const handlePageChange = (event, newPage) => {
-    if (activeTab === 0 && searchQuery) {
-      debouncedSearch(searchQuery, newPage);
-    } else if (activeTab === 1) {
-      if (selectedSubGroup) {
-        fetchMaterialsBySubGroup(selectedSubGroup, newPage);
-      } else if (selectedGroup) {
-        fetchMaterialsByGroup(selectedGroup, newPage);
-      }
-    }
+    fetchMaterials(newPage);
   };
 
   // Handle search input change
   const handleSearchChange = value => {
     setSearchQuery(value);
-
-    // Reset pagination to page 1 when search term changes
-    setPagination({
-      ...pagination,
-      page: 1,
-    });
-
-    // Don't clear results immediately when typing, just start loading state
-    if (value && value.trim() !== "") {
-      setLoading(true);
-    } else {
-      setMaterials([]);
-    }
-
-    debouncedSearch(value, 1); // Reset to page 1
-  };
-
-  // Handle tab change
-  const handleTabChange = (event, newValue) => {
-    setActiveTab(newValue);
-    setSearchQuery("");
-    setMaterials([]);
-
-    if (newValue === 0) {
-      // Reset selection when switching to search tab
-      setSelectedGroup("");
-      setSelectedSubGroup("");
-    } else {
-      // Fetch groups if needed when switching to browse tab
-      if (groups.length === 0) {
-        fetchGroups();
-      }
-    }
   };
 
   // Handle group selection
   const handleGroupSelect = groupId => {
     setSelectedGroup(groupId);
     setSelectedSubGroup(""); // Reset subgroup when group changes
-
-    // Reset pagination to page 1
-    setPagination({
-      ...pagination,
-      page: 1,
-    });
-
-    if (groupId === "") {
-      setMaterials([]);
-    }
   };
 
   // Handle subgroup selection
   const handleSubGroupSelect = subGroupId => {
     setSelectedSubGroup(subGroupId);
-
-    // Reset pagination to page 1
-    setPagination({
-      ...pagination,
-      page: 1,
-    });
   };
 
   // Handle clear group
   const handleClearGroup = () => {
     setSelectedGroup("");
     setSelectedSubGroup("");
-    setMaterials([]);
   };
 
   // Handle clear subgroup
   const handleClearSubgroup = () => {
     setSelectedSubGroup("");
-    setMaterials([]);
   };
 
   // Open attachments dialog
@@ -390,16 +340,8 @@ export default function LookupMaterials() {
         );
       }
 
-      // Refresh the materials list in the background
-      if (activeTab === 0 && searchQuery) {
-        debouncedSearch(searchQuery, pagination.page);
-      } else if (activeTab === 1) {
-        if (selectedSubGroup) {
-          fetchMaterialsBySubGroup(selectedSubGroup, pagination.page);
-        } else if (selectedGroup) {
-          fetchMaterialsByGroup(selectedGroup, pagination.page);
-        }
-      }
+      // Refresh the materials list
+      fetchMaterials(pagination.page);
     } catch (error) {
       console.error("Failed to upload attachments:", error);
       let errorMessage = "Failed to upload attachments. Please try again.";
@@ -449,16 +391,7 @@ export default function LookupMaterials() {
       await axiosPrivate.put(`/material/${selectedMaterial.id}/aliases`, aliases);
 
       // Refresh material data after update
-      if (activeTab === 0 && searchQuery) {
-        debouncedSearch(searchQuery, pagination.page);
-      } else if (activeTab === 1) {
-        if (selectedSubGroup) {
-          fetchMaterialsBySubGroup(selectedSubGroup, pagination.page);
-        } else if (selectedGroup) {
-          fetchMaterialsByGroup(selectedGroup, pagination.page);
-        }
-      }
-
+      fetchMaterials(pagination.page);
       handleCloseAliasDialog();
     } catch (error) {
       console.error("Failed to update aliases:", error);
@@ -592,17 +525,13 @@ export default function LookupMaterials() {
 
   // Determine if we should show "no results" message
   const showNoResultsMessage = () => {
-    return searchQuery.trim() !== "" && !loading && materials.length === 0;
+    const hasFilters = searchQuery.trim() !== "" || selectedGroup !== "" || selectedSubGroup !== "";
+    return hasFilters && !loading && materials.length === 0;
   };
 
   // Determine if we should show the table
   const showResultsTable = () => {
     return materials.length > 0;
-  };
-
-  // Determine if we should show the initial search prompt
-  const showSearchPrompt = () => {
-    return searchQuery.trim() === "" && !loading;
   };
 
   return (
@@ -614,166 +543,113 @@ export default function LookupMaterials() {
         width: "100%",
       }}
     >
-      <Box sx={{ mb: 3 }}>
-        <Tabs value={activeTab} onChange={handleTabChange}>
-          <Tab label="Search" />
-          <Tab label="Browse by Category" />
-        </Tabs>
-      </Box>
-
-      {activeTab === 0 && (
-        <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          <Box sx={{ display: "flex", gap: 2, alignItems: "center", mb: 3 }}>
+      <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mb: 3 }}>
+          {/* Search field */}
+          <Box sx={{ display: "flex", alignItems: "center" }}>
             <SearchFieldComp
               setQuery={handleSearchChange}
               placeholder="Search materials by name, code, description..."
             />
-            {loading && <CircularProgress size={24} />}
+            {loading && <CircularProgress size={24} sx={{ ml: 2 }} />}
           </Box>
 
-          {error && (
-            <Typography color="error" variant="body2" sx={{ mb: 2 }}>
-              {error}
-            </Typography>
-          )}
+          {/* Group selection */}
+          <Box sx={{ display: "flex", alignItems: "center" }}>
+            <FormControl sx={{ minWidth: 200 }}>
+              <Select
+                value={selectedGroup}
+                displayEmpty
+                onChange={e => handleGroupSelect(e.target.value)}
+              >
+                <MenuItem value="">
+                  <em>Select Material Group</em>
+                </MenuItem>
+                {groups.map(group => (
+                  <MenuItem key={group.id} value={group.id}>
+                    {group.code} - {group.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            {selectedGroup && (
+              <Tooltip title="Clear group selection">
+                <IconButton onClick={handleClearGroup} size="small" sx={{ ml: 1 }}>
+                  <Close fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
 
-          {showResultsTable() && (
-            <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1 }}>
-              <Box sx={{ flexGrow: 1 }}>
-                <TableSimple
-                  columns={columns}
-                  rowsData={materials}
-                  sx={{
-                    height: "100%",
-                    width: "100%",
-                  }}
-                />
-              </Box>
-              {pagination.totalPages > 1 && (
-                <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
-                  <Pagination
-                    count={pagination.totalPages}
-                    page={pagination.page}
-                    onChange={handlePageChange}
-                    color="primary"
-                  />
-                </Box>
-              )}
-            </Box>
-          )}
-
-          {!showResultsTable() && (
-            <Typography variant="body1" color="text.secondary">
-              {showNoResultsMessage()
-                ? "No materials found for your search. Try different keywords."
-                : showSearchPrompt()
-                ? "Enter a search term to find materials."
-                : null}
-            </Typography>
-          )}
-        </Box>
-      )}
-
-      {activeTab === 1 && (
-        <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          <Box sx={{ display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap", mb: 3 }}>
+          {/* Subgroup selection */}
+          {selectedGroup && (
             <Box sx={{ display: "flex", alignItems: "center" }}>
               <FormControl sx={{ minWidth: 200 }}>
                 <Select
-                  value={selectedGroup}
+                  value={selectedSubGroup}
                   displayEmpty
-                  onChange={e => handleGroupSelect(e.target.value)}
+                  onChange={e => handleSubGroupSelect(e.target.value)}
                 >
                   <MenuItem value="">
-                    <em>Select Material Group</em>
+                    <em>Select Subgroup</em>
                   </MenuItem>
-                  {groups.map(group => (
-                    <MenuItem key={group.id} value={group.id}>
-                      {group.code} - {group.name}
+                  {subGroups.map(subGroup => (
+                    <MenuItem key={subGroup.id} value={subGroup.id}>
+                      {subGroup.code} - {subGroup.name}
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
-              {selectedGroup && (
-                <Tooltip title="Clear group selection">
-                  <IconButton onClick={handleClearGroup} size="small" sx={{ ml: 1 }}>
+              {selectedSubGroup && (
+                <Tooltip title="Clear subgroup selection">
+                  <IconButton onClick={handleClearSubgroup} size="small" sx={{ ml: 1 }}>
                     <Close fontSize="small" />
                   </IconButton>
                 </Tooltip>
               )}
             </Box>
-
-            {selectedGroup && (
-              <Box sx={{ display: "flex", alignItems: "center" }}>
-                <FormControl sx={{ minWidth: 200 }}>
-                  <Select
-                    value={selectedSubGroup}
-                    displayEmpty
-                    onChange={e => handleSubGroupSelect(e.target.value)}
-                  >
-                    <MenuItem value="">
-                      <em>Select Subgroup</em>
-                    </MenuItem>
-                    {subGroups.map(subGroup => (
-                      <MenuItem key={subGroup.id} value={subGroup.id}>
-                        {subGroup.code} - {subGroup.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                {selectedSubGroup && (
-                  <Tooltip title="Clear subgroup selection">
-                    <IconButton onClick={handleClearSubgroup} size="small" sx={{ ml: 1 }}>
-                      <Close fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                )}
-              </Box>
-            )}
-
-            {loading && <CircularProgress size={24} />}
-          </Box>
-
-          {error && (
-            <Typography color="error" variant="body2" sx={{ mb: 2 }}>
-              {error}
-            </Typography>
-          )}
-
-          {materials.length > 0 ? (
-            <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1 }}>
-              <Box sx={{ flexGrow: 1 }}>
-                <TableSimple
-                  columns={columns}
-                  rowsData={materials}
-                  sx={{
-                    height: "100%",
-                    width: "100%",
-                  }}
-                />
-              </Box>
-              {pagination.totalPages > 1 && (
-                <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
-                  <Pagination
-                    count={pagination.totalPages}
-                    page={pagination.page}
-                    onChange={handlePageChange}
-                    color="primary"
-                  />
-                </Box>
-              )}
-            </Box>
-          ) : (
-            <Typography variant="body1" color="text.secondary">
-              {selectedGroup && !loading
-                ? selectedSubGroup
-                  ? "No materials found in this subgroup."
-                  : "No materials found in this group."
-                : "Select a group to view materials. You can further filter by subgroup."}
-            </Typography>
           )}
         </Box>
-      )}
+
+        {error && (
+          <Typography color="error" variant="body2" sx={{ mb: 2 }}>
+            {error}
+          </Typography>
+        )}
+
+        {showResultsTable() && (
+          <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1 }}>
+            <Box sx={{ flexGrow: 1 }}>
+              <TableSimple
+                columns={columns}
+                rowsData={materials}
+                sx={{
+                  height: "100%",
+                  width: "100%",
+                }}
+              />
+            </Box>
+            {pagination.totalPages > 1 && (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
+                <Pagination
+                  count={pagination.totalPages}
+                  page={pagination.page}
+                  onChange={handlePageChange}
+                  color="primary"
+                />
+              </Box>
+            )}
+          </Box>
+        )}
+
+        {!showResultsTable() && !loading && (
+          <Typography variant="body1" color="text.secondary">
+            {showNoResultsMessage()
+              ? "No materials found. Try different search terms or filters."
+              : "Loading materials..."}
+          </Typography>
+        )}
+      </Box>
 
       {/* Attachments Dialog */}
       <Dialog
