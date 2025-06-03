@@ -1,13 +1,6 @@
+import { Add, DeleteOutline, Edit, FileDownload, FileUpload } from "@mui/icons-material";
 import {
-  Close,
-  Edit,
-  Image,
-  InsertDriveFile,
-  PictureAsPdf,
-  Upload,
-  Visibility,
-} from "@mui/icons-material";
-import {
+  Alert,
   Box,
   Button,
   CircularProgress,
@@ -15,26 +8,17 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
-  FormControl,
   IconButton,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  MenuItem,
   Pagination,
-  Select,
+  Paper,
+  Snackbar,
   TextField,
-  Tooltip,
   Typography,
 } from "@mui/material";
 import { createColumnHelper } from "@tanstack/react-table";
-import { debounce } from "lodash";
-import moment from "moment";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import SearchFieldComp from "src/components/common/SearchFieldComp";
-import TooltipButton from "src/components/common/TooltipButton";
 import TableSimple from "src/components/table/TableSimple";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 
@@ -42,48 +26,49 @@ const columnHelper = createColumnHelper();
 
 export default function LookupMaterials() {
   const axiosPrivate = useAxiosPrivate();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
-  const [materials, setMaterials] = useState([]);
   const [groups, setGroups] = useState([]);
-  const [selectedGroup, setSelectedGroup] = useState("");
-  const [subGroups, setSubGroups] = useState([]);
-  const [selectedSubGroup, setSelectedSubGroup] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [pagination, setPagination] = useState({
     page: 1,
-    pageSize: 5,
+    pageSize: 10,
     totalCount: 0,
     totalPages: 0,
   });
-  const [attachmentsDialogOpen, setAttachmentsDialogOpen] = useState(false);
-  const [selectedMaterial, setSelectedMaterial] = useState(null);
-  const [uploadFiles, setUploadFiles] = useState([]);
-  const [uploadLoading, setUploadLoading] = useState(false);
-  const [aliasDialogOpen, setAliasDialogOpen] = useState(false);
-  const [aliases, setAliases] = useState({
-    alias1: "",
-    alias2: "",
-    alias3: "",
-  });
-  const [aliasLoading, setAliasLoading] = useState(false);
-  const [previewModalOpen, setPreviewModalOpen] = useState(false);
-  const [previewFile, setPreviewFile] = useState(null);
-  const fileInputRef = useRef(null);
+
+  const excelFileInputRef = useRef(null);
+  const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+  const [newGroup, setNewGroup] = useState({ code: "", name: "" });
+  const [editMode, setEditMode] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
+  const [importStats, setImportStats] = useState(null);
 
   // Fetch groups on component mount
   useEffect(() => {
     fetchGroups();
-  }, []);
+    console.log("rerender");
+  }, [pagination.page, searchQuery]);
 
   // Fetch groups
   const fetchGroups = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axiosPrivate.get("/material/groups");
-      const groupsData = response.data.data || [];
-      setGroups(groupsData);
+      let url = `/material/groups?page=${pagination.page}&pageSize=${pagination.pageSize}`;
+      if (searchQuery) {
+        url += `&q=${encodeURIComponent(searchQuery)}`;
+      }
+
+      const response = await axiosPrivate.get(url);
+      console.log(response.data);
+      setGroups(response.data.data || []);
+      setPagination({
+        ...pagination,
+        totalCount: response.data.pagination.totalCount,
+        totalPages: response.data.pagination.totalPages,
+      });
     } catch (error) {
       console.error("Failed to fetch groups:", error);
       setError("Failed to load material groups. Please try again.");
@@ -92,447 +77,308 @@ export default function LookupMaterials() {
     }
   };
 
-  // Fetch subgroups when a group is selected
-  useEffect(() => {
-    if (selectedGroup) {
-      fetchSubGroups(selectedGroup);
-    } else {
-      setSubGroups([]);
-      setSelectedSubGroup("");
-    }
-  }, [selectedGroup]);
-
-  // Fetch initial materials and when search or filters change
-  useEffect(() => {
-    // Reset pagination when filters change
-    setPagination(prev => ({
-      ...prev,
-      page: 1,
-    }));
-
-    fetchMaterials(1);
-  }, [selectedSubGroup, selectedGroup, searchQuery]);
-
-  const fetchMaterials = (page = 1) => {
-    if (searchQuery) {
-      searchMaterials(searchQuery, page);
-    } else if (selectedGroup && selectedSubGroup) {
-      fetchMaterialsBySubGroup(selectedSubGroup, page);
-    } else if (selectedGroup) {
-      fetchMaterialsByGroup(selectedGroup, page);
-    } else {
-      searchMaterials("", page); // Call with empty string to get all materials
-    }
+  // Show snackbar message
+  const showSnackbar = (message, severity = "success") => {
+    setSnackbar({ open: true, message, severity });
   };
 
-  // Search materials using the search endpoint
-  const searchMaterials = useCallback(
-    debounce(async (term, page = 1) => {
-      setLoading(true);
-      setError(null);
-      try {
-        // Build the URL with or without search term
-        let url = `/material/search?page=${page}&pageSize=${pagination.pageSize}`;
-        if (term && term.trim() !== "") {
-          const encodedSearchTerm = encodeURIComponent(term.trim());
-          url += `&q=${encodedSearchTerm}`;
-        }
-
-        const response = await axiosPrivate.get(url);
-        setMaterials(response.data.data || []);
-        setPagination({
-          ...pagination,
-          page,
-          totalCount: response.data.pagination.totalCount,
-          totalPages: response.data.pagination.totalPages,
-        });
-      } catch (error) {
-        console.error("Search failed:", error);
-        setError("Failed to load materials. Please try again.");
-        setMaterials([]);
-      } finally {
-        setLoading(false);
-      }
-    }, 500),
-    [pagination.pageSize, axiosPrivate]
-  );
-
-  // Fetch subgroups
-  const fetchSubGroups = async groupId => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await axiosPrivate.get(`/material/groups/${groupId}/subgroups`);
-      setSubGroups(response.data.data || []);
-    } catch (error) {
-      console.error("Failed to fetch subgroups:", error);
-      setError("Failed to load subgroups. Please try again.");
-      setSubGroups([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fetch materials by group
-  const fetchMaterialsByGroup = async (groupId, page = 1) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await axiosPrivate.get(
-        `/material/groups/${groupId}/materials?page=${page}&pageSize=${pagination.pageSize}`
-      );
-      setMaterials(response.data.data || []);
-      setPagination({
-        ...pagination,
-        page,
-        totalCount: response.data.pagination.totalCount,
-        totalPages: response.data.pagination.totalPages,
-      });
-    } catch (error) {
-      console.error("Failed to fetch materials by group:", error);
-      setError("Failed to load materials. Please try again.");
-      setMaterials([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fetch materials by subgroup
-  const fetchMaterialsBySubGroup = async (subGroupId, page = 1) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await axiosPrivate.get(
-        `/material/subgroups/${subGroupId}/materials?page=${page}&pageSize=${pagination.pageSize}`
-      );
-      setMaterials(response.data.data || []);
-      setPagination({
-        ...pagination,
-        page,
-        totalCount: response.data.pagination.totalCount,
-        totalPages: response.data.pagination.totalPages,
-      });
-    } catch (error) {
-      console.error("Failed to fetch materials:", error);
-      setError("Failed to load materials. Please try again.");
-      setMaterials([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Handle page change
-  const handlePageChange = (event, newPage) => {
-    fetchMaterials(newPage);
+  // Handle snackbar close
+  const handleSnackbarClose = () => {
+    setSnackbar({ ...snackbar, open: false });
   };
 
   // Handle search input change
   const handleSearchChange = value => {
     setSearchQuery(value);
+    setPagination({ ...pagination, page: 1 }); // Reset to first page on new search
   };
 
-  // Handle group selection
-  const handleGroupSelect = groupId => {
-    setSelectedGroup(groupId);
-    setSelectedSubGroup(""); // Reset subgroup when group changes
+  // Handle page change
+  const handlePageChange = (event, newPage) => {
+    setPagination(prev => ({ ...prev, page: newPage }));
   };
 
-  // Handle subgroup selection
-  const handleSubGroupSelect = subGroupId => {
-    setSelectedSubGroup(subGroupId);
-  };
-
-  // Handle clear group
-  const handleClearGroup = () => {
-    setSelectedGroup("");
-    setSelectedSubGroup("");
-  };
-
-  // Handle clear subgroup
-  const handleClearSubgroup = () => {
-    setSelectedSubGroup("");
-  };
-
-  // Open attachments dialog
-  const handleOpenAttachmentsDialog = async material => {
+  // Export groups to Excel
+  const handleExportToExcel = async () => {
     setLoading(true);
-    setSelectedMaterial(material);
-    setAttachmentsDialogOpen(true);
-
     try {
-      // Get the latest attachments
-      const attachmentsResponse = await axiosPrivate.get(`/material/${material.id}/attachments`);
-
-      // Update the selected material with fresh attachments
-      setSelectedMaterial({
-        ...material,
-        attachments: attachmentsResponse.data.data || [],
+      const response = await axiosPrivate.get("/material/groups/export", {
+        responseType: "blob",
       });
+
+      // Create a URL for the blob
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+
+      // Create a temporary link element
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "material_groups.xlsx");
+
+      // Append link to the body
+      document.body.appendChild(link);
+
+      // Trigger download
+      link.click();
+
+      // Clean up
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+
+      showSnackbar("Material groups exported successfully");
     } catch (error) {
-      console.error("Error fetching attachments:", error);
-      // Keep using the attachments from the material object if fetch fails
+      console.error("Export failed:", error);
+      showSnackbar("Failed to export material groups", "error");
     } finally {
       setLoading(false);
     }
   };
 
-  // Close attachments dialog
-  const handleCloseAttachmentsDialog = () => {
-    setAttachmentsDialogOpen(false);
-    setSelectedMaterial(null);
+  // Handle Excel file selection for import
+  const handleExcelFileSelect = () => {
+    excelFileInputRef.current.click();
   };
 
-  // Handle file selection
-  const handleFileSelect = event => {
-    setUploadFiles(Array.from(event.target.files));
-  };
+  // Import groups from Excel
+  const handleImportFromExcel = async event => {
+    const file = event.target.files[0];
+    if (!file) return;
 
-  // Trigger file input click
-  const handleBrowseClick = () => {
-    fileInputRef.current.click();
-  };
-
-  // Upload attachments
-  const handleUploadAttachments = async () => {
-    if (!selectedMaterial || uploadFiles.length === 0) return;
-
-    setUploadLoading(true);
-    setError(null); // Clear any previous errors
+    setLoading(true);
 
     try {
+      console.log("Importing file:", file.name, "Size:", file.size, "Type:", file.type);
       const formData = new FormData();
-      uploadFiles.forEach(file => {
-        formData.append("files", file);
-      });
+      formData.append("file", file); // This name must match what the backend expects
 
-      await axiosPrivate.post(`/material/${selectedMaterial.id}/attachments`, formData, {
+      // Log formData contents for debugging
+      console.log("FormData contents:");
+      for (let pair of formData.entries()) {
+        console.log(pair[0], pair[1]);
+      }
+
+      const response = await axiosPrivate.post("/material/groups/import", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
       });
 
-      // Clear the selected files after successful upload
-      setUploadFiles([]);
+      console.log("Import response:", response.data);
 
-      // Fetch the updated material details and attachments separately
-      try {
-        // Get the material details
-        const materialResponse = await axiosPrivate.get(`/material/${selectedMaterial.id}`);
+      // Display import stats
+      setImportStats(response.data.data);
 
-        // Get the attachments using the dedicated endpoint
-        const attachmentsResponse = await axiosPrivate.get(
-          `/material/${selectedMaterial.id}/attachments`
-        );
+      // Refresh groups
+      fetchGroups();
 
-        // Create a complete updated material object with the latest attachments
-        const updatedMaterial = {
-          ...materialResponse.data.data,
-          attachments: attachmentsResponse.data.data || [],
-        };
-
-        // Update the selected material with all details including fresh attachments
-        setSelectedMaterial(updatedMaterial);
-      } catch (fetchError) {
-        console.error("Error fetching updated material:", fetchError);
-        // Even if refresh fails, show a success message for the upload
-        setError(
-          "Upload successful, but couldn't refresh attachment list. Please close and reopen."
-        );
-      }
-
-      // Refresh the materials list
-      fetchMaterials(pagination.page);
+      showSnackbar("Material groups imported successfully");
     } catch (error) {
-      console.error("Failed to upload attachments:", error);
-      let errorMessage = "Failed to upload attachments. Please try again.";
-
-      if (error.response && error.response.data && error.response.data.message) {
-        errorMessage = error.response.data.message;
+      console.error("Import failed:", error);
+      // More detailed error logging
+      if (error.response) {
+        console.error("Error response:", {
+          status: error.response.status,
+          data: error.response.data,
+          headers: error.response.headers,
+        });
+      } else if (error.request) {
+        console.error("Error request:", error.request);
+      } else {
+        console.error("Error message:", error.message);
       }
-
-      setError(errorMessage);
+      showSnackbar(error.response?.data?.message || "Failed to import material groups", "error");
     } finally {
-      setUploadLoading(false);
+      setLoading(false);
+      // Reset the file input
+      event.target.value = null;
     }
   };
 
-  // Open alias dialog
-  const handleOpenAliasDialog = material => {
-    setSelectedMaterial(material);
-    setAliases({
-      alias1: material.alias1 || "",
-      alias2: material.alias2 || "",
-      alias3: material.alias3 || "",
-    });
-    setAliasDialogOpen(true);
+  // Open group dialog
+  const handleOpenGroupDialog = (group = null) => {
+    if (group) {
+      setNewGroup({ id: group.id, code: group.code, name: group.name });
+      setEditMode(true);
+    } else {
+      setNewGroup({ code: "", name: "" });
+      setEditMode(false);
+    }
+    setGroupDialogOpen(true);
   };
 
-  // Close alias dialog
-  const handleCloseAliasDialog = () => {
-    setAliasDialogOpen(false);
-    setSelectedMaterial(null);
+  // Close group dialog
+  const handleCloseGroupDialog = () => {
+    setGroupDialogOpen(false);
+    setNewGroup({ code: "", name: "" });
+    setEditMode(false);
   };
 
-  // Handle alias change
-  const handleAliasChange = event => {
+  // Handle input change for group form
+  const handleInputChange = event => {
     const { name, value } = event.target;
-    setAliases(prev => ({
-      ...prev,
-      [name]: value,
-    }));
+    setNewGroup(prev => ({ ...prev, [name]: value }));
   };
 
-  // Update aliases
-  const handleUpdateAliases = async () => {
-    if (!selectedMaterial) return;
+  // Create or update group
+  const handleSaveGroup = async () => {
+    if (!newGroup.code || !newGroup.name) {
+      showSnackbar("Group code and name are required", "error");
+      return;
+    }
 
-    setAliasLoading(true);
+    setLoading(true);
+
     try {
-      await axiosPrivate.put(`/material/${selectedMaterial.id}/aliases`, aliases);
+      let response;
 
-      // Refresh material data after update
-      fetchMaterials(pagination.page);
-      handleCloseAliasDialog();
+      if (editMode) {
+        // Update existing group
+        response = await axiosPrivate.put(`/material/groups/${newGroup.id}`, newGroup);
+        showSnackbar("Group updated successfully");
+      } else {
+        // Create new group
+        response = await axiosPrivate.post("/material/groups", newGroup);
+        showSnackbar("Group created successfully");
+      }
+
+      // Refresh groups
+      fetchGroups();
+      handleCloseGroupDialog();
     } catch (error) {
-      console.error("Failed to update aliases:", error);
-      setError("Failed to update aliases. Please try again.");
+      console.error("Group save failed:", error);
+      showSnackbar(error.response?.data?.message || "Failed to save group", "error");
     } finally {
-      setAliasLoading(false);
+      setLoading(false);
     }
   };
 
-  // Get icon for file type
-  const getFileIcon = fileType => {
-    if (!fileType) return <InsertDriveFile />;
-
-    const type = fileType.toLowerCase();
-
-    if (type.includes("pdf")) return <PictureAsPdf color="error" />;
+  // Delete group
+  const handleDeleteGroup = async groupId => {
     if (
-      type.includes("jpg") ||
-      type.includes("jpeg") ||
-      type.includes("png") ||
-      type.includes("gif") ||
-      type.includes("image")
-    )
-      return <Image color="primary" />;
+      !window.confirm("Are you sure you want to delete this group? This action cannot be undone.")
+    ) {
+      return;
+    }
 
-    return <InsertDriveFile />;
+    setLoading(true);
+
+    try {
+      await axiosPrivate.delete(`/material/groups/${groupId}`);
+      showSnackbar("Group deleted successfully");
+
+      // Refresh groups
+      fetchGroups();
+    } catch (error) {
+      console.error("Group delete failed:", error);
+      showSnackbar(error.response?.data?.message || "Failed to delete group", "error");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Open attachment in a preview modal
-  const handleViewAttachment = attachment => {
-    // Create a URL to the file using the new streaming endpoint
-    const fileUrl = `${import.meta.env.VITE_URL_LOC}/material/file/${attachment.attachment}`;
-
-    // Set the file to preview and open the modal
-    setPreviewFile({
-      url: fileUrl,
-      name: attachment.attachment,
-      type: attachment.type || attachment.fileType || "application/octet-stream",
+  // Navigate to subgroups page
+  const handleViewSubgroups = group => {
+    navigate(`/dashboard/subgroups/${group.id}`, {
+      state: {
+        groupName: group.name,
+        groupCode: group.code,
+      },
     });
-    setPreviewModalOpen(true);
   };
 
-  // Table columns
-  const columns = useMemo(
-    () => [
-      columnHelper.accessor("fullCode", {
-        header: "Code",
-        cell: ({ getValue, row }) => {
-          return getValue() || "-";
-        },
-      }),
-      columnHelper.accessor("name", {
-        header: "Material Name",
-        cell: ({ getValue }) => getValue() || "-",
-      }),
-      columnHelper.accessor("description", {
-        header: "Description",
-        cell: ({ getValue }) => getValue() || "-",
-      }),
-      columnHelper.accessor(
-        row => ({
-          groupCode: row.groupCode,
-          groupName: row.groupName,
-        }),
-        {
-          id: "group",
-          header: "Group",
-          cell: ({ getValue }) => {
-            const group = getValue();
-            return group && group.groupCode && group.groupName
-              ? `${group.groupCode} - ${group.groupName}`
-              : "-";
-          },
-        }
+  // Table columns definition
+  const columns = [
+    {
+      id: "code",
+      label: "Code",
+      header: "Code",
+      accessorKey: "code",
+      cell: info => (
+        <Box
+          component="span"
+          sx={{
+            fontWeight: "medium",
+          }}
+        >
+          {info.getValue()}
+        </Box>
       ),
-      columnHelper.accessor(
-        row => ({
-          subGroupCode: row.subGroupCode,
-          subGroupName: row.subGroupName,
-        }),
-        {
-          id: "subgroup",
-          header: "Subgroup",
-          cell: ({ getValue }) => {
-            const subgroup = getValue();
-            return subgroup && subgroup.subGroupCode && subgroup.subGroupName
-              ? `${subgroup.subGroupCode} - ${subgroup.subGroupName}`
-              : "-";
-          },
-        }
+    },
+    {
+      id: "name",
+      label: "Group Name",
+      header: "Group Name",
+      accessorKey: "name",
+      cell: info => {
+        const row = info.row.original;
+        return (
+          <Box
+            component="span"
+            sx={{
+              fontWeight: "medium",
+              cursor: "pointer",
+              color: "primary.main",
+              "&:hover": {
+                textDecoration: "underline",
+              },
+            }}
+            onClick={() => handleViewSubgroups(row)}
+          >
+            {info.getValue()}
+          </Box>
+        );
+      },
+    },
+    {
+      id: "subgroups_count",
+      label: "Subgroups",
+      header: "Subgroups",
+      accessorKey: "subgroups_count",
+      cell: info => (
+        <Box
+          component="span"
+          sx={{
+            textAlign: "center",
+          }}
+        >
+          {info.getValue() || 0}
+        </Box>
       ),
-      columnHelper.accessor("created_at", {
-        header: "Created At",
-        cell: ({ getValue }) => (getValue() ? moment(getValue()).format("YYYY-MM-DD") : "-"),
-      }),
-      columnHelper.accessor("updated_at", {
-        header: "Updated At",
-        cell: ({ getValue }) => (getValue() ? moment(getValue()).format("YYYY-MM-DD") : "-"),
-      }),
-      columnHelper.display({
-        header: "Actions",
-        id: "actions",
-        cell: ({ row }) => {
-          const material = row.original;
-          const hasAttachments = material.attachments && material.attachments.length > 0;
-
-          return (
-            <Box sx={{ display: "flex", gap: 1 }}>
-              <TooltipButton
-                Icon={<Visibility />}
-                TooltipText={
-                  hasAttachments
-                    ? `View Attachments (${material.attachments.length})`
-                    : "View & Upload Attachments"
-                }
-                OnClick={() => handleOpenAttachmentsDialog(material)}
-                sx={!hasAttachments ? { opacity: 0.8 } : {}}
-              />
-              <TooltipButton
-                Icon={<Edit />}
-                TooltipText="Edit Aliases"
-                OnClick={() => handleOpenAliasDialog(material)}
-              />
-            </Box>
-          );
-        },
-      }),
-    ],
-    []
-  );
-
-  // Determine if we should show "no results" message
-  const showNoResultsMessage = () => {
-    const hasFilters = searchQuery.trim() !== "" || selectedGroup !== "" || selectedSubGroup !== "";
-    return hasFilters && !loading && materials.length === 0;
-  };
-
-  // Determine if we should show the table
-  const showResultsTable = () => {
-    return materials.length > 0;
-  };
+    },
+    {
+      id: "materials_count",
+      label: "Materials",
+      header: "Materials",
+      accessorKey: "materials_count",
+      cell: info => (
+        <Box
+          component="span"
+          sx={{
+            textAlign: "center",
+          }}
+        >
+          {info.getValue() || 0}
+        </Box>
+      ),
+    },
+    {
+      id: "actions",
+      label: "Actions",
+      header: "Actions",
+      cell: info => {
+        const row = info.row.original;
+        return (
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <IconButton size="small" onClick={() => handleOpenGroupDialog(row)} color="primary">
+              <Edit fontSize="small" />
+            </IconButton>
+            <IconButton size="small" onClick={() => handleDeleteGroup(row.id)} color="error">
+              <DeleteOutline fontSize="small" />
+            </IconButton>
+          </Box>
+        );
+      },
+    },
+  ];
 
   return (
     <Box
@@ -543,348 +389,172 @@ export default function LookupMaterials() {
         width: "100%",
       }}
     >
-      <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mb: 3 }}>
-          {/* Search field */}
-          <Box sx={{ display: "flex", alignItems: "center" }}>
-            <SearchFieldComp
-              setQuery={handleSearchChange}
-              placeholder="Search materials by name, code, description..."
-            />
-            {loading && <CircularProgress size={24} sx={{ ml: 2 }} />}
-          </Box>
-
-          {/* Group selection */}
-          <Box sx={{ display: "flex", alignItems: "center" }}>
-            <FormControl sx={{ minWidth: 200 }}>
-              <Select
-                value={selectedGroup}
-                displayEmpty
-                onChange={e => handleGroupSelect(e.target.value)}
-              >
-                <MenuItem value="">
-                  <em>Select Material Group</em>
-                </MenuItem>
-                {groups.map(group => (
-                  <MenuItem key={group.id} value={group.id}>
-                    {group.code} - {group.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            {selectedGroup && (
-              <Tooltip title="Clear group selection">
-                <IconButton onClick={handleClearGroup} size="small" sx={{ ml: 1 }}>
-                  <Close fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            )}
-          </Box>
-
-          {/* Subgroup selection */}
-          {selectedGroup && (
-            <Box sx={{ display: "flex", alignItems: "center" }}>
-              <FormControl sx={{ minWidth: 200 }}>
-                <Select
-                  value={selectedSubGroup}
-                  displayEmpty
-                  onChange={e => handleSubGroupSelect(e.target.value)}
-                >
-                  <MenuItem value="">
-                    <em>Select Subgroup</em>
-                  </MenuItem>
-                  {subGroups.map(subGroup => (
-                    <MenuItem key={subGroup.id} value={subGroup.id}>
-                      {subGroup.code} - {subGroup.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              {selectedSubGroup && (
-                <Tooltip title="Clear subgroup selection">
-                  <IconButton onClick={handleClearSubgroup} size="small" sx={{ ml: 1 }}>
-                    <Close fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              )}
-            </Box>
-          )}
+      {/* Header section with Excel import/export */}
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+        <Box sx={{ flexGrow: 1, mr: 2 }}>
+          <SearchFieldComp setQuery={handleSearchChange} placeholder="Search material groups..." />
         </Box>
+        <Box sx={{ display: "flex", gap: 1, flexShrink: 0 }}>
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => handleOpenGroupDialog()}
+            sx={{ py: 1 }}
+          >
+            Add Group
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<FileDownload />}
+            onClick={handleExportToExcel}
+            disabled={loading}
+            sx={{ py: 1 }}
+          >
+            Export to Excel
+          </Button>
+          <Button
+            variant="contained"
+            color="secondary"
+            startIcon={<FileUpload />}
+            onClick={handleExcelFileSelect}
+            disabled={loading}
+            sx={{ py: 1 }}
+          >
+            Import from Excel
+          </Button>
+          <input
+            type="file"
+            ref={excelFileInputRef}
+            style={{ display: "none" }}
+            onChange={handleImportFromExcel}
+            accept=".xlsx,.xls"
+          />
+        </Box>
+      </Box>
 
+      {importStats && (
+        <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
+          <Typography variant="body2" sx={{ fontWeight: "bold" }}>
+            Import Results: {importStats.total} rows processed
+          </Typography>
+          <Typography variant="body2">{importStats.createdInfo}</Typography>
+          <Typography variant="body2">{importStats.updatedInfo}</Typography>
+          {importStats.skippedInfo && (
+            <Typography variant="body2">{importStats.skippedInfo}</Typography>
+          )}
+          {importStats.errorsCount > 0 && (
+            <Typography variant="body2" color="error">
+              Errors: {importStats.errorsCount}
+            </Typography>
+          )}
+        </Alert>
+      )}
+
+      {/* Main content area */}
+      <Box sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
         {error && (
           <Typography color="error" variant="body2" sx={{ mb: 2 }}>
             {error}
           </Typography>
         )}
 
-        {showResultsTable() && (
-          <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1 }}>
-            <Box sx={{ flexGrow: 1 }}>
-              <TableSimple
-                columns={columns}
-                rowsData={materials}
-                sx={{
-                  height: "100%",
-                  width: "100%",
-                }}
+        {groups.length > 0 ? (
+          <>
+            <TableSimple
+              columns={columns}
+              rowsData={groups}
+              sx={{
+                height: "100%",
+                width: "100%",
+              }}
+            />
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                py: 2,
+                gap: 2,
+                alignItems: "center",
+              }}
+            >
+              <Pagination
+                count={pagination.totalPages}
+                page={pagination.page}
+                onChange={handlePageChange}
+                color="primary"
+                disabled={pagination.totalPages <= 1}
+                size="large"
               />
             </Box>
-            {pagination.totalPages > 1 && (
-              <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
-                <Pagination
-                  count={pagination.totalPages}
-                  page={pagination.page}
-                  onChange={handlePageChange}
-                  color="primary"
-                />
-              </Box>
-            )}
-          </Box>
-        )}
-
-        {!showResultsTable() && !loading && (
-          <Typography variant="body1" color="text.secondary">
-            {showNoResultsMessage()
-              ? "No materials found. Try different search terms or filters."
-              : "Loading materials..."}
-          </Typography>
+          </>
+        ) : (
+          <Paper
+            elevation={1}
+            sx={{
+              p: 3,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              height: "100%",
+              backgroundColor: "background.default",
+            }}
+          >
+            <Typography variant="body1" color="text.secondary">
+              {loading ? (
+                <Box sx={{ display: "flex", alignItems: "center" }}>
+                  <CircularProgress size={20} sx={{ mr: 1 }} />
+                  Loading groups...
+                </Box>
+              ) : (
+                "No material groups found. Use the 'Add Group' button to create one."
+              )}
+            </Typography>
+          </Paper>
         )}
       </Box>
 
-      {/* Attachments Dialog */}
-      <Dialog
-        open={attachmentsDialogOpen}
-        onClose={handleCloseAttachmentsDialog}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <Typography variant="h6">
-              Attachments for {selectedMaterial?.name || "Material"}
-            </Typography>
-            <IconButton onClick={handleCloseAttachmentsDialog}>
-              <Close />
-            </IconButton>
-          </Box>
-        </DialogTitle>
-        <Divider />
-        <DialogContent>
-          {selectedMaterial && (
-            <>
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mb: 3 }}>
-                <Typography variant="body1">
-                  Upload new attachments. Supported formats: PDF, DOC, DOCX, PNG, JPG, JPEG.
-                </Typography>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                  <Button variant="outlined" startIcon={<Upload />} onClick={handleBrowseClick}>
-                    Browse Files
-                  </Button>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    style={{ display: "none" }}
-                    multiple
-                    onChange={handleFileSelect}
-                    accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
-                  />
-                  <Typography variant="body2">
-                    {uploadFiles.length > 0
-                      ? `${uploadFiles.length} file(s) selected`
-                      : "No files selected"}
-                  </Typography>
-                  {uploadFiles.length > 0 && (
-                    <Button
-                      variant="contained"
-                      startIcon={uploadLoading ? <CircularProgress size={20} /> : <Upload />}
-                      onClick={handleUploadAttachments}
-                      disabled={uploadLoading}
-                    >
-                      {uploadLoading ? "Uploading..." : "Upload"}
-                    </Button>
-                  )}
-                </Box>
-                {uploadFiles.length > 0 && (
-                  <List dense>
-                    {uploadFiles.map((file, index) => (
-                      <ListItem key={index}>
-                        <ListItemIcon>{getFileIcon(file.type)}</ListItemIcon>
-                        <ListItemText
-                          primary={file.name}
-                          secondary={`${(file.size / 1024 / 1024).toFixed(2)} MB`}
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                )}
-                <Divider />
-              </Box>
-
-              {error && (
-                <Box sx={{ mb: 2 }}>
-                  <Typography color="error" variant="body2">
-                    {error}
-                  </Typography>
-                </Box>
-              )}
-
-              <Typography variant="h6" sx={{ mb: 1 }}>
-                Existing Attachments
-              </Typography>
-              {selectedMaterial.attachments && selectedMaterial.attachments.length > 0 ? (
-                <List>
-                  {selectedMaterial.attachments.map((attachment, index) => (
-                    <ListItem
-                      key={attachment.id || index}
-                      secondaryAction={
-                        <IconButton
-                          edge="end"
-                          onClick={() => handleViewAttachment(attachment)}
-                          title="Preview file"
-                        >
-                          <Visibility />
-                        </IconButton>
-                      }
-                    >
-                      <ListItemIcon>
-                        {getFileIcon(attachment.type || attachment.fileType)}
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={attachment.attachment}
-                        secondary={attachment.type || attachment.fileType || "Unknown file type"}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              ) : (
-                <Box sx={{ display: "flex", justifyContent: "center", p: 3 }}>
-                  <Typography variant="body1" color="text.secondary">
-                    No attachments available for this material.
-                  </Typography>
-                </Box>
-              )}
-            </>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseAttachmentsDialog}>Close</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Alias Edit Dialog */}
-      <Dialog open={aliasDialogOpen} onClose={handleCloseAliasDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <Typography variant="h6">
-              Edit Aliases for {selectedMaterial?.name || "Material"}
-            </Typography>
-            <IconButton onClick={handleCloseAliasDialog}>
-              <Close />
-            </IconButton>
-          </Box>
-        </DialogTitle>
-        <Divider />
+      {/* Group Dialog */}
+      <Dialog open={groupDialogOpen} onClose={handleCloseGroupDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>{editMode ? "Edit Material Group" : "Add Material Group"}</DialogTitle>
         <DialogContent>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
             <TextField
-              label="Alias 1"
-              name="alias1"
+              label="Group Code"
+              name="code"
               fullWidth
-              value={aliases.alias1}
-              onChange={handleAliasChange}
+              value={newGroup.code}
+              onChange={handleInputChange}
+              required
             />
             <TextField
-              label="Alias 2"
-              name="alias2"
+              label="Group Name"
+              name="name"
               fullWidth
-              value={aliases.alias2}
-              onChange={handleAliasChange}
-            />
-            <TextField
-              label="Alias 3"
-              name="alias3"
-              fullWidth
-              value={aliases.alias3}
-              onChange={handleAliasChange}
+              value={newGroup.name}
+              onChange={handleInputChange}
+              required
             />
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button
-            variant="contained"
-            startIcon={<Edit />}
-            onClick={handleUpdateAliases}
-            disabled={aliasLoading}
-          >
-            {aliasLoading ? <CircularProgress size={24} /> : "Save Changes"}
+          <Button onClick={handleCloseGroupDialog}>Cancel</Button>
+          <Button variant="contained" onClick={handleSaveGroup} disabled={loading}>
+            {loading ? <CircularProgress size={24} /> : editMode ? "Update" : "Save"}
           </Button>
-          <Button onClick={handleCloseAliasDialog}>Cancel</Button>
         </DialogActions>
       </Dialog>
 
-      {/* File Preview Modal */}
-      <Dialog
-        open={previewModalOpen}
-        onClose={() => setPreviewModalOpen(false)}
-        maxWidth="lg"
-        fullWidth
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
       >
-        <DialogTitle>
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <Typography variant="h6">{previewFile?.name || "File Preview"}</Typography>
-            <IconButton onClick={() => setPreviewModalOpen(false)}>
-              <Close />
-            </IconButton>
-          </Box>
-        </DialogTitle>
-        <Divider />
-        <DialogContent
-          sx={{
-            height: "70vh",
-            p: 0,
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          {previewFile &&
-            (previewFile.type.includes("image") ? (
-              <img
-                src={previewFile.url}
-                alt={previewFile.name}
-                style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
-              />
-            ) : previewFile.type.includes("pdf") ? (
-              <iframe
-                src={previewFile.url}
-                title={previewFile.name}
-                width="100%"
-                height="100%"
-                style={{ border: "none" }}
-              />
-            ) : (
-              <Box sx={{ textAlign: "center", p: 3 }}>
-                <Typography variant="body1" gutterBottom>
-                  This file type cannot be previewed directly.
-                </Typography>
-                <Button variant="contained" href={previewFile.url} target="_blank" sx={{ mt: 2 }}>
-                  Open File
-                </Button>
-              </Box>
-            ))}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPreviewModalOpen(false)}>Close</Button>
-          <Button
-            variant="contained"
-            href={previewFile?.url}
-            download={previewFile?.name}
-            disabled={!previewFile}
-          >
-            Download
-          </Button>
-        </DialogActions>
-      </Dialog>
+        <Alert onClose={handleSnackbarClose} severity={snackbar.severity} sx={{ width: "100%" }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
