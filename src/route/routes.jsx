@@ -11,6 +11,7 @@ const DirectFormCreateNew = lazy(() => import("src/pages/create_new/DirectFormCr
 const LookupMaterials = lazy(() => import("src/pages/dashboard/LookupMaterials"));
 const Subgroups = lazy(() => import("src/pages/dashboard/SubgroupMaterial"));
 const Materials = lazy(() => import("src/pages/dashboard/MaterialDetail"));
+const SearchMaterials = lazy(() => import("src/pages/dashboard/SearchMaterials"));
 // import ErrorPage from '../pages/ErrorPage';
 // import Error404 from 'src/pages/Error404';
 // import LoginPage from 'src/pages/LoginPage';
@@ -174,6 +175,10 @@ export const routes = createBrowserRouter([
       {
         path: "materials/:subgroupId",
         element: <Materials />,
+      },
+      {
+        path: "materials/search",
+        element: <SearchMaterials />,
       },
     ],
   },
