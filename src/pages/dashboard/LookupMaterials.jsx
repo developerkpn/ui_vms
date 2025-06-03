@@ -43,7 +43,9 @@ export default function LookupMaterials() {
   const [newGroup, setNewGroup] = useState({ code: "", name: "" });
   const [editMode, setEditMode] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
-  const [importStats, setImportStats] = useState(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [groupToDelete, setGroupToDelete] = useState(null);
 
   // Fetch groups on component mount
   useEffect(() => {
@@ -90,7 +92,7 @@ export default function LookupMaterials() {
   // Handle search input change
   const handleSearchChange = value => {
     setSearchQuery(value);
-    setPagination({ ...pagination, page: 1 }); // Reset to first page on new search
+    setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page on new search
   };
 
   // Handle page change
@@ -102,7 +104,7 @@ export default function LookupMaterials() {
   const handleExportToExcel = async () => {
     setLoading(true);
     try {
-      const response = await axiosPrivate.get("/material/groups/export", {
+      const response = await axiosPrivate.get("/material/groups/export/only", {
         responseType: "blob",
       });
 
@@ -112,7 +114,7 @@ export default function LookupMaterials() {
       // Create a temporary link element
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", "material_groups.xlsx");
+      link.setAttribute("download", "groups.xlsx");
 
       // Append link to the body
       document.body.appendChild(link);
@@ -124,10 +126,10 @@ export default function LookupMaterials() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(link);
 
-      showSnackbar("Material groups exported successfully");
+      showSnackbar("Groups exported successfully");
     } catch (error) {
       console.error("Export failed:", error);
-      showSnackbar("Failed to export material groups", "error");
+      showSnackbar("Failed to export groups", "error");
     } finally {
       setLoading(false);
     }
@@ -138,12 +140,13 @@ export default function LookupMaterials() {
     excelFileInputRef.current.click();
   };
 
-  // Import groups from Excel
+  // Import materials from Excel
   const handleImportFromExcel = async event => {
     const file = event.target.files[0];
     if (!file) return;
 
     setLoading(true);
+    setImportLoading(true);
 
     try {
       console.log("Importing file:", file.name, "Size:", file.size, "Type:", file.type);
@@ -164,13 +167,10 @@ export default function LookupMaterials() {
 
       console.log("Import response:", response.data);
 
-      // Display import stats
-      setImportStats(response.data.data);
-
       // Refresh groups
       fetchGroups();
 
-      showSnackbar("Material groups imported successfully");
+      showSnackbar("Groups imported successfully");
     } catch (error) {
       console.error("Import failed:", error);
       // More detailed error logging
@@ -185,9 +185,10 @@ export default function LookupMaterials() {
       } else {
         console.error("Error message:", error.message);
       }
-      showSnackbar(error.response?.data?.message || "Failed to import material groups", "error");
+      showSnackbar(error.response?.data?.message || "Failed to import groups", "error");
     } finally {
       setLoading(false);
+      setImportLoading(false);
       // Reset the file input
       event.target.value = null;
     }
@@ -253,16 +254,18 @@ export default function LookupMaterials() {
 
   // Delete group
   const handleDeleteGroup = async groupId => {
-    if (
-      !window.confirm("Are you sure you want to delete this group? This action cannot be undone.")
-    ) {
-      return;
-    }
+    setGroupToDelete(groupId);
+    setDeleteDialogOpen(true);
+  };
+
+  // Confirm group deletion
+  const confirmDeleteGroup = async () => {
+    if (!groupToDelete) return;
 
     setLoading(true);
 
     try {
-      await axiosPrivate.delete(`/material/groups/${groupId}`);
+      await axiosPrivate.delete(`/material/groups/${groupToDelete}`);
       showSnackbar("Group deleted successfully");
 
       // Refresh groups
@@ -272,7 +275,15 @@ export default function LookupMaterials() {
       showSnackbar(error.response?.data?.message || "Failed to delete group", "error");
     } finally {
       setLoading(false);
+      setDeleteDialogOpen(false);
+      setGroupToDelete(null);
     }
+  };
+
+  // Cancel delete operation
+  const cancelDelete = () => {
+    setDeleteDialogOpen(false);
+    setGroupToDelete(null);
   };
 
   // Navigate to subgroups page
@@ -290,23 +301,35 @@ export default function LookupMaterials() {
     {
       id: "code",
       label: "Code",
-      header: "Code",
-      accessorKey: "code",
-      cell: info => (
-        <Box
-          component="span"
-          sx={{
-            fontWeight: "medium",
-          }}
-        >
-          {info.getValue()}
-        </Box>
+      header: () => (
+        <Box sx={{ display: "flex", justifyContent: "flex-start", width: "100%" }}>Code</Box>
       ),
+      accessorKey: "code",
+      cell: info => {
+        const row = info.row.original;
+        return (
+          <Box
+            component="span"
+            sx={{
+              fontWeight: "medium",
+              display: "flex",
+              justifyContent: "flex-start",
+              width: "100%",
+              cursor: "pointer",
+            }}
+            onClick={() => handleViewSubgroups(row)}
+          >
+            {info.getValue()}
+          </Box>
+        );
+      },
     },
     {
       id: "name",
       label: "Group Name",
-      header: "Group Name",
+      header: () => (
+        <Box sx={{ display: "flex", justifyContent: "flex-start", width: "100%" }}>Group Name</Box>
+      ),
       accessorKey: "name",
       cell: info => {
         const row = info.row.original;
@@ -315,11 +338,11 @@ export default function LookupMaterials() {
             component="span"
             sx={{
               fontWeight: "medium",
-              cursor: "pointer",
               color: "primary.main",
-              "&:hover": {
-                textDecoration: "underline",
-              },
+              display: "flex",
+              justifyContent: "flex-start",
+              width: "100%",
+              cursor: "pointer",
             }}
             onClick={() => handleViewSubgroups(row)}
           >
@@ -331,47 +354,70 @@ export default function LookupMaterials() {
     {
       id: "subgroups_count",
       label: "Subgroups",
-      header: "Subgroups",
-      accessorKey: "subgroups_count",
-      cell: info => (
-        <Box
-          component="span"
-          sx={{
-            textAlign: "center",
-          }}
-        >
-          {info.getValue() || 0}
-        </Box>
+      header: () => (
+        <Box sx={{ display: "flex", justifyContent: "center", width: "100%" }}>Subgroups</Box>
       ),
+      accessorKey: "subgroups_count",
+      cell: info => {
+        const row = info.row.original;
+        return (
+          <Box
+            component="span"
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              width: "100%",
+              cursor: "pointer",
+            }}
+            onClick={() => handleViewSubgroups(row)}
+          >
+            {info.getValue() || 0}
+          </Box>
+        );
+      },
     },
     {
       id: "materials_count",
       label: "Materials",
-      header: "Materials",
-      accessorKey: "materials_count",
-      cell: info => (
-        <Box
-          component="span"
-          sx={{
-            textAlign: "center",
-          }}
-        >
-          {info.getValue() || 0}
-        </Box>
+      header: () => (
+        <Box sx={{ display: "flex", justifyContent: "center", width: "100%" }}>Materials</Box>
       ),
+      accessorKey: "materials_count",
+      cell: info => {
+        const row = info.row.original;
+        return (
+          <Box
+            component="span"
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              width: "100%",
+              cursor: "pointer",
+            }}
+            onClick={() => handleViewSubgroups(row)}
+          >
+            {info.getValue() || 0}
+          </Box>
+        );
+      },
     },
     {
       id: "actions",
       label: "Actions",
-      header: "Actions",
+      header: () => (
+        <Box sx={{ display: "flex", justifyContent: "flex-end", width: "100%" }}>Actions</Box>
+      ),
       cell: info => {
         const row = info.row.original;
         return (
-          <Box sx={{ display: "flex", gap: 1 }}>
-            <IconButton size="small" onClick={() => handleOpenGroupDialog(row)} color="primary">
+          <Box
+            sx={{ display: "flex", gap: 1, justifyContent: "flex-end", width: "100%" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <IconButton size="small" onClick={e => handleOpenGroupDialog(row)} color="primary">
               <Edit fontSize="small" />
             </IconButton>
-            <IconButton size="small" onClick={() => handleDeleteGroup(row.id)} color="error">
+            <IconButton size="small" onClick={e => handleDeleteGroup(row.id)} color="error">
               <DeleteOutline fontSize="small" />
             </IconButton>
           </Box>
@@ -410,17 +456,19 @@ export default function LookupMaterials() {
             disabled={loading}
             sx={{ py: 1 }}
           >
-            Export to Excel
+            Export Groups
           </Button>
           <Button
             variant="contained"
             color="secondary"
-            startIcon={<FileUpload />}
+            startIcon={
+              importLoading ? <CircularProgress size={20} color="inherit" /> : <FileUpload />
+            }
             onClick={handleExcelFileSelect}
-            disabled={loading}
+            disabled={loading || importLoading}
             sx={{ py: 1 }}
           >
-            Import from Excel
+            {importLoading ? "Importing..." : "Import Groups"}
           </Button>
           <input
             type="file"
@@ -431,24 +479,6 @@ export default function LookupMaterials() {
           />
         </Box>
       </Box>
-
-      {importStats && (
-        <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
-          <Typography variant="body2" sx={{ fontWeight: "bold" }}>
-            Import Results: {importStats.total} rows processed
-          </Typography>
-          <Typography variant="body2">{importStats.createdInfo}</Typography>
-          <Typography variant="body2">{importStats.updatedInfo}</Typography>
-          {importStats.skippedInfo && (
-            <Typography variant="body2">{importStats.skippedInfo}</Typography>
-          )}
-          {importStats.errorsCount > 0 && (
-            <Typography variant="body2" color="error">
-              Errors: {importStats.errorsCount}
-            </Typography>
-          )}
-        </Alert>
-      )}
 
       {/* Main content area */}
       <Box sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
@@ -466,6 +496,18 @@ export default function LookupMaterials() {
               sx={{
                 height: "100%",
                 width: "100%",
+                "& .MuiTableRow-root": {
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                },
+                "& .MuiTableRow-root:hover": {
+                  backgroundColor: "rgba(0, 0, 0, 0.04)",
+                  transform: "translateY(-2px)",
+                  boxShadow: "0 4px 8px rgba(0, 0, 0, 0.05)",
+                },
+                "& .MuiTableCell-root": {
+                  transition: "all 0.2s ease",
+                },
               }}
             />
             <Box
@@ -540,6 +582,24 @@ export default function LookupMaterials() {
           <Button onClick={handleCloseGroupDialog}>Cancel</Button>
           <Button variant="contained" onClick={handleSaveGroup} disabled={loading}>
             {loading ? <CircularProgress size={24} /> : editMode ? "Update" : "Save"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onClose={cancelDelete} maxWidth="sm">
+        <DialogTitle>Confirm Deletion</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1">
+            Are you sure you want to delete this group? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cancelDelete} color="primary">
+            Cancel
+          </Button>
+          <Button onClick={confirmDeleteGroup} color="error" variant="contained">
+            Delete
           </Button>
         </DialogActions>
       </Dialog>

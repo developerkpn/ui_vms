@@ -72,6 +72,8 @@ export default function Materials() {
   const [previewFile, setPreviewFile] = useState(null);
   const fileInputRef = useRef(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
+  const [deleteAttachmentDialogOpen, setDeleteAttachmentDialogOpen] = useState(false);
+  const [attachmentToDelete, setAttachmentToDelete] = useState(null);
 
   // Fetch materials on component mount
   useEffect(() => {
@@ -342,23 +344,25 @@ export default function Materials() {
   const handleDeleteAttachment = async attachment => {
     if (!attachment || !attachment.id) return;
 
-    if (
-      !window.confirm(
-        "Are you sure you want to delete this attachment? This action cannot be undone."
-      )
-    ) {
-      return;
-    }
+    setAttachmentToDelete(attachment);
+    setDeleteAttachmentDialogOpen(true);
+  };
+
+  // Confirm attachment deletion
+  const confirmDeleteAttachment = async () => {
+    if (!attachmentToDelete || !attachmentToDelete.id) return;
 
     setUploadLoading(true);
     setError(null);
 
     try {
-      await axiosPrivate.delete(`/material/attachments/${attachment.id}`);
+      await axiosPrivate.delete(`/material/attachments/${attachmentToDelete.id}`);
 
       // Update the selected material by removing the deleted attachment
       if (selectedMaterial && selectedMaterial.attachments) {
-        const updatedAttachments = selectedMaterial.attachments.filter(a => a.id !== attachment.id);
+        const updatedAttachments = selectedMaterial.attachments.filter(
+          a => a.id !== attachmentToDelete.id
+        );
 
         setSelectedMaterial({
           ...selectedMaterial,
@@ -382,7 +386,24 @@ export default function Materials() {
       showSnackbar(errorMessage, "error");
     } finally {
       setUploadLoading(false);
+      setDeleteAttachmentDialogOpen(false);
+      setAttachmentToDelete(null);
     }
+  };
+
+  // Cancel delete operation
+  const cancelDeleteAttachment = () => {
+    setDeleteAttachmentDialogOpen(false);
+    setAttachmentToDelete(null);
+  };
+
+  // Remove file from upload list
+  const handleRemoveUploadFile = index => {
+    setUploadFiles(prevFiles => {
+      const newFiles = [...prevFiles];
+      newFiles.splice(index, 1);
+      return newFiles;
+    });
   };
 
   // Table columns definition
@@ -557,7 +578,7 @@ export default function Materials() {
           to="/dashboard/materials/lookup"
           underline="hover"
           color="text.primary"
-          sx={{ fontWeight: "medium" }}
+          sx={{ fontWeight: "medium", color: "primary.main" }}
         >
           Material Groups
         </Link>
@@ -567,7 +588,7 @@ export default function Materials() {
           state={{ groupName, groupCode }}
           underline="hover"
           color="text.primary"
-          sx={{ fontWeight: "medium" }}
+          sx={{ fontWeight: "medium", color: "primary.main" }}
         >
           {groupCode && groupName ? `${groupCode} - ${groupName}` : "Subgroups"}
         </Link>
@@ -580,16 +601,6 @@ export default function Materials() {
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
         <Box sx={{ flexGrow: 1, mr: 2 }}>
           <SearchFieldComp setQuery={handleSearchChange} placeholder="Search materials..." />
-        </Box>
-        <Box sx={{ display: "flex", gap: 1, flexShrink: 0 }}>
-          <Button
-            variant="outlined"
-            startIcon={<ArrowBack />}
-            onClick={handleBackToSubgroups}
-            sx={{ py: 1 }}
-          >
-            Back to Subgroups
-          </Button>
         </Box>
       </Box>
 
@@ -680,7 +691,7 @@ export default function Materials() {
               <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mb: 3 }}>
                 <Typography variant="body1">
                   Upload new attachments. Supported formats: PDF, DOC, DOCX, PNG, JPG, JPEG.
-                  <Box component="span" sx={{ fontWeight: "bold", color: "warning.main", ml: 1 }}>
+                  <Box component="span" sx={{ fontWeight: "bold", color: "primary.main", ml: 1 }}>
                     Maximum 3 attachments allowed per material.
                   </Box>
                 </Typography>
@@ -729,7 +740,20 @@ export default function Materials() {
                     {uploadFiles.length > 0 && (
                       <List dense>
                         {uploadFiles.map((file, index) => (
-                          <ListItem key={index}>
+                          <ListItem
+                            key={index}
+                            secondaryAction={
+                              <IconButton
+                                edge="end"
+                                onClick={() => handleRemoveUploadFile(index)}
+                                title="Remove file"
+                                color="error"
+                                size="small"
+                              >
+                                <Delete fontSize="small" />
+                              </IconButton>
+                            }
+                          >
                             <ListItemIcon>{getFileIcon(file.type)}</ListItemIcon>
                             <ListItemText
                               primary={file.name}
@@ -912,6 +936,30 @@ export default function Materials() {
             disabled={!previewFile}
           >
             Download
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Attachment Confirmation Dialog */}
+      <Dialog open={deleteAttachmentDialogOpen} onClose={cancelDeleteAttachment} maxWidth="sm">
+        <DialogTitle>Confirm Attachment Deletion</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1">Are you sure you want to delete this attachment?</Typography>
+          {attachmentToDelete && (
+            <Typography variant="body2" sx={{ mt: 1, fontWeight: "medium" }}>
+              {attachmentToDelete.attachment}
+            </Typography>
+          )}
+          <Typography variant="body2" color="error" sx={{ mt: 2 }}>
+            This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cancelDeleteAttachment} color="primary">
+            Cancel
+          </Button>
+          <Button onClick={confirmDeleteAttachment} color="error" variant="contained">
+            Delete
           </Button>
         </DialogActions>
       </Dialog>

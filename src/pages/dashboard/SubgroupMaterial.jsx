@@ -43,6 +43,7 @@ export default function Subgroups() {
   const navigate = useNavigate();
   const axiosPrivate = useAxiosPrivate();
   const { groupName, groupCode } = location.state || {};
+  const excelFileInputRef = useRef(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [subgroups, setSubgroups] = useState([]);
@@ -62,10 +63,9 @@ export default function Subgroups() {
   const [loadingGroups, setLoadingGroups] = useState(false);
   const [groupFilterValue, setGroupFilterValue] = useState("");
   const [groupFetchRetry, setGroupFetchRetry] = useState(0);
-
-  // Add state variables for Excel file handling
-  const excelFileInputRef = useRef(null);
-  const [importStats, setImportStats] = useState(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [subgroupToDelete, setSubgroupToDelete] = useState(null);
 
   // Fetch subgroups on component mount
   useEffect(() => {
@@ -159,7 +159,7 @@ export default function Subgroups() {
   // Handle search input change
   const handleSearchChange = value => {
     setSearchQuery(value);
-    setPagination({ ...pagination, page: 1 }); // Reset to first page on new search
+    setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page on new search
   };
 
   // Handle page change
@@ -277,18 +277,18 @@ export default function Subgroups() {
 
   // Delete subgroup
   const handleDeleteSubgroup = async subgroupId => {
-    if (
-      !window.confirm(
-        "Are you sure you want to delete this subgroup? This action cannot be undone."
-      )
-    ) {
-      return;
-    }
+    setSubgroupToDelete(subgroupId);
+    setDeleteDialogOpen(true);
+  };
+
+  // Confirm subgroup deletion
+  const confirmDeleteSubgroup = async () => {
+    if (!subgroupToDelete) return;
 
     setLoading(true);
 
     try {
-      await axiosPrivate.delete(`/material/subgroups/${subgroupId}`);
+      await axiosPrivate.delete(`/material/subgroups/${subgroupToDelete}`);
       showSnackbar("Subgroup deleted successfully");
 
       // Refresh subgroups
@@ -298,7 +298,15 @@ export default function Subgroups() {
       showSnackbar(error.response?.data?.message || "Failed to delete subgroup", "error");
     } finally {
       setLoading(false);
+      setDeleteDialogOpen(false);
+      setSubgroupToDelete(null);
     }
+  };
+
+  // Cancel delete operation
+  const cancelDelete = () => {
+    setDeleteDialogOpen(false);
+    setSubgroupToDelete(null);
   };
 
   // Navigate to materials page
@@ -319,11 +327,12 @@ export default function Subgroups() {
     navigate("/dashboard/materials/lookup");
   };
 
-  // Export subgroups to Excel
-  const handleExportToExcel = async () => {
+  // Add function to export subgroups
+  const handleExportSubgroups = async () => {
     setLoading(true);
     try {
-      const response = await axiosPrivate.get("/material/subgroups/export", {
+      // Export only subgroups for this group
+      const response = await axiosPrivate.get(`/material/subgroups/export/${groupId}`, {
         responseType: "blob",
       });
 
@@ -333,7 +342,7 @@ export default function Subgroups() {
       // Create a temporary link element
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", "material_subgroups.xlsx");
+      link.setAttribute("download", `subgroups_for_${groupCode || groupId}.xlsx`);
 
       // Append link to the body
       document.body.appendChild(link);
@@ -345,37 +354,32 @@ export default function Subgroups() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(link);
 
-      showSnackbar("Material subgroups exported successfully");
+      showSnackbar("Subgroups exported successfully");
     } catch (error) {
       console.error("Export failed:", error);
-      showSnackbar("Failed to export material subgroups", "error");
+      showSnackbar("Failed to export subgroups", "error");
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle Excel file selection for import
+  // Add function to handle Excel file selection for import
   const handleExcelFileSelect = () => {
     excelFileInputRef.current.click();
   };
 
-  // Import subgroups from Excel
+  // Add function to import subgroups from Excel
   const handleImportFromExcel = async event => {
     const file = event.target.files[0];
     if (!file) return;
 
     setLoading(true);
+    setImportLoading(true);
 
     try {
       console.log("Importing file:", file.name, "Size:", file.size, "Type:", file.type);
       const formData = new FormData();
-      formData.append("file", file); // This name must match what the backend expects
-
-      // Log formData contents for debugging
-      console.log("FormData contents:");
-      for (let pair of formData.entries()) {
-        console.log(pair[0], pair[1]);
-      }
+      formData.append("file", file);
 
       const response = await axiosPrivate.post("/material/subgroups/import", formData, {
         headers: {
@@ -385,16 +389,12 @@ export default function Subgroups() {
 
       console.log("Import response:", response.data);
 
-      // Display import stats
-      setImportStats(response.data.data);
-
       // Refresh subgroups
       fetchSubgroups();
 
-      showSnackbar("Material subgroups imported successfully");
+      showSnackbar("Subgroups imported successfully");
     } catch (error) {
       console.error("Import failed:", error);
-      // More detailed error logging
       if (error.response) {
         console.error("Error response:", {
           status: error.response.status,
@@ -406,9 +406,10 @@ export default function Subgroups() {
       } else {
         console.error("Error message:", error.message);
       }
-      showSnackbar(error.response?.data?.message || "Failed to import material subgroups", "error");
+      showSnackbar(error.response?.data?.message || "Failed to import subgroups", "error");
     } finally {
       setLoading(false);
+      setImportLoading(false);
       // Reset the file input
       event.target.value = null;
     }
@@ -419,23 +420,37 @@ export default function Subgroups() {
     {
       id: "code",
       label: "Code",
-      header: "Code",
-      accessorKey: "code",
-      cell: info => (
-        <Box
-          component="span"
-          sx={{
-            fontWeight: "medium",
-          }}
-        >
-          {info.getValue()}
-        </Box>
+      header: () => (
+        <Box sx={{ display: "flex", justifyContent: "flex-start", width: "100%" }}>Code</Box>
       ),
+      accessorKey: "code",
+      cell: info => {
+        const row = info.row.original;
+        return (
+          <Box
+            component="span"
+            sx={{
+              fontWeight: "medium",
+              display: "flex",
+              justifyContent: "flex-start",
+              width: "100%",
+              cursor: "pointer",
+            }}
+            onClick={() => handleViewMaterials(row)}
+          >
+            {info.getValue()}
+          </Box>
+        );
+      },
     },
     {
       id: "name",
       label: "Subgroup Name",
-      header: "Subgroup Name",
+      header: () => (
+        <Box sx={{ display: "flex", justifyContent: "flex-start", width: "100%" }}>
+          Subgroup Name
+        </Box>
+      ),
       accessorKey: "name",
       cell: info => {
         const row = info.row.original;
@@ -444,11 +459,11 @@ export default function Subgroups() {
             component="span"
             sx={{
               fontWeight: "medium",
-              cursor: "pointer",
               color: "primary.main",
-              "&:hover": {
-                textDecoration: "underline",
-              },
+              display: "flex",
+              justifyContent: "flex-start",
+              width: "100%",
+              cursor: "pointer",
             }}
             onClick={() => handleViewMaterials(row)}
           >
@@ -460,31 +475,45 @@ export default function Subgroups() {
     {
       id: "materials_count",
       label: "Materials",
-      header: "Materials",
-      accessorKey: "materials_count",
-      cell: info => (
-        <Box
-          component="span"
-          sx={{
-            textAlign: "center",
-          }}
-        >
-          {info.getValue() || 0}
-        </Box>
+      header: () => (
+        <Box sx={{ display: "flex", justifyContent: "center", width: "100%" }}>Materials</Box>
       ),
+      accessorKey: "materials_count",
+      cell: info => {
+        const row = info.row.original;
+        return (
+          <Box
+            component="span"
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              width: "100%",
+              cursor: "pointer",
+            }}
+            onClick={() => handleViewMaterials(row)}
+          >
+            {info.getValue() || 0}
+          </Box>
+        );
+      },
     },
     {
       id: "actions",
       label: "Actions",
-      header: "Actions",
+      header: () => (
+        <Box sx={{ display: "flex", justifyContent: "flex-end", width: "100%" }}>Actions</Box>
+      ),
       cell: info => {
         const row = info.row.original;
         return (
-          <Box sx={{ display: "flex", gap: 1 }}>
-            <IconButton size="small" onClick={() => handleOpenSubgroupDialog(row)} color="primary">
+          <Box
+            sx={{ display: "flex", gap: 1, justifyContent: "flex-end", width: "100%" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <IconButton size="small" onClick={e => handleOpenSubgroupDialog(row)} color="primary">
               <Edit fontSize="small" />
             </IconButton>
-            <IconButton size="small" onClick={() => handleDeleteSubgroup(row.id)} color="error">
+            <IconButton size="small" onClick={e => handleDeleteSubgroup(row.id)} color="error">
               <DeleteOutline fontSize="small" />
             </IconButton>
           </Box>
@@ -525,7 +554,7 @@ export default function Subgroups() {
           to="/dashboard/materials/lookup"
           underline="hover"
           color="text.primary"
-          sx={{ fontWeight: "medium" }}
+          sx={{ fontWeight: "medium", color: "primary.main" }}
         >
           Material Groups
         </Link>
@@ -546,34 +575,27 @@ export default function Subgroups() {
             onClick={() => handleOpenSubgroupDialog()}
             sx={{ py: 1 }}
           >
-            Add Subgroup
+            Add
           </Button>
           <Button
             variant="outlined"
-            startIcon={<ArrowBack />}
-            onClick={handleBackToGroups}
-            sx={{ py: 1 }}
-          >
-            Back to Groups
-          </Button>
-          <Button
-            variant="contained"
             startIcon={<FileDownload />}
-            onClick={handleExportToExcel}
-            disabled={loading}
+            onClick={handleExportSubgroups}
             sx={{ py: 1 }}
           >
-            Export to Excel
+            Export Subgroups
           </Button>
           <Button
-            variant="contained"
+            variant="outlined"
             color="secondary"
-            startIcon={<FileUpload />}
+            startIcon={
+              importLoading ? <CircularProgress size={20} color="inherit" /> : <FileUpload />
+            }
             onClick={handleExcelFileSelect}
-            disabled={loading}
+            disabled={loading || importLoading}
             sx={{ py: 1 }}
           >
-            Import from Excel
+            {importLoading ? "Importing..." : "Import Subgroups"}
           </Button>
           <input
             type="file"
@@ -593,26 +615,6 @@ export default function Subgroups() {
           </Typography>
         )}
 
-        {importStats && (
-          <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
-            <Typography variant="body2" sx={{ fontWeight: "bold" }}>
-              Import Results: {importStats.total} rows processed
-            </Typography>
-            <Typography variant="body2">Created: {importStats.created} new subgroups</Typography>
-            <Typography variant="body2">
-              Updated: {importStats.updated} existing subgroups
-            </Typography>
-            {importStats.skippedInfo && (
-              <Typography variant="body2">{importStats.skippedInfo}</Typography>
-            )}
-            {importStats.errorsCount > 0 && (
-              <Typography variant="body2" color="error">
-                Errors: {importStats.errorsCount}
-              </Typography>
-            )}
-          </Alert>
-        )}
-
         {subgroups.length > 0 ? (
           <>
             <TableSimple
@@ -621,6 +623,18 @@ export default function Subgroups() {
               sx={{
                 height: "100%",
                 width: "100%",
+                "& .MuiTableRow-root": {
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                },
+                "& .MuiTableRow-root:hover": {
+                  backgroundColor: "rgba(0, 0, 0, 0.04)",
+                  transform: "translateY(-2px)",
+                  boxShadow: "0 4px 8px rgba(0, 0, 0, 0.05)",
+                },
+                "& .MuiTableCell-root": {
+                  transition: "all 0.2s ease",
+                },
               }}
             />
             <Box
@@ -788,6 +802,24 @@ export default function Subgroups() {
           <Button onClick={handleCloseSubgroupDialog}>Cancel</Button>
           <Button variant="contained" onClick={handleSaveSubgroup} disabled={loading}>
             {loading ? <CircularProgress size={24} /> : editMode ? "Update" : "Save"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onClose={cancelDelete} maxWidth="sm">
+        <DialogTitle>Confirm Deletion</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1">
+            Are you sure you want to delete this subgroup? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cancelDelete} color="primary">
+            Cancel
+          </Button>
+          <Button onClick={confirmDeleteSubgroup} color="error" variant="contained">
+            Delete
           </Button>
         </DialogActions>
       </Dialog>
