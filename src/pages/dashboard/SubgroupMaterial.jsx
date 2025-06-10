@@ -165,6 +165,9 @@ export default function Subgroups() {
   // Handle page change
   const handlePageChange = (event, newPage) => {
     setPagination(prev => ({ ...prev, page: newPage }));
+
+    // for better UX, clear the subgroups list when page changes
+    setSubgroups([]);
   };
 
   // Open subgroup dialog

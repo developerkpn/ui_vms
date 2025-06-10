@@ -50,7 +50,6 @@ export default function LookupMaterials() {
   // Fetch groups on component mount
   useEffect(() => {
     fetchGroups();
-    console.log("rerender");
   }, [pagination.page, searchQuery]);
 
   // Fetch groups
@@ -98,6 +97,9 @@ export default function LookupMaterials() {
   // Handle page change
   const handlePageChange = (event, newPage) => {
     setPagination(prev => ({ ...prev, page: newPage }));
+
+    // for better UX, clear the groups list when page changes
+    setGroups([]);
   };
 
   // Export groups to Excel

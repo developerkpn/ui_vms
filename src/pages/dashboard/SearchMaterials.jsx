@@ -140,12 +140,12 @@ export default function SearchMaterials() {
 
         const response = await axiosPrivate.get(url);
         setMaterials(response.data.data || []);
-        setPagination({
-          ...pagination,
-          page,
+
+        setPagination(prev => ({
+          ...prev,
           totalCount: response.data.pagination.totalCount,
           totalPages: response.data.pagination.totalPages,
-        });
+        }));
       } catch (error) {
         console.error("Search failed:", error);
         setError("Failed to load materials. Please try again.");
@@ -182,12 +182,12 @@ export default function SearchMaterials() {
         `/material/groups/${groupId}/materials?page=${page}&pageSize=${pagination.pageSize}`
       );
       setMaterials(response.data.data || []);
-      setPagination({
-        ...pagination,
-        page,
+
+      setPagination(prev => ({
+        ...prev,
         totalCount: response.data.pagination.totalCount,
         totalPages: response.data.pagination.totalPages,
-      });
+      }));
     } catch (error) {
       console.error("Failed to fetch materials by group:", error);
       setError("Failed to load materials. Please try again.");
@@ -206,12 +206,12 @@ export default function SearchMaterials() {
         `/material/subgroups/${subGroupId}/materials?page=${page}&pageSize=${pagination.pageSize}`
       );
       setMaterials(response.data.data || []);
-      setPagination({
-        ...pagination,
-        page,
+
+      setPagination(prev => ({
+        ...prev,
         totalCount: response.data.pagination.totalCount,
         totalPages: response.data.pagination.totalPages,
-      });
+      }));
     } catch (error) {
       console.error("Failed to fetch materials:", error);
       setError("Failed to load materials. Please try again.");
@@ -221,83 +221,77 @@ export default function SearchMaterials() {
     }
   };
 
-  // Handle page change
-  const handlePageChange = (event, newPage) => {
+  const handlePageChange = (_event, newPage) => {
+    setPagination(prev => ({
+      ...prev,
+      page: newPage,
+    }));
+
+    // for better UX, clear the materials list when page changes
+    setMaterials([]);
+
     fetchMaterials(newPage);
   };
 
-  // Handle search input change
   const handleSearchChange = value => {
     setSearchQuery(value);
   };
 
-  // Handle group selection
   const handleGroupSelect = groupId => {
     setSelectedGroup(groupId);
-    setSelectedSubGroup(""); // Reset subgroup when group changes
+    setSelectedSubGroup("");
   };
 
-  // Handle subgroup selection
   const handleSubGroupSelect = subGroupId => {
     setSelectedSubGroup(subGroupId);
   };
 
-  // Handle clear group
   const handleClearGroup = () => {
     setSelectedGroup("");
     setSelectedSubGroup("");
   };
 
-  // Handle clear subgroup
   const handleClearSubgroup = () => {
     setSelectedSubGroup("");
   };
 
-  // Open attachments dialog
   const handleOpenAttachmentsDialog = async material => {
     setLoading(true);
     setSelectedMaterial(material);
     setAttachmentsDialogOpen(true);
 
     try {
-      // Get the latest attachments
       const attachmentsResponse = await axiosPrivate.get(`/material/${material.id}/attachments`);
 
-      // Update the selected material with fresh attachments
       setSelectedMaterial({
         ...material,
         attachments: attachmentsResponse.data.data || [],
       });
     } catch (error) {
       console.error("Error fetching attachments:", error);
-      // Keep using the attachments from the material object if fetch fails
     } finally {
       setLoading(false);
     }
   };
 
-  // Close attachments dialog
   const handleCloseAttachmentsDialog = () => {
     setAttachmentsDialogOpen(false);
     setSelectedMaterial(null);
   };
 
-  // Handle file selection
   const handleFileSelect = event => {
     setUploadFiles(Array.from(event.target.files));
   };
 
-  // Trigger file input click
   const handleBrowseClick = () => {
     fileInputRef.current.click();
   };
 
-  // Upload attachments
   const handleUploadAttachments = async () => {
     if (!selectedMaterial || uploadFiles.length === 0) return;
 
     setUploadLoading(true);
-    setError(null); // Clear any previous errors
+    setError(null);
 
     try {
       const formData = new FormData();
@@ -311,36 +305,28 @@ export default function SearchMaterials() {
         },
       });
 
-      // Clear the selected files after successful upload
       setUploadFiles([]);
 
-      // Fetch the updated material details and attachments separately
       try {
-        // Get the material details
         const materialResponse = await axiosPrivate.get(`/material/${selectedMaterial.id}`);
 
-        // Get the attachments using the dedicated endpoint
         const attachmentsResponse = await axiosPrivate.get(
           `/material/${selectedMaterial.id}/attachments`
         );
 
-        // Create a complete updated material object with the latest attachments
         const updatedMaterial = {
           ...materialResponse.data.data,
           attachments: attachmentsResponse.data.data || [],
         };
 
-        // Update the selected material with all details including fresh attachments
         setSelectedMaterial(updatedMaterial);
       } catch (fetchError) {
         console.error("Error fetching updated material:", fetchError);
-        // Even if refresh fails, show a success message for the upload
         setError(
           "Upload successful, but couldn't refresh attachment list. Please close and reopen."
         );
       }
 
-      // Refresh the materials list
       fetchMaterials(pagination.page);
     } catch (error) {
       console.error("Failed to upload attachments:", error);
@@ -356,7 +342,6 @@ export default function SearchMaterials() {
     }
   };
 
-  // Open alias dialog
   const handleOpenAliasDialog = material => {
     setSelectedMaterial(material);
     setAliases({
@@ -367,13 +352,11 @@ export default function SearchMaterials() {
     setAliasDialogOpen(true);
   };
 
-  // Close alias dialog
   const handleCloseAliasDialog = () => {
     setAliasDialogOpen(false);
     setSelectedMaterial(null);
   };
 
-  // Handle alias change
   const handleAliasChange = event => {
     const { name, value } = event.target;
     setAliases(prev => ({
@@ -382,7 +365,6 @@ export default function SearchMaterials() {
     }));
   };
 
-  // Update aliases
   const handleUpdateAliases = async () => {
     if (!selectedMaterial) return;
 
@@ -390,7 +372,6 @@ export default function SearchMaterials() {
     try {
       await axiosPrivate.put(`/material/${selectedMaterial.id}/aliases`, aliases);
 
-      // Refresh material data after update
       fetchMaterials(pagination.page);
       handleCloseAliasDialog();
     } catch (error) {
@@ -401,7 +382,6 @@ export default function SearchMaterials() {
     }
   };
 
-  // Get icon for file type
   const getFileIcon = fileType => {
     if (!fileType) return <InsertDriveFile />;
 
@@ -420,12 +400,9 @@ export default function SearchMaterials() {
     return <InsertDriveFile />;
   };
 
-  // Open attachment in a preview modal
   const handleViewAttachment = attachment => {
-    // Create a URL to the file using the new streaming endpoint
     const fileUrl = `${import.meta.env.VITE_URL_LOC}/material/file/${attachment.attachment}`;
 
-    // Set the file to preview and open the modal
     setPreviewFile({
       url: fileUrl,
       name: attachment.attachment,
@@ -434,7 +411,6 @@ export default function SearchMaterials() {
     setPreviewModalOpen(true);
   };
 
-  // Table columns
   const columns = useMemo(
     () => [
       columnHelper.accessor("fullCode", {
@@ -447,9 +423,20 @@ export default function SearchMaterials() {
         header: "Material Name",
         cell: ({ getValue }) => getValue() || "-",
       }),
-      columnHelper.accessor("description", {
+      columnHelper.accessor("combined_description", {
         header: "Description",
-        cell: ({ getValue }) => getValue() || "-",
+        cell: ({ getValue, row }) => {
+          const combinedDesc = getValue();
+          if (combinedDesc) return combinedDesc;
+          const description = row.original.description;
+          const longText = row.original.long_text;
+
+          if (description && longText) return `${description} - ${longText}`;
+          if (description) return description;
+          if (longText) return longText;
+
+          return "-";
+        },
       }),
       columnHelper.accessor(
         row => ({
@@ -467,22 +454,10 @@ export default function SearchMaterials() {
           },
         }
       ),
-      columnHelper.accessor(
-        row => ({
-          subGroupCode: row.subGroupCode,
-          subGroupName: row.subGroupName,
-        }),
-        {
-          id: "subgroup",
-          header: "Subgroup",
-          cell: ({ getValue }) => {
-            const subgroup = getValue();
-            return subgroup && subgroup.subGroupCode && subgroup.subGroupName
-              ? `${subgroup.subGroupCode} - ${subgroup.subGroupName}`
-              : "-";
-          },
-        }
-      ),
+      columnHelper.accessor("alias1", {
+        header: "Alias",
+        cell: ({ getValue }) => getValue() || "-",
+      }),
       columnHelper.accessor("created_at", {
         header: "Created At",
         cell: ({ getValue }) => (getValue() ? moment(getValue()).format("YYYY-MM-DD") : "-"),

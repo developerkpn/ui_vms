@@ -125,14 +125,9 @@ export default function Materials() {
 
   // Handle page change
   const handlePageChange = (event, newPage) => {
-    setPagination({ ...pagination, page: newPage });
-  };
+    setPagination(prev => ({ ...prev, page: newPage }));
 
-  // Navigate back to subgroups
-  const handleBackToSubgroups = () => {
-    navigate(`/dashboard/subgroups/${groupId}`, {
-      state: { groupName, groupCode },
-    });
+    setMaterials([]);
   };
 
   // Open attachments dialog
