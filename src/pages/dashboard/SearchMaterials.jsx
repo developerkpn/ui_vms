@@ -81,7 +81,7 @@ export default function SearchMaterials() {
     setLoading(true);
     setError(null);
     try {
-      const response = await axiosPrivate.get("/material/groups");
+      const response = await axiosPrivate.get("/material/groups/dropdown");
       const groupsData = response.data.data || [];
       setGroups(groupsData);
     } catch (error) {
@@ -162,7 +162,7 @@ export default function SearchMaterials() {
     setLoading(true);
     setError(null);
     try {
-      const response = await axiosPrivate.get(`/material/groups/${groupId}/subgroups`);
+      const response = await axiosPrivate.get(`/material/subgroups/${groupId}/dropdown`);
       setSubGroups(response.data.data || []);
     } catch (error) {
       console.error("Failed to fetch subgroups:", error);
@@ -536,6 +536,13 @@ export default function SearchMaterials() {
                 value={selectedGroup}
                 displayEmpty
                 onChange={e => handleGroupSelect(e.target.value)}
+                MenuProps={{
+                  PaperProps: {
+                    style: {
+                      maxHeight: 300,
+                    },
+                  },
+                }}
               >
                 <MenuItem value="">
                   <em>Select Material Group</em>
@@ -564,6 +571,13 @@ export default function SearchMaterials() {
                   value={selectedSubGroup}
                   displayEmpty
                   onChange={e => handleSubGroupSelect(e.target.value)}
+                  MenuProps={{
+                    PaperProps: {
+                      style: {
+                        maxHeight: 300,
+                      },
+                    },
+                  }}
                 >
                   <MenuItem value="">
                     <em>Select Subgroup</em>
