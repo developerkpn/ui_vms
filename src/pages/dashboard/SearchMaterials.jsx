@@ -413,7 +413,7 @@ export default function SearchMaterials() {
 
   const columns = useMemo(
     () => [
-      columnHelper.accessor("fullCode", {
+      columnHelper.accessor("code", {
         header: "Code",
         cell: ({ getValue, row }) => {
           return getValue() || "-";
