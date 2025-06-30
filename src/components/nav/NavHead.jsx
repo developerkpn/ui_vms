@@ -1,8 +1,8 @@
-import { ListItem, ListItemButton, ListItemIcon, ListItemText } from '@mui/material';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
-import { Suspense, lazy, useMemo } from 'react';
+import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
+import { ListItem, ListItemButton, ListItemIcon, ListItemText } from "@mui/material";
+import { Suspense, lazy, useMemo } from "react";
 
-const getIcon = (icon) => {
+const getIcon = icon => {
   // add as many icons as you need
   switch (icon) {
     case 'ConfirmationNumber':
@@ -19,6 +19,8 @@ const getIcon = (icon) => {
       return lazy(() => import('@mui/icons-material/Gavel'));
     case 'Computer':
       return lazy(() => import('@mui/icons-material/Computer'));
+    case 'Inventory':
+      return lazy(() => import('@mui/icons-material/Inventory'));
     default:
       return HelpOutlineIcon;
   }

@@ -1,6 +1,6 @@
-import { Navigate, createBrowserRouter } from "react-router-dom";
 import axios from "axios";
 import { lazy } from "react";
+import { Navigate, createBrowserRouter } from "react-router-dom";
 import ESubmissionDir from "src/pages/dashboard/ESubmissionDir";
 import FormVendorClient from "src/pages/dashboard/FormVendorClient";
 const OSTicketReqEdit = lazy(() => import("src/pages/reqedit/OSTicketReqEdit"));
@@ -8,6 +8,10 @@ const VendorLandingPage = lazy(() => import("src/pages/vendor/VendorLandingPage"
 const VendorUsers = lazy(() => import("src/pages/vendor/VendorUsers"));
 const VerificationPage = lazy(() => import("src/pages/verification/VerificationPage"));
 const DirectFormCreateNew = lazy(() => import("src/pages/create_new/DirectFormCreateNew"));
+const LookupMaterials = lazy(() => import("src/pages/dashboard/LookupMaterials"));
+const Subgroups = lazy(() => import("src/pages/dashboard/SubgroupMaterial"));
+const Materials = lazy(() => import("src/pages/dashboard/MaterialDetail"));
+const SearchMaterials = lazy(() => import("src/pages/dashboard/SearchMaterials"));
 // import ErrorPage from '../pages/ErrorPage';
 // import Error404 from 'src/pages/Error404';
 // import LoginPage from 'src/pages/LoginPage';
@@ -159,6 +163,22 @@ export const routes = createBrowserRouter([
       {
         path: "esubmission",
         element: <ESubmissionDir />,
+      },
+      {
+        path: "materials/lookup",
+        element: <LookupMaterials />,
+      },
+      {
+        path: "subgroups/:groupId",
+        element: <Subgroups />,
+      },
+      {
+        path: "materials/:subgroupId",
+        element: <Materials />,
+      },
+      {
+        path: "materials/search",
+        element: <SearchMaterials />,
       },
     ],
   },
