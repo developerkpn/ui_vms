@@ -1,5 +1,6 @@
 import {
   Close,
+  Download,
   Edit,
   Image,
   InsertDriveFile,
@@ -509,6 +510,44 @@ export default function SearchMaterials() {
     return materials.length > 0;
   };
 
+  // Download to Excel handler
+  const handleDownloadExcel = async () => {
+    try {
+      let url = "/material/export/materials";
+      const params = [];
+      if (selectedGroup) params.push(`groupId=${selectedGroup}`);
+      if (selectedSubGroup) params.push(`subGroupId=${selectedSubGroup}`);
+      if (params.length > 0) url += `?${params.join("&")}`;
+
+      const response = await axiosPrivate.get(url, {
+        responseType: "blob",
+      });
+
+      // Try to get filename from Content-Disposition header
+      let filename = "materials.xlsx";
+      const disposition = response.headers["content-disposition"];
+      if (disposition) {
+        // More robust regex, handles quotes and whitespace
+        const match = disposition.match(/filename[^;=\n]*=((['\"]).*?\2|[^;\n]*)/);
+        if (match && match[1]) {
+          filename = match[1].replace(/['"]/g, "").trim();
+        }
+      }
+
+      // Create a blob and trigger download
+      const blob = new Blob([response.data], { type: response.headers["content-type"] });
+      const link = document.createElement("a");
+      link.href = window.URL.createObjectURL(blob);
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error("Failed to download Excel:", error);
+      setError("Failed to download Excel file. Please try again.");
+    }
+  };
+
   return (
     <Box
       sx={{
@@ -520,6 +559,18 @@ export default function SearchMaterials() {
     >
       <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mb: 3 }}>
+          {/* Download to Excel button */}
+          <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
+            <Button
+              variant="contained"
+              startIcon={<Download />}
+              onClick={handleDownloadExcel}
+              sx={{ minWidth: 180 }}
+            >
+              Download to Excel
+            </Button>
+          </Box>
+
           {/* Search field */}
           <Box sx={{ display: "flex", alignItems: "center" }}>
             <SearchFieldComp
