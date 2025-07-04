@@ -3,6 +3,7 @@ import { lazy } from "react";
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import ESubmissionDir from "src/pages/dashboard/ESubmissionDir";
 import FormVendorClient from "src/pages/dashboard/FormVendorClient";
+const NavigateETender = lazy(() => import("src/pages/e-tender/NavigateETender"));
 const OSTicketReqEdit = lazy(() => import("src/pages/reqedit/OSTicketReqEdit"));
 const VendorLandingPage = lazy(() => import("src/pages/vendor/VendorLandingPage"));
 const VendorUsers = lazy(() => import("src/pages/vendor/VendorUsers"));
@@ -179,6 +180,14 @@ export const routes = createBrowserRouter([
       {
         path: "materials/search",
         element: <SearchMaterials />,
+      },
+      {
+        path: "etender/multiple",
+        element: <NavigateETender type="recap" />,
+      },
+      {
+        path: "etender/single",
+        element: <NavigateETender type="scalling" />,
       },
     ],
   },
