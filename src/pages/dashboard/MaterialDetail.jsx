@@ -78,6 +78,8 @@ export default function Materials() {
   const [attachmentToDelete, setAttachmentToDelete] = useState(null);
   const [sortField, setSortField] = useState("code");
   const [sortOrder, setSortOrder] = useState("asc");
+  const [deleteMaterialDialogOpen, setDeleteMaterialDialogOpen] = useState(false);
+  const [materialToDelete, setMaterialToDelete] = useState(null);
 
   // Fetch materials on component mount
   useEffect(() => {
@@ -417,6 +419,41 @@ export default function Materials() {
     setPagination(prev => ({ ...prev, page: 1 }));
   };
 
+  // Handle delete material button click
+  const handleDeleteMaterial = material => {
+    setMaterialToDelete(material);
+    setDeleteMaterialDialogOpen(true);
+  };
+
+  // Confirm delete material
+  const confirmDeleteMaterial = async () => {
+    if (!materialToDelete || !materialToDelete.id) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await axiosPrivate.delete(`/material/${materialToDelete.id}`);
+      showSnackbar("Material deleted successfully");
+      // Refresh materials list
+      fetchMaterials();
+    } catch (error) {
+      let errorMessage = "Failed to delete material. Please try again.";
+      if (error.response && error.response.data && error.response.data.message) {
+        errorMessage = error.response.data.message;
+      }
+      setError(errorMessage);
+      showSnackbar(errorMessage, "error");
+    } finally {
+      setLoading(false);
+      setDeleteMaterialDialogOpen(false);
+      setMaterialToDelete(null);
+    }
+  };
+
+  const cancelDeleteMaterial = () => {
+    setDeleteMaterialDialogOpen(false);
+    setMaterialToDelete(null);
+  };
+
   // Table columns definition
   const columns = [
     {
@@ -563,6 +600,15 @@ export default function Materials() {
               title="Edit Aliases"
             >
               <Edit fontSize="small" />
+            </IconButton>
+            <IconButton
+              size="small"
+              onClick={() => handleDeleteMaterial(row)}
+              color="error"
+              title={row.dfFromClient ? "Already deleted" : "Delete Material"}
+              disabled={row.dfFromClient}
+            >
+              <Delete fontSize="small" />
             </IconButton>
           </Box>
         );
@@ -983,6 +1029,30 @@ export default function Materials() {
             Cancel
           </Button>
           <Button onClick={confirmDeleteAttachment} color="error" variant="contained">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Material Confirmation Dialog */}
+      <Dialog open={deleteMaterialDialogOpen} onClose={cancelDeleteMaterial} maxWidth="sm">
+        <DialogTitle>Confirm Material Deletion</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1">Are you sure you want to delete this material?</Typography>
+          {materialToDelete && (
+            <Typography variant="body2" sx={{ mt: 1, fontWeight: "medium" }}>
+              {materialToDelete.code} - {materialToDelete.name}
+            </Typography>
+          )}
+          <Typography variant="body2" color="error" sx={{ mt: 2 }}>
+            This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cancelDeleteMaterial} color="primary">
+            Cancel
+          </Button>
+          <Button onClick={confirmDeleteMaterial} color="error" variant="contained">
             Delete
           </Button>
         </DialogActions>

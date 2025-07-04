@@ -80,6 +80,8 @@ export default function SearchMaterials() {
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   const [deleteAttachmentDialogOpen, setDeleteAttachmentDialogOpen] = useState(false);
   const [attachmentToDelete, setAttachmentToDelete] = useState(null);
+  const [deleteMaterialDialogOpen, setDeleteMaterialDialogOpen] = useState(false);
+  const [materialToDelete, setMaterialToDelete] = useState(null);
 
   // Fetch groups on component mount
   useEffect(() => {
@@ -148,15 +150,13 @@ export default function SearchMaterials() {
         controllerRef.current = new AbortController();
         const signal = controllerRef.current.signal;
         // Build the URL with or without search term
-        let url = `/material/search?page=${page}&pageSize=${pagination.pageSize}`;
+        let url = `/material/search/all?page=${page}&pageSize=${pagination.pageSize}`;
         if (term && term.trim() !== "") {
           const encodedSearchTerm = encodeURIComponent(term.trim());
           url += `&q=${encodedSearchTerm}`;
         }
-
         const response = await axiosPrivate.get(url, { signal });
         setMaterials(response.data.data || []);
-
         setPagination(prev => ({
           ...prev,
           totalCount: response.data.pagination.totalCount,
@@ -522,6 +522,41 @@ export default function SearchMaterials() {
     });
   };
 
+  // Handle delete material button click
+  const handleDeleteMaterial = material => {
+    setMaterialToDelete(material);
+    setDeleteMaterialDialogOpen(true);
+  };
+
+  // Confirm delete material
+  const confirmDeleteMaterial = async () => {
+    if (!materialToDelete || !materialToDelete.id) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await axiosPrivate.delete(`/material/${materialToDelete.id}`);
+      showSnackbar("Material deleted successfully");
+      // Refresh materials list
+      fetchMaterials(pagination.page);
+    } catch (error) {
+      let errorMessage = "Failed to delete material. Please try again.";
+      if (error.response && error.response.data && error.response.data.message) {
+        errorMessage = error.response.data.message;
+      }
+      setError(errorMessage);
+      showSnackbar(errorMessage, "error");
+    } finally {
+      setLoading(false);
+      setDeleteMaterialDialogOpen(false);
+      setMaterialToDelete(null);
+    }
+  };
+
+  const cancelDeleteMaterial = () => {
+    setDeleteMaterialDialogOpen(false);
+    setMaterialToDelete(null);
+  };
+
   const columns = useMemo(
     () => [
       columnHelper.accessor("code", {
@@ -611,7 +646,6 @@ export default function SearchMaterials() {
         cell: ({ row }) => {
           const material = row.original;
           const hasAttachments = material.attachments && material.attachments.length > 0;
-
           return (
             <Box sx={{ display: "flex", gap: 1 }}>
               <TooltipButton
@@ -628,6 +662,12 @@ export default function SearchMaterials() {
                 Icon={<Edit />}
                 TooltipText="Edit Aliases"
                 OnClick={() => handleOpenAliasDialog(material)}
+              />
+              <TooltipButton
+                Icon={<Delete color={material.dffromclient ? "disabled" : "error"} />}
+                TooltipText={material.dffromclient ? "Already deleted" : "Delete Material"}
+                OnClick={() => handleDeleteMaterial(material)}
+                disabled={material.dffromclient}
               />
             </Box>
           );
@@ -1107,6 +1147,30 @@ export default function SearchMaterials() {
             Cancel
           </Button>
           <Button onClick={confirmDeleteAttachment} color="error" variant="contained">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Material Confirmation Dialog */}
+      <Dialog open={deleteMaterialDialogOpen} onClose={cancelDeleteMaterial} maxWidth="sm">
+        <DialogTitle>Confirm Material Deletion</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1">Are you sure you want to delete this material?</Typography>
+          {materialToDelete && (
+            <Typography variant="body2" sx={{ mt: 1, fontWeight: "medium" }}>
+              {materialToDelete.code} - {materialToDelete.name}
+            </Typography>
+          )}
+          <Typography variant="body2" color="error" sx={{ mt: 2 }}>
+            This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cancelDeleteMaterial} color="primary">
+            Cancel
+          </Button>
+          <Button onClick={confirmDeleteMaterial} color="error" variant="contained">
             Delete
           </Button>
         </DialogActions>
