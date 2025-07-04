@@ -1,5 +1,7 @@
 import {
   ArrowBack,
+  ArrowDownward,
+  ArrowUpward,
   AttachFile,
   CheckCircle,
   CheckCircleOutline,
@@ -74,13 +76,15 @@ export default function Materials() {
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   const [deleteAttachmentDialogOpen, setDeleteAttachmentDialogOpen] = useState(false);
   const [attachmentToDelete, setAttachmentToDelete] = useState(null);
+  const [sortField, setSortField] = useState("code");
+  const [sortOrder, setSortOrder] = useState("asc");
 
   // Fetch materials on component mount
   useEffect(() => {
     if (subgroupId) {
       fetchMaterials();
     }
-  }, [subgroupId, pagination.page, searchQuery]);
+  }, [subgroupId, pagination.page, searchQuery, sortField, sortOrder]);
 
   // Fetch materials
   const fetchMaterials = async () => {
@@ -91,7 +95,12 @@ export default function Materials() {
       if (searchQuery) {
         url += `&q=${encodeURIComponent(searchQuery)}`;
       }
-
+      if (sortField) {
+        url += `&sort=${sortField}`;
+      }
+      if (sortOrder) {
+        url += `&order=${sortOrder}`;
+      }
       const response = await axiosPrivate.get(url);
       setMaterials(response.data.data || []);
       setPagination({
@@ -401,10 +410,30 @@ export default function Materials() {
     });
   };
 
+  // Code column header with sort arrow
+  const handleSortCode = () => {
+    setSortOrder(prev => (prev === "asc" ? "desc" : "asc"));
+    setSortField("code");
+    setPagination(prev => ({ ...prev, page: 1 }));
+  };
+
   // Table columns definition
   const columns = [
     {
-      header: "Code",
+      header: (
+        <Box
+          sx={{ display: "flex", alignItems: "center", cursor: "pointer", userSelect: "none" }}
+          onClick={handleSortCode}
+        >
+          Code
+          {sortField === "code" &&
+            (sortOrder === "asc" ? (
+              <ArrowUpward fontSize="small" sx={{ ml: 0.5 }} />
+            ) : (
+              <ArrowDownward fontSize="small" sx={{ ml: 0.5 }} />
+            ))}
+        </Box>
+      ),
       accessorKey: "code",
       cell: info => (
         <Box

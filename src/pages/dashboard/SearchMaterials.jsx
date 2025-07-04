@@ -1,5 +1,6 @@
 import {
   Close,
+  Delete,
   Download,
   Edit,
   Image,
@@ -9,6 +10,7 @@ import {
   Visibility,
 } from "@mui/icons-material";
 import {
+  Alert,
   Box,
   Button,
   CircularProgress,
@@ -26,6 +28,7 @@ import {
   MenuItem,
   Pagination,
   Select,
+  Snackbar,
   TextField,
   Tooltip,
   Typography,
@@ -71,6 +74,10 @@ export default function SearchMaterials() {
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
   const fileInputRef = useRef(null);
+  const controllerRef = useRef();
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
+  const [deleteAttachmentDialogOpen, setDeleteAttachmentDialogOpen] = useState(false);
+  const [attachmentToDelete, setAttachmentToDelete] = useState(null);
 
   // Fetch groups on component mount
   useEffect(() => {
@@ -132,6 +139,12 @@ export default function SearchMaterials() {
       setLoading(true);
       setError(null);
       try {
+        // Abort previous request if exists
+        if (controllerRef.current) {
+          controllerRef.current.abort();
+        }
+        controllerRef.current = new AbortController();
+        const signal = controllerRef.current.signal;
         // Build the URL with or without search term
         let url = `/material/search?page=${page}&pageSize=${pagination.pageSize}`;
         if (term && term.trim() !== "") {
@@ -139,7 +152,7 @@ export default function SearchMaterials() {
           url += `&q=${encodedSearchTerm}`;
         }
 
-        const response = await axiosPrivate.get(url);
+        const response = await axiosPrivate.get(url, { signal });
         setMaterials(response.data.data || []);
 
         setPagination(prev => ({
@@ -148,15 +161,29 @@ export default function SearchMaterials() {
           totalPages: response.data.pagination.totalPages,
         }));
       } catch (error) {
+        if (error.code === "ERR_CANCELED") {
+          // Request was aborted, do not set error
+          console.log("Request was aborted", error);
+          return;
+        }
         console.error("Search failed:", error);
-        setError("Failed to load materials. Please try again.");
         setMaterials([]);
+        setError("Failed to load materials. Please try again.");
       } finally {
         setLoading(false);
       }
     }, 500),
     [pagination.pageSize, axiosPrivate]
   );
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (controllerRef.current) {
+        controllerRef.current.abort();
+      }
+    };
+  }, []);
 
   // Fetch subgroups
   const fetchSubGroups = async groupId => {
@@ -329,6 +356,7 @@ export default function SearchMaterials() {
       }
 
       fetchMaterials(pagination.page);
+      showSnackbar("Attachments uploaded successfully");
     } catch (error) {
       console.error("Failed to upload attachments:", error);
       let errorMessage = "Failed to upload attachments. Please try again.";
@@ -338,6 +366,7 @@ export default function SearchMaterials() {
       }
 
       setError(errorMessage);
+      showSnackbar(errorMessage, "error");
     } finally {
       setUploadLoading(false);
     }
@@ -374,10 +403,13 @@ export default function SearchMaterials() {
       await axiosPrivate.put(`/material/${selectedMaterial.id}/aliases`, aliases);
 
       fetchMaterials(pagination.page);
+      showSnackbar("Aliases updated successfully");
       handleCloseAliasDialog();
     } catch (error) {
       console.error("Failed to update aliases:", error);
-      setError("Failed to update aliases. Please try again.");
+      const errorMessage = "Failed to update aliases. Please try again.";
+      setError(errorMessage);
+      showSnackbar(errorMessage, "error");
     } finally {
       setAliasLoading(false);
     }
@@ -412,6 +444,82 @@ export default function SearchMaterials() {
     setPreviewModalOpen(true);
   };
 
+  // Show snackbar message
+  const showSnackbar = (message, severity = "success") => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  // Handle snackbar close
+  const handleSnackbarClose = () => {
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  // Add a function to handle attachment deletion
+  const handleDeleteAttachment = async attachment => {
+    if (!attachment || !attachment.id) return;
+
+    setAttachmentToDelete(attachment);
+    setDeleteAttachmentDialogOpen(true);
+  };
+
+  // Confirm attachment deletion
+  const confirmDeleteAttachment = async () => {
+    if (!attachmentToDelete || !attachmentToDelete.id) return;
+
+    setUploadLoading(true);
+    setError(null);
+
+    try {
+      await axiosPrivate.delete(`/material/attachments/${attachmentToDelete.id}`);
+
+      // Update the selected material by removing the deleted attachment
+      if (selectedMaterial && selectedMaterial.attachments) {
+        const updatedAttachments = selectedMaterial.attachments.filter(
+          a => a.id !== attachmentToDelete.id
+        );
+
+        setSelectedMaterial({
+          ...selectedMaterial,
+          attachments: updatedAttachments,
+        });
+      }
+
+      // Refresh the materials list to show updated attachment count
+      fetchMaterials(pagination.page);
+
+      showSnackbar("Attachment deleted successfully");
+    } catch (error) {
+      console.error("Failed to delete attachment:", error);
+      let errorMessage = "Failed to delete attachment. Please try again.";
+
+      if (error.response && error.response.data && error.response.data.message) {
+        errorMessage = error.response.data.message;
+      }
+
+      setError(errorMessage);
+      showSnackbar(errorMessage, "error");
+    } finally {
+      setUploadLoading(false);
+      setDeleteAttachmentDialogOpen(false);
+      setAttachmentToDelete(null);
+    }
+  };
+
+  // Cancel delete operation
+  const cancelDeleteAttachment = () => {
+    setDeleteAttachmentDialogOpen(false);
+    setAttachmentToDelete(null);
+  };
+
+  // Remove file from upload list
+  const handleRemoveUploadFile = index => {
+    setUploadFiles(prevFiles => {
+      const newFiles = [...prevFiles];
+      newFiles.splice(index, 1);
+      return newFiles;
+    });
+  };
+
   const columns = useMemo(
     () => [
       columnHelper.accessor("code", {
@@ -420,12 +528,8 @@ export default function SearchMaterials() {
           return getValue() || "-";
         },
       }),
-      columnHelper.accessor("name", {
-        header: "Material Name",
-        cell: ({ getValue }) => getValue() || "-",
-      }),
       columnHelper.accessor("combined_description", {
-        header: "Description",
+        header: "Material Description",
         cell: ({ getValue, row }) => {
           const combinedDesc = getValue();
           if (combinedDesc) return combinedDesc;
@@ -459,6 +563,11 @@ export default function SearchMaterials() {
         header: "Alias",
         cell: ({ getValue }) => getValue() || "-",
       }),
+      columnHelper.accessor("created_by", {
+        header: "Created By",
+        cell: ({ getValue }) => getValue() || "-",
+      }),
+
       columnHelper.accessor("created_at", {
         header: "Created At",
         cell: ({ getValue }) => (getValue() ? moment(getValue()).format("YYYY-MM-DD") : "-"),
@@ -747,7 +856,20 @@ export default function SearchMaterials() {
                 {uploadFiles.length > 0 && (
                   <List dense>
                     {uploadFiles.map((file, index) => (
-                      <ListItem key={index}>
+                      <ListItem
+                        key={index}
+                        secondaryAction={
+                          <IconButton
+                            edge="end"
+                            onClick={() => handleRemoveUploadFile(index)}
+                            title="Remove file"
+                            color="error"
+                            size="small"
+                          >
+                            <Delete fontSize="small" />
+                          </IconButton>
+                        }
+                      >
                         <ListItemIcon>{getFileIcon(file.type)}</ListItemIcon>
                         <ListItemText
                           primary={file.name}
@@ -777,13 +899,24 @@ export default function SearchMaterials() {
                     <ListItem
                       key={attachment.id || index}
                       secondaryAction={
-                        <IconButton
-                          edge="end"
-                          onClick={() => handleViewAttachment(attachment)}
-                          title="Preview file"
-                        >
-                          <Visibility />
-                        </IconButton>
+                        <Box sx={{ display: "flex" }}>
+                          <IconButton
+                            edge="end"
+                            onClick={() => handleViewAttachment(attachment)}
+                            title="Preview file"
+                            sx={{ mr: 1 }}
+                          >
+                            <Visibility />
+                          </IconButton>
+                          <IconButton
+                            edge="end"
+                            onClick={() => handleDeleteAttachment(attachment)}
+                            title="Delete attachment"
+                            color="error"
+                          >
+                            <Delete />
+                          </IconButton>
+                        </Box>
                       }
                     >
                       <ListItemIcon>
@@ -925,6 +1058,42 @@ export default function SearchMaterials() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Delete Attachment Confirmation Dialog */}
+      <Dialog open={deleteAttachmentDialogOpen} onClose={cancelDeleteAttachment} maxWidth="sm">
+        <DialogTitle>Confirm Attachment Deletion</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1">Are you sure you want to delete this attachment?</Typography>
+          {attachmentToDelete && (
+            <Typography variant="body2" sx={{ mt: 1, fontWeight: "medium" }}>
+              {attachmentToDelete.attachment}
+            </Typography>
+          )}
+          <Typography variant="body2" color="error" sx={{ mt: 2 }}>
+            This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cancelDeleteAttachment} color="primary">
+            Cancel
+          </Button>
+          <Button onClick={confirmDeleteAttachment} color="error" variant="contained">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      >
+        <Alert onClose={handleSnackbarClose} severity={snackbar.severity} sx={{ width: "100%" }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

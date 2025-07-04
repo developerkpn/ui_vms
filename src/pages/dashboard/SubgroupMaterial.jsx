@@ -1,6 +1,8 @@
 import {
   Add,
   ArrowBack,
+  ArrowDownward,
+  ArrowUpward,
   DeleteOutline,
   Edit,
   FileDownload,
@@ -66,13 +68,15 @@ export default function Subgroups() {
   const [importLoading, setImportLoading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [subgroupToDelete, setSubgroupToDelete] = useState(null);
+  const [sortField, setSortField] = useState("code");
+  const [sortOrder, setSortOrder] = useState("asc");
 
   // Fetch subgroups on component mount
   useEffect(() => {
     if (groupId) {
       fetchSubgroups();
     }
-  }, [groupId, pagination.page, searchQuery]);
+  }, [groupId, pagination.page, searchQuery, sortField, sortOrder]);
 
   // Initialize groups data on component mount (for potential use before dialog opens)
   useEffect(() => {
@@ -129,7 +133,12 @@ export default function Subgroups() {
       if (searchQuery) {
         url += `&q=${encodeURIComponent(searchQuery)}`;
       }
-
+      if (sortField) {
+        url += `&sort=${sortField}`;
+      }
+      if (sortOrder) {
+        url += `&order=${sortOrder}`;
+      }
       const response = await axiosPrivate.get(url);
       console.log("Subgroups response:", response.data);
       setSubgroups(response.data.data || []);
@@ -418,13 +427,31 @@ export default function Subgroups() {
     }
   };
 
+  // Code column header with sort arrow
+  const handleSortCode = () => {
+    setSortOrder(prev => (prev === "asc" ? "desc" : "asc"));
+    setSortField("code");
+    setPagination(prev => ({ ...prev, page: 1 }));
+  };
+
   // Table columns definition
   const columns = [
     {
       id: "code",
       label: "Code",
       header: () => (
-        <Box sx={{ display: "flex", justifyContent: "flex-start", width: "100%" }}>Code</Box>
+        <Box
+          sx={{ display: "flex", alignItems: "center", cursor: "pointer", userSelect: "none" }}
+          onClick={handleSortCode}
+        >
+          Code
+          {sortField === "code" &&
+            (sortOrder === "asc" ? (
+              <ArrowUpward fontSize="small" sx={{ ml: 0.5 }} />
+            ) : (
+              <ArrowDownward fontSize="small" sx={{ ml: 0.5 }} />
+            ))}
+        </Box>
       ),
       accessorKey: "code",
       cell: info => {
