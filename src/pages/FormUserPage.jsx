@@ -374,7 +374,7 @@ export default function FormUserPage() {
                   control={control}
                   options={optionBU}
                   label="Business Unit"
-                  rules={{ required: true }}
+                  // rules={{ required: true }}
                 />
               </Grid>
               <Grid item xs={6}>

@@ -1176,7 +1176,6 @@ function FormVendorCG() {
                         }}
                       />
                     </Grid>
-                    <Grid item xs={4}></Grid>
                     <Grid item xs={2}>
                       <SelectComp
                         name="badan_usaha"
@@ -1191,7 +1190,7 @@ function FormVendorCG() {
                         options={BadanUsahaOpt}
                       />
                     </Grid>
-                    <Grid item xs={4}>
+                    <Grid item xs={10}>
                       <TextFieldComp
                         name="name1"
                         label={t("Company Name") + " *"}
@@ -1200,7 +1199,7 @@ function FormVendorCG() {
                         t={t}
                         rules={{
                           required: "Please insert this field",
-                          maxLength: { value: 35, message: "Max 35 Character" },
+                          maxLength: { value: 80, message: "Max 80 Character" },
                         }}
                         onChangeovr={funChgname}
                         toUpperCase={true}
@@ -1240,7 +1239,7 @@ function FormVendorCG() {
                             {t("Verify")}
                           </LoadingButton>
                         </Grid>
-                        <Grid item xs={4}>
+                        <Grid item xs={12}>
                           <Alert variant="filled" severity="warning">
                             {t(
                               "Untuk melanjutkan, mohon klik verifikasi apakah nama vendor yang diisi sudah terdaftar"
@@ -1355,85 +1354,34 @@ function FormVendorCG() {
                       />
                     </Grid>
                     <Grid item xs={12}></Grid>
-                    <Grid item xs={2}>
-                      <SwitchComponent
-                        name="is_new_npwp"
-                        control={control}
-                        frontlabel={"16 Digit"}
-                        backlabel={"Old"}
+                    <Grid item xs={4}>
+                      <NumericFieldComp
+                        name="npwp"
+                        t={t}
                         disabled={
-                          checkFieldRule("is_new_npwp") ||
+                          checkFieldRule("npwp") ||
                           watch("ventype") == "OVERSEAS" ||
                           watch("ventype") == "GOVERNMENT"
                         }
+                        rules={{
+                          required:
+                            watch("ventype") == "OVERSEAS" || watch("ventype") == "GOVERNMENT"
+                              ? false
+                              : "Please insert this field",
+                          minLength: {
+                            value: 16,
+                            message: "Isi 16 digit",
+                          },
+                          maxLength: {
+                            value: 16,
+                            message: "Isi 16 digit",
+                          },
+                        }}
+                        label={t("Tax Number") + " *"}
+                        control={control}
+                        thousandSeparator={false}
+                        allowLeadingZeros={true}
                       />
-                    </Grid>
-                    <Grid item xs={4}>
-                      {watch("is_new_npwp") == true && (
-                        <NumericFieldComp
-                          name="npwp"
-                          t={t}
-                          disabled={
-                            checkFieldRule("npwp") ||
-                            watch("ventype") == "OVERSEAS" ||
-                            watch("ventype") == "GOVERNMENT"
-                          }
-                          rules={{
-                            required:
-                              watch("ventype") == "OVERSEAS" || watch("ventype") == "GOVERNMENT"
-                                ? false
-                                : "Please insert this field",
-                            minLength: {
-                              value: 16,
-                              message: "Isi 16 digit",
-                            },
-                            maxLength: {
-                              value: 16,
-                              message: "Isi 16 digit",
-                            },
-                          }}
-                          label={t("Tax Number") + " *"}
-                          control={control}
-                          thousandSeparator={false}
-                          allowLeadingZeros={true}
-                        />
-                      )}
-                      {watch("is_new_npwp") == false && (
-                        <PatternFieldComp
-                          name="npwp"
-                          t={t}
-                          helperText={"Mohon input hanya nominal tanpa karakter spesial"}
-                          label={t("Tax Number") + " *"}
-                          useplaceholder
-                          format="##.###.###.#-###.###"
-                          mask={"_"}
-                          control={control}
-                          disabled={
-                            checkFieldRule("npwp") ||
-                            watch("ventype") == "OVERSEAS" ||
-                            watch("ventype") == "GOVERNMENT"
-                          }
-                          rules={{
-                            pattern: {
-                              value: /^[0-9.-]+$/,
-                              message:
-                                "format not matched. only numbers (0-9), point (.), and hyphen (-)",
-                            },
-                            minLength: {
-                              value: 20,
-                              message: "Karakter tidak cukup",
-                            },
-                            maxLength: {
-                              value: 21,
-                              message: "Mohon isi dengan lengkap",
-                            },
-                            required:
-                              watch("ventype") == "OVERSEAS" || watch("ventype") == "GOVERNMENT"
-                                ? false
-                                : "Please insert this field",
-                          }}
-                        />
-                      )}
                     </Grid>
                     {(!checkFieldRule("used_tax") || data_form.ticket_stat == false) && (
                       <Grid item xs={6}>

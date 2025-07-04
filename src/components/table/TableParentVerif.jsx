@@ -1,5 +1,20 @@
-import { flexRender, getCoreRowModel, useReactTable, getExpandedRowModel } from '@tanstack/react-table';
-import { TableContainer, Table, TableBody, TableCell, TableHead, TableRow, IconButton, Box, Grid } from '@mui/material';
+import {
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+  getExpandedRowModel,
+} from "@tanstack/react-table";
+import {
+  TableContainer,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  IconButton,
+  Box,
+  Grid,
+} from "@mui/material";
 import {
   KeyboardArrowRight,
   KeyboardArrowDown,
@@ -8,25 +23,25 @@ import {
   CheckCircleOutline,
   CancelOutlined,
   VisibilityOutlined,
-} from '@mui/icons-material';
-import TableChildVerif from './TableChildVerif';
-import { useEffect, useMemo, useState } from 'react';
-import useAxiosPrivate from '../../hooks/useAxiosPrivate';
-import { Fragment } from 'react';
-import { useTheme } from '@mui/material/styles';
-import TooltipButton from '../common/TooltipButton';
-import DialogFormConfirmation from '../common/DialogFormConfirmation';
-import { TextFieldComp } from '../common/TextFieldComp';
-import { useForm } from 'react-hook-form';
-import { useSnackBar } from 'src/provider/SnackbarProvider';
-import { useNavigate, Link } from 'react-router-dom';
-import RefreshButton from '../common/RefreshButton';
-import { useSession } from 'src/provider/sessionProvider';
-import usePermissionStore from 'src/store/userPermissionStore';
+} from "@mui/icons-material";
+import TableChildVerif from "./TableChildVerif";
+import { useEffect, useMemo, useState } from "react";
+import useAxiosPrivate from "../../hooks/useAxiosPrivate";
+import { Fragment } from "react";
+import { useTheme } from "@mui/material/styles";
+import TooltipButton from "../common/TooltipButton";
+import DialogFormConfirmation from "../common/DialogFormConfirmation";
+import { TextFieldComp } from "../common/TextFieldComp";
+import { useForm } from "react-hook-form";
+import { useSnackBar } from "src/provider/SnackbarProvider";
+import { useNavigate, Link } from "react-router-dom";
+import RefreshButton from "../common/RefreshButton";
+import { useSession } from "src/provider/sessionProvider";
+import usePermissionStore from "src/store/userPermissionStore";
 
 const ThumbnailVendor = ({ data_ven }) => {
   return (
-    <Box sx={{ width: '100%' }}>
+    <Box sx={{ width: "100%" }}>
       <Grid container spacing={1}>
         <Grid item xs={3}>
           <p>Vendor Name</p>
@@ -55,7 +70,7 @@ const ThumbnailVendor = ({ data_ven }) => {
 
 const ApproveDialog = ({ data_ven }) => {
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', p: 3 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", p: 3 }}>
       <h2>Approve Verification Vendor ?</h2>
       <ThumbnailVendor data_ven={data_ven} />
     </Box>
@@ -63,15 +78,15 @@ const ApproveDialog = ({ data_ven }) => {
 };
 const RejectDialog = ({ control, data_ven }) => {
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', p: 3 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", p: 3 }}>
       <h2>Reject Verification Vendor ?</h2>
       <ThumbnailVendor data_ven={data_ven} />
       <TextFieldComp
         name="remarks"
         label="Rejection Remarks"
         control={control}
-        sx={{ width: '50rem' }}
-        rules={{ required: 'Please insert this field' }}
+        sx={{ width: "50rem" }}
+        rules={{ required: "Please insert this field" }}
         multiline
       />
     </Box>
@@ -86,70 +101,70 @@ export default function TableParentVerif() {
   const navigate = useNavigate();
   const [refresh, _setRefresh] = useState(false);
   // const { getPermission } = useSession();
-  const permission = usePermissionStore((state) => state.permission);
+  const permission = usePermissionStore(state => state.permission);
   const [successModal, setScsModal] = useState(false);
-  const [openDialog, setOpenDialog] = useState({ state: false, action: '' });
+  const [openDialog, setOpenDialog] = useState({ state: false, action: "" });
   const [selected, setSelected] = useState({});
   const { trigger, control, getValues } = useForm({
     defaultValues: {
-      remarks: '',
+      remarks: "",
     },
   });
 
-  const setRefresh = (value) => {
+  const setRefresh = value => {
     _setRefresh(value);
   };
 
   const onNo = () => {
-    setOpenDialog((prev) => ({ ...prev, state: false }));
+    setOpenDialog(prev => ({ ...prev, state: false }));
   };
 
   const buttonAction = async (action, data) => {
-    if (action === 'view') {
+    if (action === "view") {
       navigate({
         pathname: `/dashboard/form/${data.token}`,
       });
-    } else if (action === 'approve') {
+    } else if (action === "approve") {
       setSelected(data);
-      setOpenDialog({ state: true, action: 'approve' });
-    } else if (action === 'reject') {
+      setOpenDialog({ state: true, action: "approve" });
+    } else if (action === "reject") {
       setSelected(data);
-      setOpenDialog({ state: true, action: 'reject' });
+      setOpenDialog({ state: true, action: "reject" });
     }
   };
 
-  const handleApprove = async (values) => {
+  const handleApprove = async values => {
     try {
       // console.log(values);
-      const { data } = await axiosPrivate.post('/vendor/verif', {
+      const { data } = await axiosPrivate.post("/vendor/verif", {
         verified: 1,
         ven_id: values.ven_id,
       });
-      openSnackbar('success', data.message);
-      setOpenDialog((prev) => ({ ...prev, state: false }));
+      openSnackbar("success", data.message);
+      setOpenDialog(prev => ({ ...prev, state: false }));
       setRefresh(true);
     } catch (error) {
       console.error(error);
-      openSnackbar('error', error.response.data.message);
+      openSnackbar("error", error.response.data.message);
       throw error;
     }
   };
 
-  const handleReject = async (values) => {
+  const handleReject = async values => {
     const is_valid = await trigger();
     if (is_valid) {
       try {
-        const { data } = await axiosPrivate.post('/vendor/verif', {
+        const { data } = await axiosPrivate.post("/vendor/verif", {
           verified: 0,
           ven_id: values.ven_id,
-          reject_notes: getValues('remarks'),
+          reject_notes: getValues("remarks"),
         });
-        openSnackbar('success', data.message);
-        setOpenDialog((prev) => ({ ...prev, state: false }));
+        openSnackbar("success", data.message);
+        setOpenDialog(prev => ({ ...prev, state: false }));
         setRefresh(true);
       } catch (error) {
         console.error(error);
-        openSnackbar('error', error.response.data.message);
+        openSnackbar("error", error.response.data.message);
       }
     }
   };
@@ -157,7 +172,7 @@ export default function TableParentVerif() {
   const columns = useMemo(
     () => [
       {
-        id: 'expand',
+        id: "expand",
         enableSorting: false,
         size: 1,
         cell: ({ row }) => {
@@ -168,66 +183,70 @@ export default function TableParentVerif() {
               </IconButton>
             </>
           ) : (
-            ''
+            ""
           );
         },
       },
       {
-        header: 'Vendor Code',
-        accessorKey: 'ven_code',
+        header: "Vendor Code",
+        accessorKey: "ven_code",
         size: 5,
-        cell: (props) => props.getValue(),
+        cell: props => props.getValue(),
       },
       {
-        header: 'Name',
-        accessorKey: 'name_1',
+        header: "Name",
+        accessorKey: "name_1",
         size: 10,
-        cell: (props) => props.getValue(),
+        cell: props => props.getValue(),
       },
       {
-        header: 'Email PIC',
-        accessorKey: 'email_pic',
+        header: "Email PIC",
+        accessorKey: "email_pic",
         size: 10,
-        cell: (props) => props.getValue() ?? '',
+        cell: props => props.getValue() ?? "",
       },
       {
-        header: 'No Telf PIC',
-        accessorKey: 'no_telf_pic',
+        header: "No Telf PIC",
+        accessorKey: "no_telf_pic",
         size: 10,
-        cell: (props) => props.getValue(),
+        cell: props => props.getValue(),
       },
       {
-        header: 'Email Requestor',
-        accessorKey: 'email_requestor',
+        header: "Email Requestor",
+        accessorKey: "email_requestor",
         size: 10,
-        cell: (props) => props.getValue() ?? '',
+        cell: props => props.getValue() ?? "",
       },
       {
-        id: 'action_but',
+        id: "action_but",
         enableSorting: false,
         size: 10,
-        cell: (props) => {
+        cell: props => {
           let buttons = [];
           buttons.push(
             <TooltipButton
               Icon={<CheckCircleOutline />}
-              TooltipText={'Approve'}
-              OnClick={(e) => buttonAction('approve', props.row.original)}
+              TooltipText={"Approve"}
+              OnClick={e => buttonAction("approve", props.row.original)}
             />
           );
           buttons.push(
             <TooltipButton
               Icon={<CancelOutlined />}
-              TooltipText={'Reject'}
-              OnClick={(e) => buttonAction('reject', props.row.original)}
+              TooltipText={"Reject"}
+              OnClick={e => buttonAction("reject", props.row.original)}
             />
           );
           buttons.push(
-            <Link to={`/dashboard/form/${props.row.original.token}`} target="_blank" rel="noopener noreferrer">
-              <TooltipButton Icon={<VisibilityOutlined />} TooltipText={'View'} />
+            <Link
+              to={`/dashboard/form/${props.row.original.token}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <TooltipButton Icon={<VisibilityOutlined />} TooltipText={"View"} />
             </Link>
           );
-          return <Box sx={{ display: 'flex' }}>{buttons}</Box>;
+          return <Box sx={{ display: "flex" }}>{buttons}</Box>;
         },
       },
     ],
@@ -237,7 +256,7 @@ export default function TableParentVerif() {
   const table = useReactTable({
     columns,
     data: data_verif,
-    getRowId: (row) => row.ven_id,
+    getRowId: row => row.ven_id,
     getRowCanExpand: () => true,
     getCoreRowModel: getCoreRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
@@ -246,11 +265,11 @@ export default function TableParentVerif() {
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await axiosPrivate.get('/vendor/verif');
+        const { data } = await axiosPrivate.get("/vendor/verif");
         setDataVerif(data.data);
       } catch (error) {
         console.error(error);
-        openSnackbar('error', error.response.data.message);
+        openSnackbar("error", error.response.data.message);
       } finally {
         if (refresh) {
           setRefresh(false);
@@ -260,22 +279,22 @@ export default function TableParentVerif() {
   }, [refresh]);
 
   useEffect(() => {
-    const perm = permission['Vendor Verification'];
-    if (!perm.create) {
-      navigate('/dashboard/ticket');
+    const perm = permission["Vendor Verification"];
+    if (perm && !perm.create) {
+      navigate("/dashboard/ticket");
     }
-  }, []);
+  }, [permission]);
 
   return (
     <>
       <DialogFormConfirmation
         open={openDialog.state}
         onNo={onNo}
-        onYes={openDialog.action === 'approve' ? handleApprove : handleReject}
-        title={openDialog.action === 'approve' ? 'Approve Verification' : 'Reject Verification'}
+        onYes={openDialog.action === "approve" ? handleApprove : handleReject}
+        title={openDialog.action === "approve" ? "Approve Verification" : "Reject Verification"}
         values={selected}
       >
-        {openDialog.action === 'approve' ? (
+        {openDialog.action === "approve" ? (
           <ApproveDialog data_ven={selected} />
         ) : (
           <RejectDialog data_ven={selected} control={control} />
@@ -284,20 +303,24 @@ export default function TableParentVerif() {
       <Box>
         <RefreshButton isLoading={refresh} setRefreshbtn={setRefresh} />
       </Box>
-      <TableContainer sx={{ height: '100%' }}>
+      <TableContainer sx={{ height: "100%" }}>
         <Table stickyHeader>
           <TableHead>
-            {table.getHeaderGroups().map((headerGroup) => {
+            {table.getHeaderGroups().map(headerGroup => {
               return (
                 <TableRow key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => {
+                  {headerGroup.headers.map(header => {
                     return (
-                      <TableCell key={header.id} colSpan={header.colSpan} sx={{ width: `${header.column.getSize()}%` }}>
+                      <TableCell
+                        key={header.id}
+                        colSpan={header.colSpan}
+                        sx={{ width: `${header.column.getSize()}%` }}
+                      >
                         {header.isPlaceholder ? null : (
                           <div
                             style={{
-                              display: 'flex',
-                              alignContent: 'center',
+                              display: "flex",
+                              alignContent: "center",
                             }}
                           >
                             {flexRender(header.column.columnDef.header, header.getContext())}
@@ -311,19 +334,21 @@ export default function TableParentVerif() {
             })}
           </TableHead>
           <TableBody>
-            {table.getRowModel().rows.map((row) => {
+            {table.getRowModel().rows.map(row => {
               return (
                 <Fragment key={row.id}>
                   <TableRow hover>
-                    {row.getVisibleCells().map((cell) => {
+                    {row.getVisibleCells().map(cell => {
                       return (
-                        <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                        <TableCell key={cell.id}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
                       );
                     })}
                   </TableRow>
                   {row.getIsExpanded() && (
-                    <TableRow key={'rowchild' + row.id}>
-                      <TableCell key={'rowcell' + row.id} colSpan={row.getVisibleCells().length}>
+                    <TableRow key={"rowchild" + row.id}>
+                      <TableCell key={"rowcell" + row.id} colSpan={row.getVisibleCells().length}>
                         <>
                           <TableChildVerif dataChild={row.original.bank} />
                         </>

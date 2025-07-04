@@ -108,7 +108,9 @@
       "Alasan memilih vendor tersebut menjadi rekanan KPN": "Alasan memilih vendor tersebut menjadi rekanan KPN",
       "VAT Type": "Tipe PPN",
       "Jabatan PIC": "Jabatan PIC",
-      "Jabatan dari pihak vendor yang mengisi form": "Jabatan dari pihak vendor yang mengisi form"
+      "Jabatan dari pihak vendor yang mengisi form": "Jabatan dari pihak vendor yang mengisi form",
+      "Badan Usaha": "Badan Usaha",
+      "Isi 16 digit": "Isi 16 digit"
     }
   },
   "en": {
@@ -220,7 +222,9 @@
       "Alasan memilih vendor tersebut menjadi rekanan KPN": "Reason for choosing vendor as KPN's partner",
       "VAT Type": "VAT Type",
       "Jabatan PIC": "PIC Function",
-      "Jabatan dari pihak vendor yang mengisi form": "Function of person from vendor who filled the form"
+      "Jabatan dari pihak vendor yang mengisi form": "Function of person from vendor who filled the form",
+      "Badan Usaha": "Company Entity",
+      "Isi 16 digit": "Fill 16 digits"
     }
   }
 }
