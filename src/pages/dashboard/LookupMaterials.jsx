@@ -1,4 +1,12 @@
-import { Add, DeleteOutline, Edit, FileDownload, FileUpload } from "@mui/icons-material";
+import {
+  Add,
+  ArrowDownward,
+  ArrowUpward,
+  DeleteOutline,
+  Edit,
+  FileDownload,
+  FileUpload,
+} from "@mui/icons-material";
 import {
   Alert,
   Box,
@@ -46,11 +54,13 @@ export default function LookupMaterials() {
   const [importLoading, setImportLoading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [groupToDelete, setGroupToDelete] = useState(null);
+  const [sortField, setSortField] = useState("code");
+  const [sortOrder, setSortOrder] = useState("asc");
 
   // Fetch groups on component mount
   useEffect(() => {
     fetchGroups();
-  }, [pagination.page, searchQuery]);
+  }, [pagination.page, searchQuery, sortField, sortOrder]);
 
   // Fetch groups
   const fetchGroups = async () => {
@@ -61,7 +71,12 @@ export default function LookupMaterials() {
       if (searchQuery) {
         url += `&q=${encodeURIComponent(searchQuery)}`;
       }
-
+      if (sortField) {
+        url += `&sort=${sortField}`;
+      }
+      if (sortOrder) {
+        url += `&order=${sortOrder}`;
+      }
       const response = await axiosPrivate.get(url);
       console.log(response.data);
       setGroups(response.data.data || []);
@@ -151,15 +166,8 @@ export default function LookupMaterials() {
     setImportLoading(true);
 
     try {
-      console.log("Importing file:", file.name, "Size:", file.size, "Type:", file.type);
       const formData = new FormData();
       formData.append("file", file); // This name must match what the backend expects
-
-      // Log formData contents for debugging
-      console.log("FormData contents:");
-      for (let pair of formData.entries()) {
-        console.log(pair[0], pair[1]);
-      }
 
       const response = await axiosPrivate.post("/material/groups/import", formData, {
         headers: {
@@ -231,15 +239,13 @@ export default function LookupMaterials() {
     setLoading(true);
 
     try {
-      let response;
-
       if (editMode) {
         // Update existing group
-        response = await axiosPrivate.put(`/material/groups/${newGroup.id}`, newGroup);
+        await axiosPrivate.put(`/material/groups/${newGroup.id}`, newGroup);
         showSnackbar("Group updated successfully");
       } else {
         // Create new group
-        response = await axiosPrivate.post("/material/groups", newGroup);
+        await axiosPrivate.post("/material/groups", newGroup);
         showSnackbar("Group created successfully");
       }
 
@@ -298,13 +304,31 @@ export default function LookupMaterials() {
     });
   };
 
+  // Code column header with sort arrow
+  const handleSortCode = () => {
+    setSortOrder(prev => (prev === "asc" ? "desc" : "asc"));
+    setSortField("code");
+    setPagination(prev => ({ ...prev, page: 1 }));
+  };
+
   // Table columns definition
   const columns = [
     {
       id: "code",
       label: "Code",
       header: () => (
-        <Box sx={{ display: "flex", justifyContent: "flex-start", width: "100%" }}>Code</Box>
+        <Box
+          sx={{ display: "flex", alignItems: "center", cursor: "pointer", userSelect: "none" }}
+          onClick={handleSortCode}
+        >
+          Code
+          {sortField === "code" &&
+            (sortOrder === "asc" ? (
+              <ArrowUpward fontSize="small" sx={{ ml: 0.5 }} />
+            ) : (
+              <ArrowDownward fontSize="small" sx={{ ml: 0.5 }} />
+            ))}
+        </Box>
       ),
       accessorKey: "code",
       cell: info => {
