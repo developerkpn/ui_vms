@@ -1,4 +1,6 @@
 import {
+  CheckCircle,
+  CheckCircleOutline,
   Close,
   Delete,
   Download,
@@ -563,11 +565,14 @@ export default function SearchMaterials() {
         header: "Alias",
         cell: ({ getValue }) => getValue() || "-",
       }),
+      columnHelper.accessor("dffromclient", {
+        header: "Status",
+        cell: ({ getValue }) => (getValue() ? "Deleted" : "Active"),
+      }),
       columnHelper.accessor("created_by", {
         header: "Created By",
         cell: ({ getValue }) => getValue() || "-",
       }),
-
       columnHelper.accessor("created_at", {
         header: "Created At",
         cell: ({ getValue }) => (getValue() ? moment(getValue()).format("YYYY-MM-DD") : "-"),
@@ -575,6 +580,30 @@ export default function SearchMaterials() {
       columnHelper.accessor("updated_at", {
         header: "Updated At",
         cell: ({ getValue }) => (getValue() ? moment(getValue()).format("YYYY-MM-DD") : "-"),
+      }),
+      columnHelper.display({
+        header: "Attachments",
+        id: "attachments",
+        cell: ({ row }) => {
+          const attachmentsCount = row.original.attachments ? row.original.attachments.length : 0;
+          const MAX_ATTACHMENTS = 3;
+          return (
+            <Box sx={{ display: "flex", alignItems: "center" }}>
+              {[...Array(MAX_ATTACHMENTS)].map((_, index) => (
+                <Box key={index} sx={{ mx: 0.25 }}>
+                  {index < attachmentsCount ? (
+                    <CheckCircle color="success" fontSize="small" />
+                  ) : (
+                    <CheckCircleOutline color="disabled" fontSize="small" />
+                  )}
+                </Box>
+              ))}
+              <Typography variant="body2" sx={{ ml: 1 }}>
+                {attachmentsCount}/{MAX_ATTACHMENTS}
+              </Typography>
+            </Box>
+          );
+        },
       }),
       columnHelper.display({
         header: "Actions",
