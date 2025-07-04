@@ -161,13 +161,14 @@ export default function SearchMaterials() {
           totalPages: response.data.pagination.totalPages,
         }));
       } catch (error) {
-        if (error.name === "AbortError") {
+        if (error.code === "ERR_CANCELED") {
           // Request was aborted, do not set error
+          console.log("Request was aborted", error);
           return;
         }
         console.error("Search failed:", error);
-        setError("Failed to load materials. Please try again.");
         setMaterials([]);
+        setError("Failed to load materials. Please try again.");
       } finally {
         setLoading(false);
       }
@@ -527,12 +528,8 @@ export default function SearchMaterials() {
           return getValue() || "-";
         },
       }),
-      columnHelper.accessor("name", {
-        header: "Material Name",
-        cell: ({ getValue }) => getValue() || "-",
-      }),
       columnHelper.accessor("combined_description", {
-        header: "Description",
+        header: "Material Description",
         cell: ({ getValue, row }) => {
           const combinedDesc = getValue();
           if (combinedDesc) return combinedDesc;
@@ -566,6 +563,11 @@ export default function SearchMaterials() {
         header: "Alias",
         cell: ({ getValue }) => getValue() || "-",
       }),
+      columnHelper.accessor("created_by", {
+        header: "Created By",
+        cell: ({ getValue }) => getValue() || "-",
+      }),
+
       columnHelper.accessor("created_at", {
         header: "Created At",
         cell: ({ getValue }) => (getValue() ? moment(getValue()).format("YYYY-MM-DD") : "-"),
