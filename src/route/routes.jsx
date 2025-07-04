@@ -182,7 +182,7 @@ export const routes = createBrowserRouter([
         element: <SearchMaterials />,
       },
       {
-        path: "etender/multiple",
+        path: "etender/multi",
         element: <NavigateETender type="recap" />,
       },
       {
