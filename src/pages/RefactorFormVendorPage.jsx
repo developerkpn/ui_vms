@@ -561,7 +561,7 @@ function RefactorFormVendorPage() {
   const checkExist = useCallback(async item => {
     setLoadex(true);
     try {
-      const checkExt = await axiosPrivate.get(`/vendor/checkven?name=${item}`);
+      const checkExt = await axiosPrivate.get(`/vendor/checkven?name=${item}&bu_id=UPS`);
       // console.log(checkExt);
       setCheckex(false);
       // console.log(expanded);

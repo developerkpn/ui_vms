@@ -423,7 +423,7 @@ function RefactorFormVendorPage() {
   const checkExist = useCallback(async item => {
     setLoadex(true);
     try {
-      const checkExt = await axiosPrivate.get(`/vendor/checkven?name=${item}`);
+      const checkExt = await axiosPrivate.get(`/vendor/checkven?name=${item}&bu_id=UPS`);
       // console.log(checkExt);
       setCheckex(false);
       // console.log(expanded);
@@ -2210,7 +2210,9 @@ function RefactorFormVendorPage() {
                 </Grid>
               </AccordionDetails>
             </Accordion>
-            {(!checkFieldRule("vendetail") || data_form.ticket_stat == false) && (
+            {(!checkFieldRule("vendetail") ||
+              data_form.ticket_stat == false ||
+              emp_role_id == "STAFF") && (
               <Accordion
                 expanded={expanded.panelVendetail}
                 onChange={e => {

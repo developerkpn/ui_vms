@@ -510,7 +510,7 @@ function FormVendorCG() {
   const checkExist = useCallback(async item => {
     setLoadex(true);
     try {
-      const checkExt = await axiosPrivate.get(`/vendor/checkven?name=${item}`);
+      const checkExt = await axiosPrivate.get(`/vendor/checkven?name=${item}&bu_id=CG`);
       setCheckex(false);
       toggle({ type: FormTab.OpenForm });
       setLoadex(false);
