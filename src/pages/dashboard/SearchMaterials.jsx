@@ -43,6 +43,7 @@ import SearchFieldComp from "src/components/common/SearchFieldComp";
 import TooltipButton from "src/components/common/TooltipButton";
 import TableSimple from "src/components/table/TableSimple";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
+import TableSorting from "src/components/table/TableSorting";
 
 const columnHelper = createColumnHelper();
 
@@ -62,6 +63,7 @@ export default function SearchMaterials() {
     totalCount: 0,
     totalPages: 0,
   });
+  const [sorting, setSorting] = useState([]);
   const [attachmentsDialogOpen, setAttachmentsDialogOpen] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState(null);
   const [uploadFiles, setUploadFiles] = useState([]);
@@ -122,24 +124,24 @@ export default function SearchMaterials() {
       page: 1,
     }));
 
-    fetchMaterials(1);
-  }, [selectedSubGroup, selectedGroup, searchQuery]);
+    fetchMaterials(1, sorting);
+  }, [selectedSubGroup, selectedGroup, searchQuery, sorting]);
 
   const fetchMaterials = (page = 1) => {
     if (searchQuery) {
-      searchMaterials(searchQuery, page);
+      searchMaterials(searchQuery, page, sorting);
     } else if (selectedGroup && selectedSubGroup) {
-      fetchMaterialsBySubGroup(selectedSubGroup, page);
+      fetchMaterialsBySubGroup(selectedSubGroup, page, sorting);
     } else if (selectedGroup) {
-      fetchMaterialsByGroup(selectedGroup, page);
+      fetchMaterialsByGroup(selectedGroup, page, sorting);
     } else {
-      searchMaterials("", page); // Call with empty string to get all materials
+      searchMaterials("", page, sorting); // Call with empty string to get all materials
     }
   };
 
   // Search materials using the search endpoint
   const searchMaterials = useCallback(
-    debounce(async (term, page = 1) => {
+    debounce(async (term, page = 1, sorting) => {
       setLoading(true);
       setError(null);
       try {
@@ -149,11 +151,20 @@ export default function SearchMaterials() {
         }
         controllerRef.current = new AbortController();
         const signal = controllerRef.current.signal;
+        const URLSearch = new URLSearchParams();
         // Build the URL with or without search term
         let url = `/material/search/all?page=${page}&pageSize=${pagination.pageSize}`;
         if (term && term.trim() !== "") {
           const encodedSearchTerm = encodeURIComponent(term.trim());
           url += `&q=${encodedSearchTerm}`;
+        }
+        console.log(sorting);
+        if (sorting.length > 0) {
+          for (const sort of sorting) {
+            let state = sort.desc ? "desc" : "asc";
+            URLSearch.append(sort.id, state);
+          }
+          url += "&" + URLSearch.toString();
         }
         const response = await axiosPrivate.get(url, { signal });
         setMaterials(response.data.data || []);
@@ -186,6 +197,10 @@ export default function SearchMaterials() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    console.log(sorting);
+  }, [sorting]);
 
   // Fetch subgroups
   const fetchSubGroups = async groupId => {
@@ -561,12 +576,14 @@ export default function SearchMaterials() {
     () => [
       columnHelper.accessor("code", {
         header: "Code",
+        enableSorting: false,
         cell: ({ getValue, row }) => {
           return getValue() || "-";
         },
       }),
       columnHelper.accessor("combined_description", {
         header: "Material Description",
+        enableSorting: false,
         cell: ({ getValue, row }) => {
           const combinedDesc = getValue();
           if (combinedDesc) return combinedDesc;
@@ -588,6 +605,7 @@ export default function SearchMaterials() {
         {
           id: "group",
           header: "Group",
+          enableSorting: false,
           cell: ({ getValue }) => {
             const group = getValue();
             return group && group.groupCode && group.groupName
@@ -598,14 +616,17 @@ export default function SearchMaterials() {
       ),
       columnHelper.accessor("alias1", {
         header: "Alias",
+        enableSorting: false,
         cell: ({ getValue }) => getValue() || "-",
       }),
       columnHelper.accessor("dffromclient", {
         header: "Status",
+        enableSorting: false,
         cell: ({ getValue }) => (getValue() ? "Deleted" : "Active"),
       }),
       columnHelper.accessor("created_by", {
         header: "Created By",
+        enableSorting: false,
         cell: ({ getValue }) => getValue() || "-",
       }),
       columnHelper.accessor("created_at", {
@@ -618,6 +639,7 @@ export default function SearchMaterials() {
       }),
       columnHelper.display({
         header: "Attachments",
+        enableSorting: false,
         id: "attachments",
         cell: ({ row }) => {
           const attachmentsCount = row.original.attachments ? row.original.attachments.length : 0;
@@ -838,13 +860,15 @@ export default function SearchMaterials() {
         {showResultsTable() && (
           <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1 }}>
             <Box sx={{ flexGrow: 1 }}>
-              <TableSimple
+              <TableSorting
                 columns={columns}
                 rowsData={materials}
                 sx={{
                   height: "100%",
                   width: "100%",
                 }}
+                sorting={sorting}
+                setSorting={setSorting}
               />
             </Box>
             {pagination.totalPages > 1 && (
