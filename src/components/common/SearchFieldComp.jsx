@@ -5,18 +5,21 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const SearchFieldComp = ({ setQuery, placeholder }) => {
   const [que, setQue] = useState("");
+  const [mount, setMount] = useState(false);
   const fieldRef = useRef();
-  const updateQuery = useCallback(
-    debounce(value => {
-      setQuery(value);
-    }, 800),
-    []
-  );
+  const updateQuery = debounce(value => {
+    setQuery(value);
+  }, 800);
+
   const onChangeQuery = useCallback(value => {
     setQue(value);
   }, []);
   useEffect(() => {
-    updateQuery(que);
+    if (mount) {
+      updateQuery(que);
+    } else {
+      setMount(true);
+    }
   }, [que]);
   const clearQue = useCallback(() => {
     setQue("");

@@ -29,18 +29,21 @@ import { useNavigate } from "react-router-dom";
 import SearchFieldComp from "src/components/common/SearchFieldComp";
 import TableSimple from "src/components/table/TableSimple";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
+import usePaginationStore from "src/store/usePaginationStore";
 
 const columnHelper = createColumnHelper();
 
 export default function LookupMaterials() {
   const axiosPrivate = useAxiosPrivate();
   const navigate = useNavigate();
+  const pageGlobal = usePaginationStore(state => state.page);
+  const setPageGlobal = usePaginationStore(state => state.setPageGlobal);
   const [searchQuery, setSearchQuery] = useState("");
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [pagination, setPagination] = useState({
-    page: 1,
+    page: pageGlobal,
     pageSize: 10,
     totalCount: 0,
     totalPages: 0,
@@ -58,6 +61,10 @@ export default function LookupMaterials() {
   const [sortOrder, setSortOrder] = useState("asc");
 
   // Fetch groups on component mount
+  useEffect(() => {
+    setPagination(prev => ({ ...prev, page: pageGlobal }));
+  }, [pageGlobal]);
+
   useEffect(() => {
     fetchGroups();
   }, [pagination.page, searchQuery, sortField, sortOrder]);
@@ -80,11 +87,11 @@ export default function LookupMaterials() {
       const response = await axiosPrivate.get(url);
       console.log(response.data);
       setGroups(response.data.data || []);
-      setPagination({
-        ...pagination,
+      setPagination(prev => ({
+        ...prev,
         totalCount: response.data.pagination.totalCount,
         totalPages: response.data.pagination.totalPages,
-      });
+      }));
     } catch (error) {
       console.error("Failed to fetch groups:", error);
       setError("Failed to load material groups. Please try again.");
@@ -105,14 +112,16 @@ export default function LookupMaterials() {
 
   // Handle search input change
   const handleSearchChange = value => {
+    console.log("search...");
     setSearchQuery(value);
     setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page on new search
+    setPageGlobal(1);
   };
 
   // Handle page change
   const handlePageChange = (event, newPage) => {
     setPagination(prev => ({ ...prev, page: newPage }));
-
+    setPageGlobal(newPage);
     // for better UX, clear the groups list when page changes
     setGroups([]);
   };
