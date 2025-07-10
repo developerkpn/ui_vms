@@ -12,8 +12,8 @@ export default function NavigateETender({ type }) {
         type: type,
       });
       // console.log(data);
-      console.log(`${import.meta.env.VITE_ETENDER}/sso-login?token=${data.token}`);
-      window.open(`${import.meta.env.VITE_ETENDER}/sso-login?token=${data.token}`);
+      console.log(`${import.meta.env.VITE_ETENDER}/sso/login?token=${data.token}`);
+      window.open(`${import.meta.env.VITE_ETENDER}/sso/login?token=${data.token}`);
     } catch (error) {
       console.error(error);
       openSnackbar("error", "Something went wrong");
