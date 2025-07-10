@@ -1,15 +1,20 @@
 import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { TableContainer, Table, TableBody, TableCell, TableHead, TableRow } from "@mui/material";
 import { useMemo } from "react";
+import { ArrowUpwardOutlined, ArrowDownwardOutlined } from "@mui/icons-material";
 // import PaginationActionButton from "./PaginationActionButton";
 
-export default function TableSimple({ rowsData, sx, columns, meta }) {
+export default function TableSorting({ rowsData, sx, columns, meta, sorting, setSorting }) {
   const col = columns;
   const table = useReactTable({
     data: rowsData,
     columns: col,
     getCoreRowModel: getCoreRowModel(),
     meta: meta,
+    onSortingChange: setSorting,
+    state: {
+      sorting,
+    },
   });
   return (
     <>
@@ -29,14 +34,21 @@ export default function TableSimple({ rowsData, sx, columns, meta }) {
                       <TableCell
                         key={header.id}
                         colSpan={header.colSpan}
-                        sx={{ width: `${header.column.getSize()}px` }}
+                        sx={{ width: `${header.column.getSize()}px`, cursor: "pointer" }}
+                        onClick={e => {
+                          const sort = header.column.getToggleSortingHandler();
+                          sort(e);
+                          console.log(header.column.getIsSorted());
+                        }}
                       >
                         {header.isPlaceholder ? null : (
-                          <div>
-                            <div>
-                              {flexRender(header.column.columnDef.header, header.getContext())}
-                            </div>
-                          </div>
+                          <>
+                            {flexRender(header.column.columnDef.header, header.getContext())}{" "}
+                            {{
+                              asc: <ArrowUpwardOutlined />,
+                              desc: <ArrowDownwardOutlined />,
+                            }[header.column.getIsSorted()] ?? null}
+                          </>
                         )}
                       </TableCell>
                     );
