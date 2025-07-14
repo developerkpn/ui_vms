@@ -277,7 +277,7 @@ export default function Subgroups() {
       } else {
         fetchSubgroups();
       }
-
+      fetchSubgroups();
       handleCloseSubgroupDialog();
     } catch (error) {
       console.error("Subgroup save failed:", error);
