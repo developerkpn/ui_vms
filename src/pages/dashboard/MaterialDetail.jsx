@@ -41,6 +41,7 @@ import { Link as RouterLink, useLocation, useNavigate, useParams } from "react-r
 import SearchFieldComp from "src/components/common/SearchFieldComp";
 import TableSimple from "src/components/table/TableSimple";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
+import usePaginationStore from "src/store/usePaginationStore";
 
 export default function Materials() {
   const { subgroupId } = useParams();
@@ -53,9 +54,15 @@ export default function Materials() {
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  // Use Zustand store for pagination
+  const materialPage = usePaginationStore(state => state.materialPage);
+  const materialPageSize = usePaginationStore(state => state.materialPageSize);
+  const setMaterialPage = usePaginationStore(state => state.setMaterialPage);
+  const setMaterialPageSize = usePaginationStore(state => state.setMaterialPageSize);
+
   const [pagination, setPagination] = useState({
-    page: 1,
-    pageSize: 10,
+    page: materialPage,
+    pageSize: materialPageSize,
     totalCount: 0,
     totalPages: 0,
   });
@@ -87,6 +94,17 @@ export default function Materials() {
       fetchMaterials();
     }
   }, [subgroupId, pagination.page, searchQuery, sortField, sortOrder]);
+
+  // Sync Zustand store when page/pageSize changes
+  useEffect(() => {
+    setMaterialPage(pagination.page);
+    setMaterialPageSize(pagination.pageSize);
+  }, [pagination.page, pagination.pageSize]);
+
+  // When store changes (e.g. after navigating back), update local state
+  useEffect(() => {
+    setPagination(prev => ({ ...prev, page: materialPage, pageSize: materialPageSize }));
+  }, [materialPage, materialPageSize]);
 
   // Fetch materials
   const fetchMaterials = async () => {
@@ -137,9 +155,13 @@ export default function Materials() {
   // Handle page change
   const handlePageChange = (event, newPage) => {
     setPagination(prev => ({ ...prev, page: newPage }));
-
     setMaterials([]);
   };
+
+  // Optionally, add a handler for page size change if your TableSimple supports it
+  // const handlePageSizeChange = (newSize) => {
+  //   setPagination(prev => ({ ...prev, pageSize: newSize, page: 1 }));
+  // };
 
   // Open attachments dialog
   const handleOpenAttachmentsDialog = async material => {

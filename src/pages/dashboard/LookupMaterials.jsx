@@ -36,15 +36,19 @@ const columnHelper = createColumnHelper();
 export default function LookupMaterials() {
   const axiosPrivate = useAxiosPrivate();
   const navigate = useNavigate();
-  const pageGlobal = usePaginationStore(state => state.page);
-  const setPageGlobal = usePaginationStore(state => state.setPageGlobal);
+  // Use Zustand store for pagination
+  const groupPage = usePaginationStore(state => state.groupPage);
+  const groupPageSize = usePaginationStore(state => state.groupPageSize);
+  const setGroupPage = usePaginationStore(state => state.setGroupPage);
+  const setGroupPageSize = usePaginationStore(state => state.setGroupPageSize);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [pagination, setPagination] = useState({
-    page: pageGlobal,
-    pageSize: 10,
+    page: groupPage,
+    pageSize: groupPageSize,
     totalCount: 0,
     totalPages: 0,
   });
@@ -62,12 +66,23 @@ export default function LookupMaterials() {
 
   // Fetch groups on component mount
   useEffect(() => {
-    setPagination(prev => ({ ...prev, page: pageGlobal }));
-  }, [pageGlobal]);
+    setPagination(prev => ({ ...prev, page: groupPage, pageSize: groupPageSize }));
+  }, [groupPage, groupPageSize]);
 
   useEffect(() => {
     fetchGroups();
   }, [pagination.page, searchQuery, sortField, sortOrder]);
+
+  // Sync Zustand store when page/pageSize changes
+  useEffect(() => {
+    setGroupPage(pagination.page);
+    setGroupPageSize(pagination.pageSize);
+  }, [pagination.page, pagination.pageSize]);
+
+  // When store changes (e.g. after navigating back), update local state
+  useEffect(() => {
+    setPagination(prev => ({ ...prev, page: groupPage, pageSize: groupPageSize }));
+  }, [groupPage, groupPageSize]);
 
   // Fetch groups
   const fetchGroups = async () => {
@@ -115,16 +130,19 @@ export default function LookupMaterials() {
     console.log("search...");
     setSearchQuery(value);
     setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page on new search
-    setPageGlobal(1);
+    setGroups([]);
   };
 
   // Handle page change
   const handlePageChange = (event, newPage) => {
     setPagination(prev => ({ ...prev, page: newPage }));
-    setPageGlobal(newPage);
-    // for better UX, clear the groups list when page changes
     setGroups([]);
   };
+
+  // Optionally, add a handler for page size change if your TableSimple supports it
+  // const handlePageSizeChange = (newSize) => {
+  //   setPagination(prev => ({ ...prev, pageSize: newSize, page: 1 }));
+  // };
 
   // Export groups to Excel
   const handleExportToExcel = async () => {

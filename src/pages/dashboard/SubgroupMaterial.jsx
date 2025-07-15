@@ -38,6 +38,7 @@ import { Link as RouterLink, useLocation, useNavigate, useParams } from "react-r
 import SearchFieldComp from "src/components/common/SearchFieldComp";
 import TableSimple from "src/components/table/TableSimple";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
+import usePaginationStore from "src/store/usePaginationStore";
 
 export default function Subgroups() {
   const { groupId } = useParams();
@@ -51,9 +52,15 @@ export default function Subgroups() {
   const [subgroups, setSubgroups] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  // Use Zustand store for pagination
+  const subgroupPage = usePaginationStore(state => state.subgroupPage);
+  const subgroupPageSize = usePaginationStore(state => state.subgroupPageSize);
+  const setSubgroupPage = usePaginationStore(state => state.setSubgroupPage);
+  const setSubgroupPageSize = usePaginationStore(state => state.setSubgroupPageSize);
+
   const [pagination, setPagination] = useState({
-    page: 1,
-    pageSize: 10,
+    page: subgroupPage,
+    pageSize: subgroupPageSize,
     totalCount: 0,
     totalPages: 0,
   });
@@ -93,10 +100,16 @@ export default function Subgroups() {
     }
   }, [subgroupDialogOpen, groupFetchRetry]);
 
-  // Save pagination state when it changes
+  // Sync Zustand store when page/pageSize changes
   useEffect(() => {
-    sessionStorage.setItem("subgroupsPagination", JSON.stringify(pagination));
-  }, [pagination]);
+    setSubgroupPage(pagination.page);
+    setSubgroupPageSize(pagination.pageSize);
+  }, [pagination.page, pagination.pageSize]);
+
+  // When store changes (e.g. after navigating back), update local state
+  useEffect(() => {
+    setPagination(prev => ({ ...prev, page: subgroupPage, pageSize: subgroupPageSize }));
+  }, [subgroupPage, subgroupPageSize]);
 
   // Fetch all groups for dropdown with retry mechanism
   const fetchAllGroups = async (showErrors = true) => {
@@ -178,6 +191,11 @@ export default function Subgroups() {
     // for better UX, clear the subgroups list when page changes
     setSubgroups([]);
   };
+
+  // Optionally, add a handler for page size change if your TableSimple supports it
+  // const handlePageSizeChange = (newSize) => {
+  //   setPagination(prev => ({ ...prev, pageSize: newSize, page: 1 }));
+  // };
 
   // Open subgroup dialog
   const handleOpenSubgroupDialog = (subgroup = null) => {
