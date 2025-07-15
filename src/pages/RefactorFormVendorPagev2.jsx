@@ -97,6 +97,7 @@ function RefactorFormVendorPage() {
     titlecomp: "",
     localovs: "",
     name1: "",
+    kawasan_berikat: false,
     country: "",
     street: "",
     street2: "",
@@ -240,13 +241,14 @@ function RefactorFormVendorPage() {
         { signal: controller.signal }
       );
       const resultBank = bankInit.data;
-
+      console.log("data", data);
       const valueForm = {
         emailRequestor: data.email_proc ? data.email_proc : "",
         deptRequestor: data.dep_proc ? data.dep_proc : "",
         titlecomp: data.title ? data.title : "",
         localovs: data.local_ovs ? data.local_ovs : "",
         name1: data["name_1"] ? data["name_1"] : "",
+        kawasan_berikat: data?.kawasan_berikat,
         country: data.country ? data.country : "",
         street: data.street ? data.street : "",
         street2: data.street2 ? data.street2 : "",
@@ -496,7 +498,7 @@ function RefactorFormVendorPage() {
   }, []);
 
   useEffect(() => {
-    // console.log(loader_data);
+    console.log(loader_data);
     reset(loader_data.data);
     setChgCty(loader_data.data?.country);
     setVengrp(loader_data.data?.vengroup);
@@ -998,6 +1000,7 @@ function RefactorFormVendorPage() {
       no_telf_pic: value.no_telf_pic.trim().split(/-/)[1],
       email_pic: value.email_pic.trim(),
       email_fin: value.email_fin.trim(),
+      kawasan_berikat: value.kawasan_berikat,
     };
     let tempBanks = [];
     let ven_bank;
@@ -1259,7 +1262,7 @@ function RefactorFormVendorPage() {
                       }}
                     />
                   </Grid>
-                  <Grid item xs={4}>
+                  <Grid item xs={8}>
                     <TextFieldComp
                       name="name1"
                       label={t("Company Name") + " *"}
@@ -1272,6 +1275,7 @@ function RefactorFormVendorPage() {
                       }}
                       onChangeovr={funChgname}
                       toUpperCase={true}
+                      sx={{ minWidth: "30rem" }}
                     />
                   </Grid>
                   {checkIsExist && (
@@ -1285,7 +1289,7 @@ function RefactorFormVendorPage() {
                           {t("Verify")}
                         </LoadingButton>
                       </Grid>
-                      <Grid item xs={4}>
+                      <Grid item xs={12}>
                         <Alert variant="filled" severity="warning">
                           {t(
                             "Untuk melanjutkan, mohon klik verifikasi apakah nama vendor yang diisi sudah terdaftar"
@@ -1294,8 +1298,14 @@ function RefactorFormVendorPage() {
                       </Grid>
                     </>
                   )}
-                  {!checkIsExist && <Grid item xs={6}></Grid>}
-
+                  {!checkIsExist && <Grid item xs={3}></Grid>}
+                  {checkIsExist && openAlert && (
+                    <Grid item xs={12}>
+                      <Alert severity="error" variant="filled">
+                        {t("Already Exist")}
+                      </Alert>
+                    </Grid>
+                  )}
                   <Grid item xs={3}>
                     <PatternFieldComp
                       name="telf"
@@ -1339,7 +1349,14 @@ function RefactorFormVendorPage() {
                       )}
                     />
                   </Grid>
-
+                  <Grid item xs={3}>
+                    <CheckboxComp
+                      name="kawasan_berikat"
+                      label="Kawasan Berikat"
+                      control={control}
+                      disabled={checkFieldRule("kawasan_berikat")}
+                    />
+                  </Grid>
                   {!checkFieldRule("search_term") && (
                     <Grid item xs={6}>
                       <TextFieldComp
@@ -1363,11 +1380,6 @@ function RefactorFormVendorPage() {
                 </Grid>
               </AccordionDetails>
             </Accordion>
-            {checkIsExist && openAlert && (
-              <Alert sx={{ mt: "2rem", mb: "2rem" }} severity="error" variant="filled">
-                {t("Already Exist")}
-              </Alert>
-            )}
             <Accordion
               expanded={expanded.panelInfoAcc}
               onChange={e => {

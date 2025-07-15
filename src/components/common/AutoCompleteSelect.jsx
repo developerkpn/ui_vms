@@ -55,6 +55,7 @@ export default function AutoCompleteSelect({
         return (
           <Autocomplete
             onChange={(e, newValue) => {
+              console.log(newValue);
               if (onChangeovr != undefined) {
                 onChangeovr(newValue);
               }
@@ -72,10 +73,9 @@ export default function AutoCompleteSelect({
             error={error}
             options={options}
             freeSolo={freeSolo}
-            onInputChange={e => {
-              const target = e?.target;
-              if (freeSolo && e) {
-                value_onchange(e.target?.value?.toUpperCase());
+            onInputChange={(e, value) => {
+              if (freeSolo && value) {
+                value_onchange(value.toUpperCase());
               }
             }}
             fullWidth
