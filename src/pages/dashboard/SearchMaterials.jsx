@@ -41,9 +41,8 @@ import moment from "moment";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import SearchFieldComp from "src/components/common/SearchFieldComp";
 import TooltipButton from "src/components/common/TooltipButton";
-import TableSimple from "src/components/table/TableSimple";
-import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import TableSorting from "src/components/table/TableSorting";
+import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 
 const columnHelper = createColumnHelper();
 
@@ -84,6 +83,7 @@ export default function SearchMaterials() {
   const [attachmentToDelete, setAttachmentToDelete] = useState(null);
   const [deleteMaterialDialogOpen, setDeleteMaterialDialogOpen] = useState(false);
   const [materialToDelete, setMaterialToDelete] = useState(null);
+  const [downloadLoading, setDownloadLoading] = useState(false);
 
   // Fetch groups on component mount
   useEffect(() => {
@@ -712,11 +712,14 @@ export default function SearchMaterials() {
 
   // Download to Excel handler
   const handleDownloadExcel = async () => {
+    setDownloadLoading(true);
     try {
       let url = "/material/export/materials";
       const params = [];
       if (selectedGroup) params.push(`groupId=${selectedGroup}`);
       if (selectedSubGroup) params.push(`subGroupId=${selectedSubGroup}`);
+      if (searchQuery && searchQuery.trim() !== "")
+        params.push(`q=${encodeURIComponent(searchQuery.trim())}`);
       if (params.length > 0) url += `?${params.join("&")}`;
 
       const response = await axiosPrivate.get(url, {
@@ -745,6 +748,8 @@ export default function SearchMaterials() {
     } catch (error) {
       console.error("Failed to download Excel:", error);
       setError("Failed to download Excel file. Please try again.");
+    } finally {
+      setDownloadLoading(false);
     }
   };
 
@@ -763,11 +768,14 @@ export default function SearchMaterials() {
           <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
             <Button
               variant="contained"
-              startIcon={<Download />}
+              startIcon={
+                downloadLoading ? <CircularProgress size={20} color="inherit" /> : <Download />
+              }
               onClick={handleDownloadExcel}
               sx={{ minWidth: 180 }}
+              disabled={downloadLoading}
             >
-              Download to Excel
+              {downloadLoading ? "Downloading..." : "Download to Excel"}
             </Button>
           </Box>
 
