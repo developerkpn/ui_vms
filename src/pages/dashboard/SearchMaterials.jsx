@@ -139,6 +139,8 @@ export default function SearchMaterials() {
     }
   };
 
+  console.log(materials, "materials");
+
   // Search materials using the search endpoint
   const searchMaterials = useCallback(
     debounce(async (term, page = 1, sorting) => {
@@ -616,6 +618,11 @@ export default function SearchMaterials() {
       ),
       columnHelper.accessor("alias1", {
         header: "Alias",
+        enableSorting: false,
+        cell: ({ getValue }) => getValue() || "-",
+      }),
+      columnHelper.accessor("unit_of_measurement", {
+        header: "UOM",
         enableSorting: false,
         cell: ({ getValue }) => getValue() || "-",
       }),
