@@ -43,6 +43,7 @@ import SearchFieldComp from "src/components/common/SearchFieldComp";
 import TooltipButton from "src/components/common/TooltipButton";
 import TableSorting from "src/components/table/TableSorting";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
+import usePermissionStore from "src/store/userPermissionStore";
 
 const columnHelper = createColumnHelper();
 
@@ -84,6 +85,7 @@ export default function SearchMaterials() {
   const [deleteMaterialDialogOpen, setDeleteMaterialDialogOpen] = useState(false);
   const [materialToDelete, setMaterialToDelete] = useState(null);
   const [downloadLoading, setDownloadLoading] = useState(false);
+  const permission = usePermissionStore(state => state.permission);
 
   // Fetch groups on component mount
   useEffect(() => {
@@ -692,12 +694,14 @@ export default function SearchMaterials() {
                 TooltipText="Edit Aliases"
                 OnClick={() => handleOpenAliasDialog(material)}
               />
-              <TooltipButton
-                Icon={<Delete color={material.dffromclient ? "disabled" : "error"} />}
-                TooltipText={material.dffromclient ? "Already deleted" : "Delete Material"}
-                OnClick={() => handleDeleteMaterial(material)}
-                disabled={material.dffromclient}
-              />
+              {permission["Material Search"]?.delete && (
+                <TooltipButton
+                  Icon={<Delete color={material.dffromclient ? "disabled" : "error"} />}
+                  TooltipText={material.dffromclient ? "Already deleted" : "Delete Material"}
+                  OnClick={() => handleDeleteMaterial(material)}
+                  disabled={material.dffromclient}
+                />
+              )}
             </Box>
           );
         },
@@ -1016,14 +1020,16 @@ export default function SearchMaterials() {
                           >
                             <Visibility />
                           </IconButton>
-                          <IconButton
-                            edge="end"
-                            onClick={() => handleDeleteAttachment(attachment)}
-                            title="Delete attachment"
-                            color="error"
-                          >
-                            <Delete />
-                          </IconButton>
+                          {permission["Material Search"]?.delete && (
+                            <IconButton
+                              edge="end"
+                              onClick={() => handleDeleteAttachment(attachment)}
+                              title="Delete attachment"
+                              color="error"
+                            >
+                              <Delete />
+                            </IconButton>
+                          )}
                         </Box>
                       }
                     >

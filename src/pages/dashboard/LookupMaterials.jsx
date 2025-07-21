@@ -30,6 +30,7 @@ import SearchFieldComp from "src/components/common/SearchFieldComp";
 import TableSimple from "src/components/table/TableSimple";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import usePaginationStore from "src/store/usePaginationStore";
+import usePermissionStore from "src/store/userPermissionStore";
 
 const columnHelper = createColumnHelper();
 
@@ -63,6 +64,9 @@ export default function LookupMaterials() {
   const [groupToDelete, setGroupToDelete] = useState(null);
   const [sortField, setSortField] = useState("code");
   const [sortOrder, setSortOrder] = useState("asc");
+
+  //get permission store
+  const permission = usePermissionStore(state => state.permission);
 
   // Fetch groups on component mount
   useEffect(() => {
@@ -467,12 +471,16 @@ export default function LookupMaterials() {
             sx={{ display: "flex", gap: 1, justifyContent: "flex-end", width: "100%" }}
             onClick={e => e.stopPropagation()}
           >
-            <IconButton size="small" onClick={e => handleOpenGroupDialog(row)} color="primary">
-              <Edit fontSize="small" />
-            </IconButton>
-            <IconButton size="small" onClick={e => handleDeleteGroup(row.id)} color="error">
-              <DeleteOutline fontSize="small" />
-            </IconButton>
+            {(permission["Material Groups"]?.update || permission["Material Groups"]?.create) && (
+              <IconButton size="small" onClick={e => handleOpenGroupDialog(row)} color="primary">
+                <Edit fontSize="small" />
+              </IconButton>
+            )}
+            {permission["Material Groups"]?.delete && (
+              <IconButton size="small" onClick={e => handleDeleteGroup(row.id)} color="error">
+                <DeleteOutline fontSize="small" />
+              </IconButton>
+            )}
           </Box>
         );
       },
@@ -494,14 +502,16 @@ export default function LookupMaterials() {
           <SearchFieldComp setQuery={handleSearchChange} placeholder="Search material groups..." />
         </Box>
         <Box sx={{ display: "flex", gap: 1, flexShrink: 0 }}>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => handleOpenGroupDialog()}
-            sx={{ py: 1 }}
-          >
-            Add Group
-          </Button>
+          {permission["Material Groups"]?.create && (
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => handleOpenGroupDialog()}
+              sx={{ py: 1 }}
+            >
+              Add Group
+            </Button>
+          )}
           <Button
             variant="contained"
             startIcon={<FileDownload />}
@@ -511,25 +521,29 @@ export default function LookupMaterials() {
           >
             Export Groups
           </Button>
-          <Button
-            variant="contained"
-            color="secondary"
-            startIcon={
-              importLoading ? <CircularProgress size={20} color="inherit" /> : <FileUpload />
-            }
-            onClick={handleExcelFileSelect}
-            disabled={loading || importLoading}
-            sx={{ py: 1 }}
-          >
-            {importLoading ? "Importing..." : "Import Groups"}
-          </Button>
-          <input
-            type="file"
-            ref={excelFileInputRef}
-            style={{ display: "none" }}
-            onChange={handleImportFromExcel}
-            accept=".xlsx,.xls"
-          />
+          {(permission["Material Groups"]?.update || permission["Material Groups"]?.create) && (
+            <>
+              <Button
+                variant="contained"
+                color="secondary"
+                startIcon={
+                  importLoading ? <CircularProgress size={20} color="inherit" /> : <FileUpload />
+                }
+                onClick={handleExcelFileSelect}
+                disabled={loading || importLoading}
+                sx={{ py: 1 }}
+              >
+                {importLoading ? "Importing..." : "Import Groups"}
+              </Button>
+              <input
+                type="file"
+                ref={excelFileInputRef}
+                style={{ display: "none" }}
+                onChange={handleImportFromExcel}
+                accept=".xlsx,.xls"
+              />
+            </>
+          )}
         </Box>
       </Box>
 

@@ -39,6 +39,7 @@ import SearchFieldComp from "src/components/common/SearchFieldComp";
 import TableSimple from "src/components/table/TableSimple";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import usePaginationStore from "src/store/usePaginationStore";
+import usePermissionStore from "src/store/userPermissionStore";
 
 export default function Subgroups() {
   const { groupId } = useParams();
@@ -57,6 +58,7 @@ export default function Subgroups() {
   const subgroupPageSize = usePaginationStore(state => state.subgroupPageSize);
   const setSubgroupPage = usePaginationStore(state => state.setSubgroupPage);
   const setSubgroupPageSize = usePaginationStore(state => state.setSubgroupPageSize);
+  const permission = usePermissionStore(state => state.permission);
 
   const [pagination, setPagination] = useState({
     page: subgroupPage,
@@ -558,12 +560,16 @@ export default function Subgroups() {
             sx={{ display: "flex", gap: 1, justifyContent: "flex-end", width: "100%" }}
             onClick={e => e.stopPropagation()}
           >
-            <IconButton size="small" onClick={e => handleOpenSubgroupDialog(row)} color="primary">
-              <Edit fontSize="small" />
-            </IconButton>
-            <IconButton size="small" onClick={e => handleDeleteSubgroup(row.id)} color="error">
-              <DeleteOutline fontSize="small" />
-            </IconButton>
+            {(permission["Material Groups"]?.update || permission["Material Groups"]?.create) && (
+              <IconButton size="small" onClick={e => handleOpenSubgroupDialog(row)} color="primary">
+                <Edit fontSize="small" />
+              </IconButton>
+            )}
+            {permission["Material Groups"]?.delete && (
+              <IconButton size="small" onClick={e => handleDeleteSubgroup(row.id)} color="error">
+                <DeleteOutline fontSize="small" />
+              </IconButton>
+            )}
           </Box>
         );
       },
@@ -617,14 +623,16 @@ export default function Subgroups() {
           <SearchFieldComp setQuery={handleSearchChange} placeholder="Search subgroups..." />
         </Box>
         <Box sx={{ display: "flex", gap: 1, flexShrink: 0 }}>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => handleOpenSubgroupDialog()}
-            sx={{ py: 1 }}
-          >
-            Add
-          </Button>
+          {permission["Material Groups"]?.create && (
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => handleOpenSubgroupDialog()}
+              sx={{ py: 1 }}
+            >
+              Add
+            </Button>
+          )}
           <Button
             variant="outlined"
             startIcon={<FileDownload />}
@@ -633,25 +641,29 @@ export default function Subgroups() {
           >
             Export Subgroups
           </Button>
-          <Button
-            variant="outlined"
-            color="secondary"
-            startIcon={
-              importLoading ? <CircularProgress size={20} color="inherit" /> : <FileUpload />
-            }
-            onClick={handleExcelFileSelect}
-            disabled={loading || importLoading}
-            sx={{ py: 1 }}
-          >
-            {importLoading ? "Importing..." : "Import Subgroups"}
-          </Button>
-          <input
-            type="file"
-            ref={excelFileInputRef}
-            style={{ display: "none" }}
-            onChange={handleImportFromExcel}
-            accept=".xlsx,.xls"
-          />
+          {(permission["Material Groups"]?.update || permission["Material Groups"]?.create) && (
+            <>
+              <Button
+                variant="outlined"
+                color="secondary"
+                startIcon={
+                  importLoading ? <CircularProgress size={20} color="inherit" /> : <FileUpload />
+                }
+                onClick={handleExcelFileSelect}
+                disabled={loading || importLoading}
+                sx={{ py: 1 }}
+              >
+                {importLoading ? "Importing..." : "Import Subgroups"}
+              </Button>
+              <input
+                type="file"
+                ref={excelFileInputRef}
+                style={{ display: "none" }}
+                onChange={handleImportFromExcel}
+                accept=".xlsx,.xls"
+              />
+            </>
+          )}
         </Box>
       </Box>
 
