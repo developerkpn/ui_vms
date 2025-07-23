@@ -69,7 +69,7 @@ export default function LoginPage() {
         alert("Successfull login");
         console.log(response);
         setTimeout(() => {
-          if (response.dept_id == "MDM_MAT") {
+          if (response.dept_id == "MDM_MAT" || response.dept_id == "MATERIAL") {
             navigate("/dashboard/materials/lookup");
           } else if (response.dept_id !== "VENDOR") {
             navigate("/dashboard/ticket");
