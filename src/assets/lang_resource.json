@@ -102,6 +102,7 @@
       "Limit Currency": "Valuta Limit",
       "Perlu diisi oleh Procurement": "Perlu diisi oleh Procurement",
       "Vendor Priority": "Vendor Prioritas",
+      "Interest Payment Priority": "Prioritas Pembayaran Interest",
       "Mohon dilanjutkan ke kolom berikutnya jika tidak cukup": "Mohon dilanjutkan ke kolom berikutnya jika tidak cukup",
       "Please insert at least 1": "Mohon isi minimal 1",
       "Karakter": "Karakter",
@@ -110,7 +111,8 @@
       "Jabatan PIC": "Jabatan PIC",
       "Jabatan dari pihak vendor yang mengisi form": "Jabatan dari pihak vendor yang mengisi form",
       "Badan Usaha": "Badan Usaha",
-      "Isi 16 digit": "Isi 16 digit"
+      "Isi 16 digit": "Isi 16 digit",
+      "This form request need approval from C Level, Please make clear description carefully": "Form ini akan meminta approval dari C Level, mohon untuk membuat deskripsi yang jelas dengan hati-hati"
     }
   },
   "en": {
@@ -216,6 +218,7 @@
       "Limit Currency": "Limit Currency",
       "Perlu diisi oleh Procurement": "Need to be filled by procurement",
       "Vendor Priority": "Vendor Priority",
+      "Interest Payment Priority": "Interest Payment Priority",
       "Mohon dilanjutkan ke kolom berikutnya jika tidak cukup": "Please continue to next field if current field is not enough",
       "Karakter": "Character",
       "Please insert at least 1": "Please insert at least 1",
@@ -224,7 +227,8 @@
       "Jabatan PIC": "PIC Function",
       "Jabatan dari pihak vendor yang mengisi form": "Function of person from vendor who filled the form",
       "Badan Usaha": "Company Entity",
-      "Isi 16 digit": "Fill 16 digits"
+      "Isi 16 digit": "Fill 16 digits",
+      "This form request need approval from C Level, Please make clear description carefully": "This form request need approval from C Level, Please make clear description carefully"
     }
   }
 }

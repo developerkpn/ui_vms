@@ -25,7 +25,7 @@ import useSessionStore from "src/store/useSessionStore";
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import UploadButton from "src/components/common/UploadButton";
 import { useNavigate, useParams } from "react-router-dom";
-import axios from "axios";
+import axios, { isAxiosError } from "axios";
 import { TextFieldComp } from "src/components/common/TextFieldComp";
 import SwitchComponent from "src/components/common/SwitchComponent";
 import SelectComp from "src/components/common/SelectComp";
@@ -134,6 +134,7 @@ function RefactorFormVendorPage() {
     description: "",
     is_tender: false,
     is_priority: false,
+    is_interest: false,
     vendorcode: "",
     ppn_type: "VAT_11",
     remarks_readOnly: "",
@@ -286,6 +287,7 @@ function RefactorFormVendorPage() {
         description: data.description ? data.description : "",
         is_tender: data.is_tender ? data.is_tender : false,
         is_priority: data.is_priority ? data.is_priority : false,
+        is_interest: data.is_interest ? data.is_interest : false,
         vendorcode: data.ven_code ? data.ven_code : data.header,
         remarks_readOnly: data.remarks ? data.remarks : "",
         remarks: "",
@@ -594,6 +596,12 @@ function RefactorFormVendorPage() {
       setFocus("description");
     }
   }, [isTender]);
+
+  useEffect(() => {
+    if (watch("is_interest") == true) {
+      setValue("is_priority", false);
+    }
+  }, [watch("is_interest")]);
 
   const navigate = useNavigate();
   const permission = usePermissionStore(state => state.permission);
@@ -977,6 +985,7 @@ function RefactorFormVendorPage() {
       is_pkp: value.ispkp,
       is_tender: value.is_tender,
       is_priority: value.is_priority,
+      is_interest: value.is_interest,
       npwp: value.npwp.trim(),
       pay_mthd: value.paymthd,
       pay_term: value.payterm,
@@ -1076,8 +1085,12 @@ function RefactorFormVendorPage() {
       }
     } catch (err) {
       console.log(err.stack);
+      if (isAxiosError(err)) {
+        setFormStat({ stat: true, type: "error", message: err.response.data.message });
+      } else {
+        setFormStat({ stat: true, type: "error", message: "error submitting" });
+      }
       // alert(err.stack);
-      setFormStat({ stat: true, type: "error", message: "error submitting" });
     } finally {
       setLoading(false);
       setBtnclick(false);
@@ -2382,10 +2395,27 @@ function RefactorFormVendorPage() {
                         name="is_priority"
                         label={t("Vendor Priority")}
                         control={control}
-                        disabled={checkFieldRule("is_priority")}
+                        disabled={checkFieldRule("is_priority") || watch("is_interest") == true}
+                      />
+                      <CheckboxComp
+                        name="is_interest"
+                        label={t("Interest Payment Priority")}
+                        control={control}
+                        disabled={checkFieldRule("is_interest")}
                       />
                     </Grid>
-
+                    {(watch("is_interest") || watch("is_tender") || watch("is_priority")) &&
+                      emp_role_id == "STAFF" && (
+                        <Grid item xs={12}>
+                          <Alert severity="warning">
+                            <h3>
+                              {t(
+                                "This form request need approval from C Level, Please make clear description carefully"
+                              )}
+                            </h3>
+                          </Alert>
+                        </Grid>
+                      )}
                     <Grid item xs={12}>
                       <TextFieldComp
                         t={t}
@@ -2705,9 +2735,12 @@ function RefactorFormVendorPage() {
                   onClick={() => {
                     // console.log(testSubmitForm());
                     handleSubmit(value => {
-                      // console.log(value);
                       is_draft.current = false;
-                      if (isTender && emp_role_id == "PROC" && isValid) {
+                      if (
+                        (isTender || value.is_priority || value.is_interest) &&
+                        emp_role_id == "STAFF" &&
+                        isValid
+                      ) {
                         setConfOpen(true);
                       } else {
                         submitForm(value);
