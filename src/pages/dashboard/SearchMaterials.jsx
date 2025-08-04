@@ -1,4 +1,5 @@
 import {
+  Add,
   CheckCircle,
   CheckCircleOutline,
   Close,
@@ -44,6 +45,7 @@ import TooltipButton from "src/components/common/TooltipButton";
 import TableSorting from "src/components/table/TableSorting";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import usePermissionStore from "src/store/userPermissionStore";
+import MaterialRequestModal from "src/components/MaterialRequestModal";
 
 const columnHelper = createColumnHelper();
 
@@ -69,6 +71,7 @@ export default function SearchMaterials() {
   const [uploadFiles, setUploadFiles] = useState([]);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [aliasDialogOpen, setAliasDialogOpen] = useState(false);
+  const [materialRequestModalOpen, setMaterialRequestModalOpen] = useState(false);
   const [aliases, setAliases] = useState({
     alias1: "",
     alias2: "",
@@ -775,8 +778,17 @@ export default function SearchMaterials() {
     >
       <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mb: 3 }}>
-          {/* Download to Excel button */}
-          <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 1 }}>
+          {/* Action buttons */}
+          <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1, mb: 1 }}>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<Add />}
+              onClick={() => setMaterialRequestModalOpen(true)}
+              sx={{ minWidth: 180 }}
+            >
+              Request New Material
+            </Button>
             <Button
               variant="contained"
               startIcon={
@@ -1232,6 +1244,22 @@ export default function SearchMaterials() {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      {/* Material Request Modal */}
+      <MaterialRequestModal
+        open={materialRequestModalOpen}
+        onClose={() => setMaterialRequestModalOpen(false)}
+        onSuccess={(data) => {
+          setSnackbar({
+            open: true,
+            message: `Material request submitted successfully! Material Code: ${data.materialCode}`,
+            severity: "success",
+          });
+          // Refresh the material list
+          fetchMaterials();
+          setMaterialRequestModalOpen(false);
+        }}
+      />
     </Box>
   );
 }
