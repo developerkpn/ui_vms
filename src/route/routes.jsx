@@ -12,6 +12,7 @@ const LookupMaterials = lazy(() => import("src/pages/dashboard/LookupMaterials")
 const Subgroups = lazy(() => import("src/pages/dashboard/SubgroupMaterial"));
 const Materials = lazy(() => import("src/pages/dashboard/MaterialDetail"));
 const SearchMaterials = lazy(() => import("src/pages/dashboard/SearchMaterials"));
+const MaterialApprovals = lazy(() => import("src/pages/dashboard/MaterialApprovals"));
 // import ErrorPage from '../pages/ErrorPage';
 // import Error404 from 'src/pages/Error404';
 // import LoginPage from 'src/pages/LoginPage';
@@ -179,6 +180,10 @@ export const routes = createBrowserRouter([
       {
         path: "materials/search",
         element: <SearchMaterials />,
+      },
+      {
+        path: "materials/approvals",
+        element: <MaterialApprovals />,
       },
     ],
   },

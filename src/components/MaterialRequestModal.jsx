@@ -68,6 +68,9 @@ const MaterialRequestModal = ({ open, onClose, onSuccess }) => {
     storage_location: "",
     valuation_type: "",
     catatan_tambahan: "",
+    alias1: "",
+    alias2: "",
+    alias3: "",
   });
 
   const [files, setFiles] = useState([]);
@@ -234,6 +237,9 @@ const MaterialRequestModal = ({ open, onClose, onSuccess }) => {
       storage_location: "",
       valuation_type: "",
       catatan_tambahan: "",
+      alias1: "",
+      alias2: "",
+      alias3: "",
     });
     setFiles([]);
     setError("");
@@ -387,6 +393,56 @@ const MaterialRequestModal = ({ open, onClose, onSuccess }) => {
               value={formData.register_number}
               onChange={handleInputChange("register_number")}
             />
+          </Grid>
+
+          {/* Aliases Section */}
+          <Grid item xs={12}>
+            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: "bold" }}>
+              Aliases
+            </Typography>
+          </Grid>
+
+          {/* Alias 1 */}
+          <Grid item xs={12} md={4}>
+            <TextField
+              fullWidth
+              label="Alias 1"
+              placeholder="Enter alternative name or code"
+              size="small"
+              value={formData.alias1}
+              onChange={handleInputChange("alias1")}
+            />
+          </Grid>
+
+          {/* Alias 2 */}
+          <Grid item xs={12} md={4}>
+            <TextField
+              fullWidth
+              label="Alias 2"
+              placeholder="Enter alternative name or code"
+              size="small"
+              value={formData.alias2}
+              onChange={handleInputChange("alias2")}
+            />
+          </Grid>
+
+          {/* Alias 3 */}
+          <Grid item xs={12} md={4}>
+            <TextField
+              fullWidth
+              label="Alias 3"
+              placeholder="Enter alternative name or code"
+              size="small"
+              value={formData.alias3}
+              onChange={handleInputChange("alias3")}
+            />
+          </Grid>
+
+          {/* Technical Specifications Section */}
+          <Grid item xs={12}>
+            <Typography variant="subtitle2" sx={{ mb: 1, mt: 2, fontWeight: "bold" }}>
+              Technical Specifications
+            </Typography>
           </Grid>
 
           {/* Part Number */}
