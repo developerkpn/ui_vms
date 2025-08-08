@@ -13,6 +13,7 @@ const LookupMaterials = lazy(() => import("src/pages/dashboard/LookupMaterials")
 const Subgroups = lazy(() => import("src/pages/dashboard/SubgroupMaterial"));
 const Materials = lazy(() => import("src/pages/dashboard/MaterialDetail"));
 const SearchMaterials = lazy(() => import("src/pages/dashboard/SearchMaterials"));
+const ReportTicketPosition = lazy(() => import("src/pages/report/ReportTicketPosition"));
 // import ErrorPage from '../pages/ErrorPage';
 // import Error404 from 'src/pages/Error404';
 // import LoginPage from 'src/pages/LoginPage';
@@ -188,6 +189,10 @@ export const routes = createBrowserRouter([
       {
         path: "etender/single",
         element: <NavigateETender type="scalling" />,
+      },
+      {
+        path: "report/ticpos",
+        element: <ReportTicketPosition />,
       },
     ],
   },

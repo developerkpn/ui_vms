@@ -16,12 +16,13 @@ export const useMasterFetcher = ({ link, param }) => {
   useEffect(() => {
     const controller = new AbortController();
     (async () => {
-      if (refresh) {
+      if (refresh && link) {
         setLoading(true);
         let URLQuery;
         if (paramq && Object.keys(paramq).length > 0) {
           URLQuery = new URLSearchParams(paramq);
         }
+        console.log(URLQuery);
         try {
           const { data } = await axiosPrivate.get(
             `${link}?${URLQuery ? URLQuery.toString() : ""}`,
@@ -43,7 +44,7 @@ export const useMasterFetcher = ({ link, param }) => {
     return () => {
       controller.abort();
     };
-  }, [refresh]);
+  }, [refresh, link, paramq]);
   const refresh_data = useCallback(
     q => {
       setRefresh(true);
