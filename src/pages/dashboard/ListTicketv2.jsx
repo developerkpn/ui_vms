@@ -27,6 +27,9 @@ import ListSAPProgress from "./ListSAPProgress";
 import useSessionStore from "src/store/useSessionStore";
 import SearchFieldComp from "src/components/common/SearchFieldComp";
 import DialogFormConfirmation from "src/components/common/DialogFormConfirmation";
+import ModalShowDataVendor from "src/components/FormVendor/ModalShowDataVendor";
+import TooltipButton from "src/components/common/TooltipButton";
+import { InfoOutlined } from "@mui/icons-material";
 
 const overrides = {
   "& .MuiDataGrid-main": {},
@@ -62,6 +65,8 @@ export default function ListTicket() {
     FINA: permission["Final Form"],
   });
   const [ticket, setTicket] = useState();
+  const [openModalInfo, setOpenModalInfo] = useState(false);
+  const [modalInfoAnc, setModalInfoAnc] = useState(null);
   const [openModal, setOpenmodal] = useState(false);
   const [btnTicket, setBtn] = useState(false);
   const [grow, setGrow] = useState(false);
@@ -440,17 +445,39 @@ export default function ListTicket() {
             sx={{ mb: 3, height: "3.5rem" }}
           />
         </Box>
-        {perm.Table?.create && (
-          <Button
-            variant="contained"
-            sx={{ width: 180, height: 50, my: 2 }}
-            onClick={() => {
-              setOpenmodal(true);
-            }}
-          >
-            Create New Vendor
-          </Button>
-        )}
+        <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+          {perm.Table?.create && (
+            <Button
+              variant="contained"
+              sx={{ width: 180, height: 50, my: 2 }}
+              onClick={() => {
+                setOpenmodal(true);
+              }}
+            >
+              Create New Vendor
+            </Button>
+          )}
+          {bu_id == "CG" && (
+            <>
+              <TooltipButton
+                placement={"top"}
+                TooltipText={"Vendor Search Info"}
+                Icon={<InfoOutlined />}
+                OnClick={e => {
+                  setOpenModalInfo(prev => !prev);
+                  setModalInfoAnc(e.currentTarget);
+                }}
+                sx={{ height: "40px" }}
+              />
+              <ModalShowDataVendor
+                open={openModalInfo}
+                setOpen={setOpenModalInfo}
+                anchorEl={modalInfoAnc}
+                initiateQ={""}
+              />
+            </>
+          )}
+        </Box>
       </Box>
       {ticket !== undefined && typeof filterAct == "boolean" && (
         <Box

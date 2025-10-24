@@ -168,7 +168,7 @@ export default function ModalShowDataVendor({ open, setOpen, initiateQ, anchorEl
                 </IconButton>
               </Card>
             )}
-            {data && data?.length == 0 && (
+            {data && data?.length == 0 && !loading && (
               <Card
                 sx={theme => ({
                   width: "100%",

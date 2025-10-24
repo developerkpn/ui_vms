@@ -111,7 +111,10 @@ function VenBankTableRow({
         <TextFieldComp
           control={control}
           name={`bank.${index}.acc_hold`}
-          rules={{ required: "Please insert this field" }}
+          rules={{
+            required: "Please insert this field",
+            maxLength: { value: 40, message: "Length exceeded 40 Characters" },
+          }}
           toUpperCase
           t={t}
           disabled={!is_allow}

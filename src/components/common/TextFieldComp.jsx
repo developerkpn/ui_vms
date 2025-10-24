@@ -1,7 +1,7 @@
-import { TextField, Tooltip } from '@mui/material';
-import { Controller } from 'react-hook-form';
-import { useState, useEffect } from 'react';
-import TextFieldDirty from '../templates/TextFieldDirty';
+import { TextField, Tooltip } from "@mui/material";
+import { Controller } from "react-hook-form";
+import { useState, useEffect } from "react";
+import TextFieldDirty from "../templates/TextFieldDirty";
 
 export const TextFieldComp = ({
   control,
@@ -23,6 +23,7 @@ export const TextFieldComp = ({
   t,
   maxLength,
   sx,
+  regex,
 }) => {
   const [is_disabled, setDisabled] = useState(false);
   useEffect(() => {
@@ -35,7 +36,7 @@ export const TextFieldComp = ({
     } else {
       setDisabled(false);
     }
-    if (typeof disabled == 'boolean' && disabled) {
+    if (typeof disabled == "boolean" && disabled) {
       setDisabled(true);
     } else {
       setDisabled(false);
@@ -61,16 +62,21 @@ export const TextFieldComp = ({
                 isDirty={isDirty && dirty}
                 helperText={helpertext}
                 error={!!error}
-                onChange={(e) => {
+                onChange={e => {
                   if (maxLength && e.target.value.length >= maxLength) {
                     return;
                   }
-                  if (Number) {
+                  let value = e.target.value;
+                  if (regex) {
+                    if (regex?.rule) {
+                      value = e.target.value.replace(regex.rule, regex.value);
+                    }
+                  } else if (Number) {
                     if (e.target.value.match(/[a-zA-Z!@#$%^&*(),.?":{}|<>-]/g) === null) {
                       onChange(e.target.value);
                     }
                   } else if (NPWP) {
-                    let value = e.target.value.replace(/[A-Za-z\W\s_]+/g, '');
+                    let value = e.target.value.replace(/[A-Za-z\W\s_]+/g, "");
                     let split = 6;
                     const dots = [];
 
@@ -79,19 +85,20 @@ export const TextFieldComp = ({
                       dots.push(value.substr(i, split));
                     }
 
-                    const temp = dots.join('.');
-                    onChange(temp.length > 12 ? `${temp.substr(0, 12)}-${temp.substr(12, 7)}` : temp);
+                    const temp = dots.join(".");
+                    onChange(
+                      temp.length > 12 ? `${temp.substr(0, 12)}-${temp.substr(12, 7)}` : temp
+                    );
+                  }
+                  if (toUpperCase) {
+                    onChange(value.toUpperCase());
+                  } else if (toLowerCase) {
+                    onChange(value.toLowerCase());
                   } else {
-                    if (toUpperCase) {
-                      onChange(e.target.value.toUpperCase());
-                    } else if (toLowerCase) {
-                      onChange(e.target.value.toLowerCase());
-                    } else {
-                      onChange(e);
-                    }
+                    onChange(e);
                   }
                 }}
-                onBlur={(e) => {
+                onBlur={e => {
                   if (onChangeovr !== undefined) {
                     onChangeovr(e.target.value);
                   }

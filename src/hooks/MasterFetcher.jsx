@@ -17,6 +17,7 @@ export const useMasterFetcher = ({ link, param }) => {
     const controller = new AbortController();
     (async () => {
       if (refresh && link) {
+        setError(null);
         setLoading(true);
         let URLQuery;
         if (paramq && Object.keys(paramq).length > 0) {

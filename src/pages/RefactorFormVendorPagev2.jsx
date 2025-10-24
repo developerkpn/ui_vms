@@ -1289,6 +1289,7 @@ function RefactorFormVendorPage() {
                       onChangeovr={funChgname}
                       toUpperCase={true}
                       sx={{ minWidth: "30rem" }}
+                      regex={{ rule: /,+/g, value: "" }}
                     />
                   </Grid>
                   {checkIsExist && (
