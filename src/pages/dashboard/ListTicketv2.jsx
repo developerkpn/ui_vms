@@ -17,7 +17,15 @@ import {
 } from "@mui/material";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { Edit, Link, Visibility, Delete, Refresh, Update } from "@mui/icons-material";
+import {
+  Edit,
+  Link,
+  Visibility,
+  Delete,
+  Refresh,
+  Update,
+  NotificationsActive,
+} from "@mui/icons-material";
 import ModalCreateTicket from "src/components/common/ModalCreateTicket";
 import usePermissionStore from "src/store/userPermissionStore";
 import { useNavigate } from "react-router-dom";
@@ -30,6 +38,7 @@ import DialogFormConfirmation from "src/components/common/DialogFormConfirmation
 import ModalShowDataVendor from "src/components/FormVendor/ModalShowDataVendor";
 import TooltipButton from "src/components/common/TooltipButton";
 import { InfoOutlined } from "@mui/icons-material";
+import { useSnackBar } from "src/provider/SnackbarProvider";
 
 const overrides = {
   "& .MuiDataGrid-main": {},
@@ -53,6 +62,10 @@ function RefreshTable(props) {
 
 const TitleConfirDelete = ({ row }) => {
   return <h4>Delete Confirmation {row.ticket_num}</h4>;
+};
+
+const TitleReminderEmail = ({ row }) => {
+  return <h4>Email Reminder {row.ticket_num}</h4>;
 };
 
 export default function ListTicket() {
@@ -82,8 +95,10 @@ export default function ListTicket() {
   const dept_id = useSessionStore(state => state.dept_id);
   const bu_id = useSessionStore(state => state.bu_id);
   const [modalConf, setModalConf] = useState(false);
+  const [modalReminder, setModalReminder] = useState(false);
   const [deleteAction, setDeleteAction] = useState();
   const [selectedRow, setSelectedRow] = useState();
+  const { openSnackbar } = useSnackBar();
 
   const showTicket = async controller => {
     const URLQuery = new URLSearchParams();
@@ -188,6 +203,22 @@ export default function ListTicket() {
     setModalConf(false);
   };
 
+  const reminderApproval = async row => {
+    try {
+      const { data } = await axiosPrivate.post("/ticket/reminderappr", {
+        ticket_id: row.id,
+      });
+      setModalReminder(false);
+      openSnackbar("success", data.message);
+    } catch (error) {
+      let message = error?.response?.data?.message;
+      if (!message) {
+        message = error?.message;
+      }
+      openSnackbar("error", message);
+    }
+  };
+
   const handleButtonAction = useCallback(
     (type, row) => async e => {
       try {
@@ -229,6 +260,9 @@ export default function ListTicket() {
               setRefreshbtn(true);
             }
           }
+        } else if (type == "Reminder") {
+          setModalReminder(true);
+          setSelectedRow(row);
         } else {
           // <Navigate to={`/form/${row.id}`} />;
           navigate(`../form/${row.id}`, { relative: "path" });
@@ -364,6 +398,20 @@ export default function ListTicket() {
                 <Tooltip key={item.id} title="Delete Ticket">
                   <IconButton onClick={handleButtonAction("Delete", item.row)}>
                     <Delete />
+                  </IconButton>
+                </Tooltip>
+              );
+            }
+            if (
+              item.row.approval_pos != "0" &&
+              item.row.emp_role_id != "STAFF" &&
+              item.row.cur_pos != "VENDOR" &&
+              item.row.emp_role_id != "MDM"
+            ) {
+              Buttons.push(
+                <Tooltip key={item.id} title="Reminder Email">
+                  <IconButton onClick={handleButtonAction("Reminder", item.row)}>
+                    <NotificationsActive />
                   </IconButton>
                 </Tooltip>
               );
@@ -544,6 +592,21 @@ export default function ListTicket() {
         }}
         values={selectedRow}
         Title={<TitleConfirDelete row={selectedRow} />}
+      />
+
+      <DialogFormConfirmation
+        open={modalReminder}
+        children={
+          <Box sx={{ p: 3 }}>
+            <p>Are you sure want to give reminder to {selectedRow?.current_position ?? ""}</p>
+          </Box>
+        }
+        onYes={reminderApproval}
+        onNo={() => {
+          setModalReminder(false);
+        }}
+        values={selectedRow}
+        Title={<TitleReminderEmail row={selectedRow} />}
       />
     </Box>
   );
