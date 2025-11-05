@@ -502,11 +502,6 @@ export default function ListTicket() {
             </Select>
           </FormControl>
           <SearchFieldComp setQuery={setQ} placeholder={"Search Vendor Code or Ticket Number..."} />
-          <RefreshTable
-            setRefreshbtn={buttonRefreshAct}
-            isLoading={refreshBtn}
-            sx={{ mb: 3, height: "3.5rem" }}
-          />
           <Box
             sx={theme => ({
               display: "flex",
@@ -527,6 +522,11 @@ export default function ListTicket() {
             />
             <p>Show All</p>
           </Box>
+          <RefreshTable
+            setRefreshbtn={buttonRefreshAct}
+            isLoading={refreshBtn}
+            sx={{ mb: 3, height: "3.5rem" }}
+          />
         </Box>
         <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
           {perm.Table?.create && (

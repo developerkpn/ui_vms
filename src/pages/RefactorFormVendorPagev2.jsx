@@ -200,10 +200,13 @@ function RefactorFormVendorPage() {
   const checkFieldRule = useCallback(
     field_name => {
       let is_exist = true;
-      console.log(data_form);
-      if (field_rule.fields[0] == "all" || emp_role_id == "ADMIN") {
+      if (
+        field_rule.fields[0] == "all" ||
+        emp_role_id == "ADMIN" ||
+        (field_name == "vendetail" && emp_role_id != "VENDOR")
+      ) {
         is_exist = true;
-      } else if (data_form.proc_id != user_id && data_form.cur_pos == "STAFF") {
+      } else if (data_form?.proc_id != user_id && data_form?.cur_pos == "STAFF") {
         is_exist = false;
       } else {
         is_exist = field_rule.fields.includes(field_name);
@@ -214,7 +217,7 @@ function RefactorFormVendorPage() {
         return is_exist;
       }
     },
-    [field_rule.fields, emp_role_id]
+    [field_rule.fields, emp_role_id, data_form, user_id]
   );
 
   useEffect(() => {
