@@ -79,6 +79,7 @@ const ventypeList = {
 function RefactorFormVendorPage() {
   const data_form = useFormCreateNew();
   const theme = useTheme();
+  const user_id = useSessionStore(state => state.user_id);
   const role = useSessionStore(state => state.role);
   const emp_role_id = useSessionStore(state => state.emp_role_id);
   const bu_id = useSessionStore(state => state.bu_id);
@@ -191,6 +192,7 @@ function RefactorFormVendorPage() {
     data: "",
     permission: "",
     cur_pos: "",
+    proc_id: "",
     approval_pos: null,
     logrej_counter: null,
   });
@@ -198,8 +200,11 @@ function RefactorFormVendorPage() {
   const checkFieldRule = useCallback(
     field_name => {
       let is_exist = true;
+      console.log(data_form);
       if (field_rule.fields[0] == "all" || emp_role_id == "ADMIN") {
         is_exist = true;
+      } else if (data_form.proc_id != user_id && data_form.cur_pos == "STAFF") {
+        is_exist = false;
       } else {
         is_exist = field_rule.fields.includes(field_name);
       }

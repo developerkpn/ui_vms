@@ -14,6 +14,7 @@ import {
   Select,
   MenuItem,
   Tooltip,
+  Checkbox,
 } from "@mui/material";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import { useEffect, useMemo, useState, useCallback } from "react";
@@ -71,13 +72,17 @@ const TitleReminderEmail = ({ row }) => {
 export default function ListTicket() {
   const permission = usePermissionStore(state => state.permission);
   const [q, setQ] = useState("");
-  const [perm, setPerm] = useState({
-    Table: permission["Ticket Request"],
-    INIT: permission["Initial Form"],
-    CREA: permission["Creation Form"],
-    FINA: permission["Final Form"],
-  });
+  const perm = useMemo(
+    () => ({
+      Table: permission["Ticket Request"],
+      INIT: permission["Initial Form"],
+      CREA: permission["Creation Form"],
+      FINA: permission["Final Form"],
+    }),
+    [permission]
+  );
   const [ticket, setTicket] = useState();
+  const [userOnlyTicket, setUOTicket] = useState([]);
   const [openModalInfo, setOpenModalInfo] = useState(false);
   const [modalInfoAnc, setModalInfoAnc] = useState(null);
   const [openModal, setOpenmodal] = useState(false);
@@ -94,10 +99,12 @@ export default function ListTicket() {
   const emp_role_id = useSessionStore(state => state.emp_role_id);
   const dept_id = useSessionStore(state => state.dept_id);
   const bu_id = useSessionStore(state => state.bu_id);
+  const user_id = useSessionStore(state => state.user_id);
   const [modalConf, setModalConf] = useState(false);
   const [modalReminder, setModalReminder] = useState(false);
   const [deleteAction, setDeleteAction] = useState();
   const [selectedRow, setSelectedRow] = useState();
+  const [showAll, setShowAll] = useState(false);
   const { openSnackbar } = useSnackBar();
 
   const showTicket = async controller => {
@@ -129,7 +136,11 @@ export default function ListTicket() {
       bu_id: item.bu_id,
       dept_id_ticket: item.dept_id_ticket,
       emp_role_id: item.cur_pos,
+      proc_id: item.proc_id,
     }));
+    console.log(user_id);
+    const uotick = load.filter(item => item.proc_id == user_id);
+    setUOTicket(uotick);
     setTicket(load);
   };
 
@@ -147,13 +158,13 @@ export default function ListTicket() {
 
   useEffect(() => {
     const controller = new AbortController();
-    if (refreshBtn) {
+    if (refreshBtn && user_id) {
       tickets(controller);
     }
     return () => {
       controller.abort();
     };
-  }, [filterAct, deleted, refreshBtn]);
+  }, [filterAct, deleted, refreshBtn, user_id]);
 
   useEffect(() => {
     setRefreshbtn(true);
@@ -392,8 +403,11 @@ export default function ListTicket() {
                 );
               }
             }
-            if (item.row.approval_pos == "0" || item.row.emp_role_id == "STAFF") {
-              console.log(item.row);
+            if (
+              ((item.row.approval_pos == "0" || item.row.emp_role_id == "STAFF") &&
+                item.row.proc_id == user_id) ||
+              emp_role_id == "ADMIN"
+            ) {
               Buttons.push(
                 <Tooltip key={item.id} title="Delete Ticket">
                   <IconButton onClick={handleButtonAction("Delete", item.row)}>
@@ -419,7 +433,8 @@ export default function ListTicket() {
             if (
               (item.row.cur_pos == emp_role_id &&
                 item.row.bu_id == bu_id &&
-                item.row.dept_id_ticket == dept_id) ||
+                item.row.dept_id_ticket == dept_id &&
+                item.row.proc_id == user_id) ||
               emp_role_id == "ADMIN"
             ) {
               Buttons.push(
@@ -457,7 +472,7 @@ export default function ListTicket() {
         },
       },
     ],
-    [perm, emp_role_id, dept_id, bu_id]
+    [perm, emp_role_id, dept_id, bu_id, user_id]
   );
 
   return (
@@ -492,6 +507,26 @@ export default function ListTicket() {
             isLoading={refreshBtn}
             sx={{ mb: 3, height: "3.5rem" }}
           />
+          <Box
+            sx={theme => ({
+              display: "flex",
+              gap: 2,
+              alignItems: "center",
+              backgroundColor: theme.palette.grey[300],
+              px: 2,
+              py: 1,
+              borderRadius: "4px",
+            })}
+          >
+            <Checkbox
+              id="showall"
+              checked={showAll}
+              onChange={() => {
+                setShowAll(prev => !prev);
+              }}
+            />
+            <p>Show All</p>
+          </Box>
         </Box>
         <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
           {perm.Table?.create && (
@@ -539,7 +574,7 @@ export default function ListTicket() {
           <Box sx={{ width: "100%", height: "88%" }}>
             <DataGrid
               sx={overrides}
-              rows={ticket}
+              rows={showAll ? ticket : userOnlyTicket}
               columns={columnTable}
               disableColumnFilter
               disableColumnSelector
