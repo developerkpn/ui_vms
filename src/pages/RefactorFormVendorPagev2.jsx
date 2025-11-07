@@ -2137,7 +2137,7 @@ function RefactorFormVendorPage() {
                       control={control}
                       frontlabel={"16 Digit"}
                       backlabel={"Old"}
-                      disabled={checkFieldRule("is_new_npwp")}
+                      disabled={checkFieldRule("npwp")}
                     />
                   </Grid>
                   <Grid item xs={4}>
@@ -2147,7 +2147,8 @@ function RefactorFormVendorPage() {
                         t={t}
                         disabled={checkFieldRule("npwp")}
                         rules={{
-                          required: watch("is_pkp") == true ? "Please insert this field" : false,
+                          required:
+                            watch("localovs") == "LOCAL" ? "Please insert this field" : false,
                           minLength: {
                             value: 16,
                             message: "Isi 16 digit",
@@ -2157,7 +2158,7 @@ function RefactorFormVendorPage() {
                             message: "Isi 16 digit",
                           },
                         }}
-                        label={t("Tax Number") + " *"}
+                        label={t("Tax Number") + (watch("localovs") == "LOCAL" ? " *" : "")}
                         control={control}
                         thousandSeparator={false}
                         allowLeadingZeros={true}
@@ -2168,7 +2169,7 @@ function RefactorFormVendorPage() {
                         name="npwp"
                         t={t}
                         helperText={"Mohon input hanya nominal tanpa karakter spesial"}
-                        label={t("Tax Number") + " *"}
+                        label={t("Tax Number") + (watch("localovs") == "LOCAL" ? " *" : "")}
                         useplaceholder
                         format="##.###.###.#-###.###"
                         mask={"_"}
@@ -2192,7 +2193,8 @@ function RefactorFormVendorPage() {
                             value: 21,
                             message: "Mohon isi dengan lengkap",
                           },
-                          required: watch("is_pkp") == true ? "Please insert this field" : false,
+                          required:
+                            watch("localovs") == "LOCAL" ? "Please insert this field" : false,
                         }}
                       />
                     )}
