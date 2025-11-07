@@ -157,6 +157,12 @@ export default function ListTicket() {
   };
 
   useEffect(() => {
+    if (emp_role_id == "MDM") {
+      setShowAll(true);
+    }
+  }, [emp_role_id]);
+
+  useEffect(() => {
     const controller = new AbortController();
     if (refreshBtn && user_id) {
       tickets(controller);
@@ -502,26 +508,28 @@ export default function ListTicket() {
             </Select>
           </FormControl>
           <SearchFieldComp setQuery={setQ} placeholder={"Search Vendor Code or Ticket Number..."} />
-          <Box
-            sx={theme => ({
-              display: "flex",
-              gap: 2,
-              alignItems: "center",
-              backgroundColor: theme.palette.grey[300],
-              px: 2,
-              py: 1,
-              borderRadius: "4px",
-            })}
-          >
-            <Checkbox
-              id="showall"
-              checked={showAll}
-              onChange={() => {
-                setShowAll(prev => !prev);
-              }}
-            />
-            <p>Show All</p>
-          </Box>
+          {emp_role_id !== "MDM" && (
+            <Box
+              sx={theme => ({
+                display: "flex",
+                gap: 2,
+                alignItems: "center",
+                backgroundColor: theme.palette.grey[300],
+                px: 2,
+                py: 1,
+                borderRadius: "4px",
+              })}
+            >
+              <Checkbox
+                id="showall"
+                checked={showAll}
+                onChange={() => {
+                  setShowAll(prev => !prev);
+                }}
+              />
+              <p>Show All</p>
+            </Box>
+          )}
           <RefreshTable
             setRefreshbtn={buttonRefreshAct}
             isLoading={refreshBtn}
