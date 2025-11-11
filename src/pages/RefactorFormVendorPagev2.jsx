@@ -200,12 +200,14 @@ function RefactorFormVendorPage() {
   const checkFieldRule = useCallback(
     field_name => {
       let is_exist = true;
-      if (
-        field_rule.fields[0] == "all" ||
-        emp_role_id == "ADMIN" ||
-        (field_name == "vendetail" && emp_role_id != "VENDOR")
-      ) {
+      if (field_rule.fields[0] == "all" || emp_role_id == "ADMIN") {
         is_exist = true;
+      } else if (field_name == "vendetail" && emp_role_id != "VENDOR") {
+        if (field_rule.condition == "disabled") {
+          is_exist = false;
+        } else {
+          is_exist = true;
+        }
       } else if (data_form?.proc_id != user_id && data_form?.cur_pos == "STAFF") {
         is_exist = false;
       } else {
