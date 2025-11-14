@@ -202,7 +202,7 @@ function RefactorFormVendorPage() {
       let is_exist = true;
       if (field_rule.fields[0] == "all" || emp_role_id == "ADMIN") {
         is_exist = true;
-      } else if (field_name == "vendetail" && emp_role_id != "VENDOR") {
+      } else if (field_name == "vendetail" && data_form.emp_role_id !== "VENDOR") {
         if (field_rule.condition == "disabled") {
           is_exist = false;
         } else {
