@@ -399,7 +399,6 @@ export default function FormUserPage() {
                   control={control}
                   options={optionDept}
                   label="Department"
-                  rules={{ required: true }}
                 />
               </Grid>
               <Grid item xs={6}>

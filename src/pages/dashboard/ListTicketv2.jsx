@@ -440,7 +440,12 @@ export default function ListTicket() {
               (item.row.cur_pos == emp_role_id &&
                 item.row.bu_id == bu_id &&
                 item.row.dept_id_ticket == dept_id &&
-                item.row.proc_id == user_id) ||
+                item.row.proc_id == user_id &&
+                emp_role_id == "STAFF") ||
+              (item.row.cur_pos == emp_role_id &&
+                item.row.bu_id == bu_id &&
+                item.row.dept_id_ticket == dept_id &&
+                emp_role_id != "STAFF") ||
               emp_role_id == "ADMIN"
             ) {
               Buttons.push(
