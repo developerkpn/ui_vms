@@ -23,8 +23,10 @@ const getIcon = icon => {
       return lazy(() => import("@mui/icons-material/Inventory"));
     case "Approval":
       return lazy(() => import("@mui/icons-material/Approval"));
-     case "Summarize":
+    case "Summarize":
       return lazy(() => import("@mui/icons-material/Summarize"));
+    case "Coupa":
+      return lazy(() => import("@mui/icons-material/PrecisionManufacturing"));
     default:
       return HelpOutlineIcon;
   }

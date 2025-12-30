@@ -46,6 +46,7 @@ const RefactorFormVendorPage = lazy(() => import("src/pages/RefactorFormVendorPa
 const ListMasterBank = lazy(() => import("src/pages/dashboard/ListMasterBank"));
 const TicketInvalid = lazy(() => import("src/pages/TicketInvalid"));
 const ResetPassword = lazy(() => import("src/pages/ResetPassword"));
+const ListCoupa = lazy(() => import("src/pages/coupa/ListPage"));
 
 export const routes = createBrowserRouter([
   {
@@ -113,6 +114,10 @@ export const routes = createBrowserRouter([
       {
         path: "ticket",
         element: <ListTicket />,
+      },
+      {
+        path: "coupa",
+        element: <ListCoupa />,
       },
       {
         path: "vendor",
