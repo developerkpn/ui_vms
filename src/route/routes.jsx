@@ -9,6 +9,7 @@ const VendorLandingPage = lazy(() => import("src/pages/vendor/VendorLandingPage"
 const VendorUsers = lazy(() => import("src/pages/vendor/VendorUsers"));
 const VerificationPage = lazy(() => import("src/pages/verification/VerificationPage"));
 const DirectFormCreateNew = lazy(() => import("src/pages/create_new/DirectFormCreateNew"));
+const DirectCoupaForm = lazy(() => import("src/pages/coupa/DirectCoupaForm"));
 const LookupMaterials = lazy(() => import("src/pages/dashboard/LookupMaterials"));
 const Subgroups = lazy(() => import("src/pages/dashboard/SubgroupMaterial"));
 const Materials = lazy(() => import("src/pages/dashboard/MaterialDetail"));
@@ -108,6 +109,15 @@ export const routes = createBrowserRouter([
           return {
             type: "form",
             token: params.token,
+          };
+        },
+      },
+      {
+        path: "form-coupa/:id",
+        element: <DirectCoupaForm />,
+        loader: ({ params }) => {
+          return {
+            id: params.id,
           };
         },
       },
