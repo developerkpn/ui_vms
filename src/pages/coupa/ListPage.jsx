@@ -23,7 +23,15 @@ export default function ListPage() {
     const [q, setQ] = useState("");
   
     const showDataVerif = async controller => {
+      const date = new Date();
+      date.setDate(date.getDate() - 4);
+
+      const body = {
+        date: date.toISOString().split("T")[0]
+      };
+
       const response = await axiosPrivate.post(`/coupa/vendor/list`, 
+        body,
         { signal: controller.signal,}
       );
       console.log(response);

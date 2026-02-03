@@ -45,6 +45,7 @@ import useTogglePanel, { FormTab } from "src/hooks/useTogglePanel";
 
 import RejectLog from "src/components/common/RejectLog";
 import VenBankTableRefactor from "src/components/FormVendor/VenBankTableRefactor";
+import VenBankTableCoupa from "./VenBankTableCoupa";
 import usePermissionStore from "src/store/userPermissionStore";
 import { useFormCoupa } from "./DirectCoupaForm";
 
@@ -83,7 +84,6 @@ function CoupaForm() {
   });
   //reducerFunction
   const { expanded, toggle } = useTogglePanel();
-  console.log(data_form);
 
   const defaultValue = {
     emailRequestor: "",
@@ -133,7 +133,7 @@ function CoupaForm() {
     vendorcode: "",
     ppn_type: "VAT_11",
     nitku: "",
-    remarks_readOnly: "",
+    remarks_disabled: "",
     limit: "",
     search_term: "",
     website_url: "",
@@ -241,35 +241,13 @@ function CoupaForm() {
           });
         }
       }
-
-      // const { data: bankInit } = await axiosPrivate.get(
-      //   `/vendor/bank/${data_form.ven_id === null ? data.ticket_ven_id : data.ven_id}`,
-      //   { signal: controller.signal }
-      // );
-      // const resultBank = bankInit.data;
-
-      const country = await axiosPrivate.post(`/master/country`, {},
-        {
-          signal: controller.signal,
-        }
-      );
-      const result = country.data.data;
-      countries.current = result.data.map(item => ({
-        value: item.country_code,
-        label: item.country_name,
-      }));
-
-      console.log(data);
-      const selectedCountry = countries.current.find(
-        c => c.label === (data.company.country + " ")
-      );
       
       const compsData = await axiosPrivate.get(`/master/company`, {
           signal: controller.signal,
         });
       const response = compsData.data.data;
       comps.current = response.data;
-      // console.log(comps.current);
+
       const upstream = comps.current["UPSTREAM"].map(item =>({
         name : item.name,
         code : item.code,
@@ -283,14 +261,11 @@ function CoupaForm() {
       }));
       comps.current = upstream.concat(downstream);
 
-      const normalize = str =>
-            str?.toLowerCase().replace(/[^a-z0-9]/g, "");
-
+      const company_code = data.vendor_detail.company_code ? data.vendor_detail.company_code.length > 2 ? data.vendor_detail.company_code.slice(0,2) : data.vendor_detail.company_code : "";
+      console.log(company_code);
       const selectedCompany = comps.current.find(
-        c => normalize(c.name) === normalize(data.vendor_detail.company)
+        c => c.code === company_code
       );
-
-      // console.log("data", data);
       
       const valueForm = {
         emailRequestor: data.email_proc ? data.email_proc : "",
@@ -299,7 +274,7 @@ function CoupaForm() {
         localovs: data.company.local_ovs.toLowerCase() == "local" ? "LOCAL" : "OVS",
         name1: data.company["name_1"] ? data.company["name_1"] : "",
         kawasan_berikat: data?.company.kawasan_berikat,
-        country: selectedCountry ? selectedCountry.value : "",
+        country: data.company.country_code ? data.company.country_code : "",
         street: data.company_address.street1 ?? "",
         street2: data.company_address.street2 ?? "",
         street3: data.company_address.street3 ?? "",
@@ -326,7 +301,7 @@ function CoupaForm() {
         npwp: data.tax_payment.npwp ? data.tax_payment.npwp : "",
         paymthd: data.tax_payment.pay_mthd.toLowerCase() ?? "",
         payterm: data.tax_payment.pay_term_code ? data.tax_payment.pay_term_code : "I30",
-        ppn_type: data.tax_payment.ppn_type ?? "",
+        ppn_type: data.tax_payment.ppn_code ?? "",
         company: selectedCompany ? selectedCompany.comp_id : "",
         purchorg: data.vendor_detail.purch_org ? { value: data.vendor_detail.purch_org, label: data.vendor_detail.purch_org } : null,
         vengroup: data.vendor_detail.ven_group ? data.vendor_detail.ven_group : "",
@@ -343,38 +318,22 @@ function CoupaForm() {
         limit: data.limit_vendor ? data.limit_vendor : "",
         search_term: data.search_term ? data.search_term : "",
         is_active: data.ticket_stat,
-        website_url: data.website_url ?? "",
-        ig_link: data.ig_link ?? "",
-        fb_link: data.fb_link ?? "",
-        twt_link: data.twt_link ?? "",
+        website_url: data.social_media.website_url ?? "",
+        ig_link: data.social_media.ig_link ?? "",
+        fb_link: data.social_media.fb_link ?? "",
+        twt_link: data.social_media.twt_link ?? "",
         nama_direktur: data.company_organization.nama_direktur ?? "",
         nama_pic: data.company_organization.nama_pic ?? "",
         no_telf_pic: data.company_organization.no_telf_pic ?? "",
         email_pic: data.company_organization.email_pic ?? "",
         email_fin: data.company_organization.email_finance ?? "",
-        bank: {
-          bank_country: { value: data.bank_information.country, label: data.bank_information.country },
-          // bank_id: item.bank_id
-          //   ? {
-          //       value: item.bank_id,
-          //       label: `${item.bank_name} (${item.bank_code})${
-          //         item.source === "form" ? " - (new)" : ""
-          //       }`,
-          //     }
-          //   : null,
+        bank: [{
+          bank_country: { value: data.bank_information.bank_country, label: data.bank_information.bank_country },
+          bank_id: { value: data.bank_information.bank_id, label: data.bank_information.bank_name},
           bank_curr: data.bank_information.bank_curr ? { value: data.bank_information.bank_curr, label: data.bank_information.bank_curr } : null,
           bank_acc: data.bank_information.bank_acc,
           acc_hold: data.bank_information.acc_hold,
-          // account_statement_letter: item.account_statement_letter && {
-          //   file_name: item.account_statement_letter,
-          //   file_id: item.account_statement_letter_id,
-          // },
-          // passbook: item.passbook && {
-          //   file_name: item.passbook,
-          //   file_id: item.passbook_id,
-          // },
-        },
-        // bunit: data.bunit,
+        }],
       };
 
       if (valueForm.name1 === "") {
@@ -409,9 +368,7 @@ function CoupaForm() {
   const [chgVengrp, setVengrp] = useState(loader_data.data?.vengroup);
   const [chgVenacc, setVenacc] = useState(loader_data.data?.venacc);
   const [chgCurr, setChgCurr] = useState(loader_data.data?.currency);
-  const [currentEdit, setCurrentEdit] = useState([]);
   const [phoneNumber, setPhnNum] = useState("+XX");
-  const [fileType, setFileType] = useState([]);
   const [chgIsPTKP, setIsPTKP] = useState(false);
   const [chgLocal, setLocal] = useState("");
   const [compTitle, setComptitle] = useState(loader_data.data?.titlecomp);
@@ -443,49 +400,6 @@ function CoupaForm() {
     if (item !== "TRADE") {
       clearErrors("currency");
       clearErrors("limit");
-    }
-  }, []);
-  const funChgIsPTKP = useCallback(item => {
-    setIsPTKP(item);
-  }, []);
-  const funChgComp = useCallback(item => {
-    setChgComp(item);
-    resetField("purchorg");
-  }, []);
-
-  const sameWithAddrComp = useCallback(fields => {
-    const country = getValues(`country`);
-    const street = getValues(`street`);
-    const street2 = getValues(`street2`);
-    const street3 = getValues(`street3`);
-    const street4 = getValues(`street4`);
-    const postal = getValues(`postal`);
-    const city = getValues(`city`);
-
-    setValue(`country_${fields}`, country);
-    setValue(`street_${fields}`, street);
-    setValue(`street2_${fields}`, street2);
-    setValue(`street3_${fields}`, street3);
-    setValue(`street4_${fields}`, street4);
-    setValue(`postal_${fields}`, postal);
-    setValue(`city_${fields}`, city);
-  }, []);
-
-  const checkExist = useCallback(async item => {
-    setLoadex(true);
-    try {
-      const checkExt = await axiosPrivate.get(`/vendor/checkven?name=${item}&bu_id=UPS`);
-      // console.log(checkExt);
-      setCheckex(false);
-      console.log(expanded);
-      toggle({ type: FormTab.OpenForm });
-      setLoadex(false);
-      setBtnclick(false);
-    } catch (error) {
-      console.log(error);
-      setOpenAlert(true);
-      toggle({ type: FormTab.RestrictForm });
-      setLoadex(false);
     }
   }, []);
 
@@ -547,7 +461,6 @@ function CoupaForm() {
   }, []);
 
   useEffect(() => {
-    console.log(loader_data);
     reset(loader_data.data);
     setChgCty(loader_data.data?.country);
     setVengrp(loader_data.data?.vengroup);
@@ -559,66 +472,6 @@ function CoupaForm() {
     setLocal(loader_data.data?.localovs);
     setIsPTKP(loader_data.data?.ispkp);
   }, [loader_data]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    if (compTitle !== "" && chgLocal !== "" && compTitle && chgLocal) {
-      (async () => {
-        try {
-          unregister("file_atth");
-          const { data } = await axiosPrivate.get(
-            `/master/filetype?title=${compTitle}&ventype=${chgLocal}&bu_id=${data_form.bu_ticket_type}&curpos=${data_form.emp_role_id}`,
-            {
-              signal: controller.signal,
-            }
-          );
-          data.data.forEach(item => {
-            if (isTender && item.file_code == "A010") {
-              register(`file_atth.${item.file_code}`, {
-                required: item.file_type,
-              });
-            } else {
-              register(
-                `file_atth.${item.file_code}`,
-                item.is_mandatory && {
-                  required: item.file_type,
-                }
-              );
-            }
-            const fileInit = initDataFile
-              .filter(element => element.file_type === item.file_code)
-              .map(item => item.file_name);
-            if (fileInit) {
-              setValue(`file_atth.${item.file_code}`, fileInit[0]);
-            }
-          });
-          setFileType(
-            data.data.map(item => {
-              if (isTender && item.file_code == "A010") {
-                return {
-                  key: item.file_code,
-                  value: `${t(item.file_type)} * `,
-                  help: langCode === "id" ? item.help : item.helpen,
-                  need_exp_date: item.need_exp_date,
-                };
-              }
-              return {
-                key: item.file_code,
-                value: `${t(item.file_type)} ${item.is_mandatory ? "*" : ""}`,
-                help: langCode === "id" ? item.help : item.helpen,
-                need_exp_date: item.need_exp_date,
-              };
-            })
-          );
-        } catch (error) {
-          console.error(error);
-        }
-      })();
-    }
-    return () => {
-      controller.abort();
-    };
-  }, [compTitle, langCode, chgLocal, loader_data, t, isTender, fields, initDataFile, data_form]);
 
   useEffect(() => {
     const firstError = Object.keys(errors).reduce((field, a) => {
@@ -637,18 +490,6 @@ function CoupaForm() {
       setConfirmAction(false);
     }
   }, [confirmAction]);
-
-  useEffect(() => {
-    if (isTender && onLoad.current) {
-      setFocus("description");
-    }
-  }, [isTender]);
-
-  useEffect(() => {
-    if (watch("is_interest") == true) {
-      setValue("is_priority", false);
-    }
-  }, [watch("is_interest")]);
 
   const navigate = useNavigate();
   const ticketState = useMemo(() => loader_data?.ticketState, [loader_data]);
@@ -823,6 +664,9 @@ function CoupaForm() {
     const getBanks = async () => {
       try {
         const banksData = await axiosPrivate.get(`/master/banksap`, {
+          params: {
+            country: data_form.bank_information.bank_country
+          },
           signal: controller.signal,
         });
         const response = banksData.data;
@@ -842,21 +686,8 @@ function CoupaForm() {
         const response = compsData.data;
         const result = response.data;
         comps.current = result.data;
-        // console.log(result.data);
-        // console.log(loader_data.data);
-        // if (loader_data.data.bunit) {
-        //   if (
-        //     loader_data.data.bunit === "CREATE_NEW_VENDOR_UPS" ||
-        //     loader_data.data.bunit === "CREATE_NEW_VENDOR_UPS_USR"
-        //   ) {
-        //     comps.current = { UPSTREAM: result.data["UPSTREAM"] };
-        //   } else {
-        //     comps.current = { DOWNSTREAM: result.data["DOWNSTREAM"] };
-        //   }
-        // }
       } catch (error) {
         console.error(error);
-        // alert(error.stack);
       }
     };
 
@@ -905,19 +736,6 @@ function CoupaForm() {
     };
   }, [loader_data]);
 
-  const setVen_fileFromChild = useCallback(newItem => {
-    if (newItem.length > 0) {
-      newItem.forEach(item => {
-        setValue(`file_atth.${item.file_type}`, item.file_name);
-      });
-      setVen_file(newItem);
-    }
-  }, []);
-
-  const deleteVenFile = deletedFile => {
-    resetField(`file_atth.${deletedFile?.file_type}`);
-  };
-
   const handleSnackClose = useCallback((e, reason) => {
     if (reason === "clickaway") {
       return;
@@ -930,168 +748,92 @@ function CoupaForm() {
     i18n.changeLanguage(value);
   }, []);
 
-  const handleReject = useCallback(
-    async value => {
-      // setTimeout(() => {
-      //   setLoading(false);
-      // }, 3000);
-      const rejectParams = {
-        ticket_id: loader_data.ticket_id,
-        remarks: value.remarks,
-      };
-      // console.log(rejectParams);
-      try {
-        setLoading(true);
-        const { data: response } = await axiosPrivate.patch(`/ticket/reject`, rejectParams);
-        setFormStat({ stat: true, type: "success", message: response.message });
-        setLoading(false);
-        setTimeout(() => {
-          navigate("../../dashboard/ticket");
-        }, 2000);
-      } catch (error) {
-        setLoading(false);
-        console.error(error);
-        alert(error);
-      }
-    },
-    [loader_data]
-  );
-
-  const handleAddNewBank = useCallback(async () => {
-    setLoadAddBnk(true);
-    try {
-      const bankv_id = v4();
-      const { data } = await axiosPrivate.post(`/vendor/newbank`, {
-        bankv_id: bankv_id,
-        ven_id: loader_data.ven_id,
-        bank_country: chgLocal === "LOCAL" ? "ID" : null,
-      });
-      append({
-        id: bankv_id,
-        bank_country: chgLocal === "LOCAL" ? { value: "ID", label: "Indonesia" } : null,
-        bank_id: null,
-        bank_curr: null,
-        bank_acc: "",
-        acc_hold: "",
-      });
-    } catch (error) {
-      console.error(error);
-      setFormStat({
-        stat: true,
-        type: "error",
-        message: error.response?.data?.message ?? error?.message,
-      });
-    } finally {
-      setLoadAddBnk(false);
-    }
-  }, [chgLocal, loader_data]);
-
   const submitForm = async value => {
     // setBtnclick(true);
     const controller = new AbortController();
     const filteredVenFile = ven_file.filter(item => item.method !== "");
     const ven_detail = {
-      ven_id: loader_data.ven_id,
-      ticket_num: loader_data.ticket_num,
-      title: value.titlecomp,
-      name_1: value.name1,
-      local_ovs: value.localovs,
-      postal: value.postal.trim(),
+      ven_id: loader_data.ven_id ?? "",
+      ticket_num: loader_data.ticket_num ?? "",
+      title: value.titlecomp ?? "",
+      name_1: value.name1 ?? "",
+      local_ovs: value.localovs ?? "",
+      postal: value.postal.trim() ?? "",
       country: value.country,
       city: typeof value.city === "object" ? value.city.value : value.city,
-      street: value.street,
-      street2: value.street2,
-      street3: value.street3,
-      street4: value.street4,
-      postal_npwp: value.postal_npwp.trim(),
+      street: value.street ?? "",
+      street2: value.street2 ?? "",
+      street3: value.street3 ?? "",
+      street4: value.street4 ?? "",
+      postal_npwp: value.postal_npwp.trim() ?? "",
       city_npwp: typeof value.city_npwp === "object" ? value.city_npwp.value : value.city_npwp,
-      street_npwp: value.street_npwp,
-      street2_npwp: value.street2_npwp,
-      street3_npwp: value.street3_npwp,
-      street4_npwp: value.street4_npwp,
-      postal_sppkp: value.postal_sppkp.trim(),
+      street_npwp: value.street_npwp ?? "",
+      street2_npwp: value.street2_npwp ?? "",
+      street3_npwp: value.street3_npwp ?? "",
+      street4_npwp: value.street4_npwp ?? "",
+      postal_sppkp: value.postal_sppkp.trim() ?? "",
       city_sppkp: typeof value.city_sppkp === "object" ? value.city_sppkp.value : value.city_sppkp,
-      street_sppkp: value.street_sppkp,
-      street2_sppkp: value.street2_sppkp,
-      street3_sppkp: value.street3_sppkp,
-      street4_sppkp: value.street4_sppkp,
-      telf1: value.telf.trim().split(/-/)[1],
-      fax: value.fax.trim().split(/-/)[1],
-      email: value.email,
+      street_sppkp: value.street_sppkp ?? "",
+      street2_sppkp: value.street2_sppkp ?? "",
+      street3_sppkp: value.street3_sppkp ?? "",
+      street4_sppkp: value.street4_sppkp ?? "",
+      telf1: value.telf.trim().split(/-/)[1] ?? "",
+      fax: value.fax.trim().split(/-/)[1] ?? "",
+      email: value.email ?? "",
       is_new_npwp: value.is_new_npwp,
       is_pkp: value.ispkp,
       is_tender: value.is_tender,
       is_priority: value.is_priority,
       is_interest: value.is_interest,
-      npwp: value.npwp.trim(),
-      pay_mthd: value.paymthd,
-      pay_term: value.payterm,
-      ppn_type: value.ppn_type,
-      company: value.company,
-      purch_org: value.purchorg?.value,
-      ven_acc: value.venacc,
-      ven_group: value.vengroup,
-      ven_type: value.ventype,
-      description: value.description,
-      limit_vendor: value.limit.toString().match(/\d+/g)?.join(""),
-      lim_curr: value.currency,
-      ven_code: value.vendorcode,
-      search_term: value.search_term,
-      website_url: value.website_url.trim(),
-      ig_link: value.ig_link.trim(),
-      fb_link: value.fb_link.trim(),
-      twt_link: value.twt_link.trim(),
-      nama_direktur: value.nama_direktur.trim(),
-      nama_pic: value.nama_pic.trim(),
-      no_telf_pic: value.no_telf_pic.trim().split(/-/)[1],
-      email_pic: value.email_pic.trim(),
-      email_fin: value.email_fin.trim(),
-      kawasan_berikat: value.kawasan_berikat,
+      npwp: value.npwp.trim() ?? "",
+      pay_mthd: value.paymthd ?? "",
+      pay_term: value.payterm ?? "",
+      ppn_type: value.ppn_type ?? "",
+      company: value.company ?? "",
+      purch_org: value.purchorg?.value ?? "",
+      ven_acc: value.venacc ?? "",
+      ven_group: value.vengroup ?? "",
+      ven_type: value.ventype ?? "",
+      description: value.description ?? "",
+      limit_vendor: value.limit.toString().match(/\d+/g)?.join("") ?? "",
+      lim_curr: value.currency ?? "",
+      ven_code: value.vendorcode ?? "",
+      search_term: value.search_term ?? "",
+      website_url: value.website_url.trim() ?? "",
+      ig_link: value.ig_link.trim() ?? "",
+      fb_link: value.fb_link.trim() ?? "",
+      twt_link: value.twt_link.trim() ?? "",
+      nama_direktur: value.nama_direktur.trim() ?? "",
+      nama_pic: value.nama_pic.trim() ?? "",
+      no_telf_pic: value.no_telf_pic.trim().split(/-/)[1] ?? "",
+      email_pic: value.email_pic.trim() ?? "",
+      email_fin: value.email_fin.trim() ?? "",
+      kawasan_berikat: value.kawasan_berikat ?? "",
+      nitku: value.nitku ?? "",
+      coupa_id: value.id_coupa ?? ""
     };
-    let tempBanks = [];
-    let ven_bank;
-    if (dirtyFields.bank) {
-      dirtyFields?.bank.map((item, index) => {
-        let changed = false;
-        Object.keys(item).map(keys => {
-          if (item[keys]?.value === true) {
-            changed = true;
-          } else if (item[keys] === true) {
-            changed = true;
-          }
-        });
-        if (changed) {
-          let bk = value.bank[index];
-          const payload = {
-            ...bk,
-            bank_country: bk.bank_country?.value,
-            bank_curr: bk.bank_curr?.value,
-            bank_id: bk.bank_id?.value,
-          };
-          tempBanks.push(payload);
-        }
-      });
-      ven_bank = tempBanks.map(item => ({
-        ...item,
-        method: "update",
-      }));
-    } else {
-      ven_bank = [];
-    }
+
+    const ven_bank = (value.bank ?? []).map((bank) => ({
+      ...bank,
+      bank_country: bank.bank_country?.value,
+      bank_curr: bank.bank_curr?.value,
+      bank_id: bank.bank_id?.value,
+      method: 'update',
+    }));
 
     const jsonSend = {
       role: role === undefined ? "VENDOR" : role,
       is_draft: is_draft.current,
-      ticket_id: loader_data.ticket_id,
-      remarks: value.remarks,
-      ticket_state: ticketState,
+      ticket_id: loader_data.ticket_id ?? "",
+      remarks: value.remarks ?? "",
+      ticket_state: ticketState ?? "",
       ven_detail: ven_detail,
       ven_banks: ven_bank,
       ven_files: filteredVenFile,
-      cur_pos: loader_data.cur_pos,
+      cur_pos: loader_data.cur_pos ?? "",
     };
 
-    // console.log(jsonSend);
+    console.log(jsonSend);
     try {
       setLoading(true);
       let submit;
@@ -1151,7 +893,7 @@ function CoupaForm() {
           }}
         >
           <Typography variant="h4" gutterBottom>
-            {`Form Vendor Registration ${loader_data.ticket_num}`}
+            {`Form Vendor Registration ${coupa_id}`}
           </Typography>
         </Box>
         <Container>
@@ -1187,7 +929,7 @@ function CoupaForm() {
               </AccordionSummary>
               <AccordionDetails>
                 <Grid container spacing={2}>
-                  <Grid item xs={3}>
+                  <Grid item xs={4}>
                     <SelectComp
                       name="titlecomp"
                       label={t("Title") + " *"}
@@ -1199,7 +941,7 @@ function CoupaForm() {
                       rules={{ required: "Please insert this field" }}
                     />
                   </Grid>
-                  <Grid item xs={3}>
+                  <Grid item xs={4}>
                     <SelectComp
                       name="localovs"
                       label={t("Local/Overseas") + " *"}
@@ -1230,7 +972,7 @@ function CoupaForm() {
                       name="name1"
                       label={t("Company Name") + " *"}
                       control={control}
-                      readOnly={true}
+                      disabled={true}
                       t={t}
                       rules={{
                         required: "Please insert this field",
@@ -1243,35 +985,35 @@ function CoupaForm() {
                     />
                   </Grid>
                   
-                  <Grid item xs={3}>
+                  <Grid item xs={4}>
                     <PatternFieldComp
                       name="telf"
                       label={t("Telephone Number")}
                       useplaceholder
                       control={control}
-                      readOnly={true}
+                      disabled={true}
                       format={phoneNumber}
                       isNumString={false}
                     />
                   </Grid>
-                  <Grid item xs={3}>
+                  <Grid item xs={4}>
                     <PatternFieldComp
                       name="fax"
                       label={t("Handphone Number")}
                       useplaceholder
                       control={control}
-                      readOnly={true}
+                      disabled={true}
                       format={phoneNumber}
                       isNumString={false}
                     />
                   </Grid>
-                  <Grid item xs={6}>
+                  <Grid item xs={8}>
                     <TextFieldComp
                       name="email"
                       label="Email *"
                       control={control}
                       t={t}
-                      readOnly={true}
+                      disabled={true}
                       rules={{
                         required: "Please insert this field",
                         pattern: {
@@ -1287,7 +1029,7 @@ function CoupaForm() {
                       name="kawasan_berikat"
                       label="Kawasan Berikat"
                       control={control}
-                      readOnly={true}
+                      disabled={true}
                     />
                   </Grid>
                   {!checkFieldRule("search_term") && (
@@ -1315,7 +1057,7 @@ function CoupaForm() {
                         name="id_coupa"
                         label={t("ID COUPA") + " *"}
                         control={control}
-                        readOnly={true}
+                        disabled={true}
                         t={t}
                         rules={{
                           required: "Please insert this field",
@@ -1359,7 +1101,7 @@ function CoupaForm() {
                       t={t}
                       label={t("URL Website")}
                       control={control}
-                      readOnly={true}
+                      disabled={true}
                       rules={{
                         maxLength: { value: 500, message: "Max 500 Character" },
                       }}
@@ -1371,7 +1113,7 @@ function CoupaForm() {
                       t={t}
                       label={t("Instagram")}
                       control={control}
-                      readOnly={true}
+                      disabled={true}
                       rules={{
                         maxLength: { value: 500, message: "Max 500 Character" },
                       }}
@@ -1383,7 +1125,7 @@ function CoupaForm() {
                       t={t}
                       label={t("Facebook")}
                       control={control}
-                      readOnly={true}
+                      disabled={true}
                       rules={{
                         maxLength: { value: 500, message: "Max 500 Character" },
                       }}
@@ -1395,7 +1137,7 @@ function CoupaForm() {
                       t={t}
                       label={t("Twitter")}
                       control={control}
-                      readOnly={true}
+                      disabled={true}
                       rules={{
                         maxLength: { value: 500, message: "Max 500 Character" },
                       }}
@@ -1434,7 +1176,7 @@ function CoupaForm() {
                       t={t}
                       label={t("Director Name") + " *"}
                       control={control}
-                      readOnly={true}
+                      disabled={true}
                       toUpperCase={true}
                       rules={{
                         required: "Please insert this field",
@@ -1448,7 +1190,7 @@ function CoupaForm() {
                       t={t}
                       label={t("PIC Name") + " *"}
                       control={control}
-                      readOnly={true}
+                      disabled={true}
                       toUpperCase={true}
                       rules={{
                         required: "Please insert this field",
@@ -1463,7 +1205,7 @@ function CoupaForm() {
                       label={t("Handphone Number PIC")}
                       useplaceholder
                       control={control}
-                      readOnly={true}
+                      disabled={true}
                       format={phoneNumber}
                       isNumString={false}
                       rules={{ required: "Please insert this field" }}
@@ -1480,7 +1222,7 @@ function CoupaForm() {
                       t={t}
                       label={t("Email PIC") + " *"}
                       control={control}
-                      readOnly={true}
+                      disabled={true}
                       toLowerCase={true}
                       rules={{
                         required: "Please insert this field",
@@ -1499,7 +1241,7 @@ function CoupaForm() {
                       t={t}
                       label={t("Email Finance") + " *"}
                       control={control}
-                      readOnly={true}
+                      disabled={true}
                       toLowerCase={true}
                       rules={{
                         required: "Please insert this field",
@@ -1572,17 +1314,17 @@ function CoupaForm() {
                         t={t}
                         control={control}
                         maxLength={35}
-                        readOnly={true}
+                        disabled={true}
                         rules={{
                           required: "Please insert this field",
                           maxLength: {
                             value: 35,
                             message: "Max 35 Character, continue to field below if not enough",
                           },
-                          pattern: {
-                            value: /^[^,]*$/,
-                            message: t(`Please fill without ',' (comma) character`),
-                          },
+                          // pattern: {
+                          //   value: /^[^,]*$/,
+                          //   message: t(`Please fill without ',' (comma) character`),
+                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1590,16 +1332,16 @@ function CoupaForm() {
                         name="street2"
                         t={t}
                         control={control}
-                        readOnly={true}
+                        disabled={true}
                         rules={{
                           maxLength: {
                             value: 35,
                             message: "Max 35 Character, continue to field below if not enough",
                           },
-                          pattern: {
-                            value: /^[^,]*$/,
-                            message: `Please fill without ',' (comma) character`,
-                          },
+                          // pattern: {
+                          //   value: /^[^,]*$/,
+                          //   message: `Please fill without ',' (comma) character`,
+                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1607,16 +1349,16 @@ function CoupaForm() {
                         name="street3"
                         t={t}
                         control={control}
-                        readOnly={true}
+                        disabled={true}
                         rules={{
                           maxLength: {
                             value: 35,
                             message: "Max 35 Character, continue to field below if not enough",
                           },
-                          pattern: {
-                            value: /^[^,]*$/,
-                            message: `Please fill without ',' (comma) character`,
-                          },
+                          // pattern: {
+                          //   value: /^[^,]*$/,
+                          //   message: `Please fill without ',' (comma) character`,
+                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1624,13 +1366,13 @@ function CoupaForm() {
                         name="street4"
                         t={t}
                         control={control}
-                        readOnly={true}
+                        disabled={true}
                         rules={{
                           maxLength: { value: 35, message: "Max 35 Character" },
-                          pattern: {
-                            value: /^[^,]*$/,
-                            message: `Please fill without ',' (comma) character`,
-                          },
+                          // pattern: {
+                          //   value: /^[^,]*$/,
+                          //   message: `Please fill without ',' (comma) character`,
+                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1643,7 +1385,7 @@ function CoupaForm() {
                       label={t("City") + " *"}
                       t={t}
                       control={control}
-                      readOnly={true}
+                      disabled={watch("localovs") == "LOCAL"}
                       options={cities}
                       rules={{
                         required: "Please insert this field",
@@ -1657,7 +1399,7 @@ function CoupaForm() {
                       label={t("Postal Code") + " *"}
                       t={t}
                       control={control}
-                      readOnly={true}
+                      disabled={true}
                       rules={{
                         required: chgLocal === "OVS" ? false : t("Please insert this field"),
                       }}
@@ -1725,17 +1467,17 @@ function CoupaForm() {
                         name="street_npwp"
                         t={t}
                         control={control}
-                        readOnly={true}
+                        disabled={true}
                         rules={{
                           required: "Please insert this field",
                           maxLength: {
                             value: 35,
                             message: "Max 35 Character, continue to field below if not enough",
                           },
-                          pattern: {
-                            value: /^[^,]*$/,
-                            message: `Please fill without ',' (comma) character`,
-                          },
+                          // pattern: {
+                          //   value: /^[^,]*$/,
+                          //   message: `Please fill without ',' (comma) character`,
+                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1743,16 +1485,16 @@ function CoupaForm() {
                         name="street2_npwp"
                         t={t}
                         control={control}
-                        readOnly={true}
+                        disabled={true}
                         rules={{
                           maxLength: {
                             value: 35,
                             message: "Max 35 Character, continue to field below if not enough",
                           },
-                          pattern: {
-                            value: /^[^,]*$/,
-                            message: `Please fill without ',' (comma) character`,
-                          },
+                          // pattern: {
+                          //   value: /^[^,]*$/,
+                          //   message: `Please fill without ',' (comma) character`,
+                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1760,16 +1502,16 @@ function CoupaForm() {
                         name="street3_npwp"
                         t={t}
                         control={control}
-                        readOnly={true}
+                        disabled={true}
                         rules={{
                           maxLength: {
                             value: 35,
                             message: "Max 35 Character, continue to field below if not enough",
                           },
-                          pattern: {
-                            value: /^[^,]*$/,
-                            message: `Please fill without ',' (comma) character`,
-                          },
+                          // pattern: {
+                          //   value: /^[^,]*$/,
+                          //   message: `Please fill without ',' (comma) character`,
+                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1777,13 +1519,13 @@ function CoupaForm() {
                         name="street4_npwp"
                         t={t}
                         control={control}
-                        readOnly={true}
+                        disabled={true}
                         rules={{
                           maxLength: { value: 35, message: "Max 35 Character" },
-                          pattern: {
-                            value: /^[^,]*$/,
-                            message: `Please fill without ',' (comma) character`,
-                          },
+                          // pattern: {
+                          //   value: /^[^,]*$/,
+                          //   message: `Please fill without ',' (comma) character`,
+                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1796,7 +1538,7 @@ function CoupaForm() {
                       t={t}
                       label={t("City") + " *"}
                       control={control}
-                      readOnly={true}
+                      disabled={watch("localovs") == "LOCAL"}
                       options={cities}
                       rules={{
                         required: "Please insert this field",
@@ -1810,7 +1552,7 @@ function CoupaForm() {
                       t={t}
                       label={t("Postal Code") + " *"}
                       control={control}
-                      readOnly={true}
+                      disabled={true}
                       rules={{
                         required: chgLocal === "OVS" ? false : "Please insert this field",
                       }}
@@ -1890,17 +1632,17 @@ function CoupaForm() {
                         name="street_sppkp"
                         t={t}
                         control={control}
-                        readOnly={true}
+                        disabled={true}
                         rules={{
                           required: "Please insert this field",
                           maxLength: {
                             value: 35,
                             message: "Max 35 Character, continue to field below if not enough",
                           },
-                          pattern: {
-                            value: /^[^,]*$/,
-                            message: `Please fill without ',' (comma) character`,
-                          },
+                          // pattern: {
+                          //   value: /^[^,]*$/,
+                          //   message: `Please fill without ',' (comma) character`,
+                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1908,16 +1650,16 @@ function CoupaForm() {
                         name="street2_sppkp"
                         t={t}
                         control={control}
-                        readOnly={true}
+                        disabled={true}
                         rules={{
                           maxLength: {
                             value: 35,
                             message: "Max 35 Character, continue to field below if not enough",
                           },
-                          pattern: {
-                            value: /^[^,]*$/,
-                            message: `Please fill without ',' (comma) character`,
-                          },
+                          // pattern: {
+                          //   value: /^[^,]*$/,
+                          //   message: `Please fill without ',' (comma) character`,
+                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1925,16 +1667,16 @@ function CoupaForm() {
                         name="street3_sppkp"
                         t={t}
                         control={control}
-                        readOnly={true}
+                        disabled={true}
                         rules={{
                           maxLength: {
                             value: 35,
                             message: "Max 35 Character, continue to field below if not enough",
                           },
-                          pattern: {
-                            value: /^[^,]*$/,
-                            message: `Please fill without ',' (comma) character`,
-                          },
+                          // pattern: {
+                          //   value: /^[^,]*$/,
+                          //   message: `Please fill without ',' (comma) character`,
+                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1942,13 +1684,13 @@ function CoupaForm() {
                         name="street4_sppkp"
                         t={t}
                         control={control}
-                        readOnly={true}
+                        disabled={true}
                         rules={{
                           maxLength: { value: 35, message: "Max 35 Character" },
-                          pattern: {
-                            value: /^[^,]*$/,
-                            message: `Please fill without ',' (comma) character`,
-                          },
+                          // pattern: {
+                          //   value: /^[^,]*$/,
+                          //   message: `Please fill without ',' (comma) character`,
+                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1961,7 +1703,7 @@ function CoupaForm() {
                       t={t}
                       label={t("City")}
                       control={control}
-                      readOnly={true}
+                      disabled={watch("localovs") == "LOCAL"}
                       options={cities}
                       rules={{
                         required: "Please insert this field",
@@ -1975,7 +1717,7 @@ function CoupaForm() {
                       t={t}
                       label={t("Postal Code")}
                       control={control}
-                      readOnly={true}
+                      disabled={true}
                       rules={{
                         required: chgLocal === "OVS" ? false : "Please insert this field",
                       }}
@@ -2014,26 +1756,25 @@ function CoupaForm() {
                       name="ispkp"
                       label="Pengusaha Kena Pajak (PKP)"
                       control={control}
-                      readOnly={true}
-                      onChangeovr={funChgIsPTKP}
+                      disabled={true}
                     />
                   </Grid>
                   <Grid item xs={12}></Grid>
-                  <Grid item xs={2}>
+                  <Grid item xs={3}>
                     <SwitchComponent
                       name="is_new_npwp"
                       control={control}
                       frontlabel={"16 Digit"}
                       backlabel={"Old"}
-                      readOnly={true}
+                      disabled={true}
                     />
                   </Grid>
-                  <Grid item xs={4}>
+                  <Grid item xs={5}>
                     {watch("is_new_npwp") == true && (
                       <NumericFieldComp
                         name="npwp"
                         t={t}
-                        readOnly={true}
+                        disabled={true}
                         rules={{
                           required:
                             watch("localovs") == "LOCAL" ? "Please insert this field" : false,
@@ -2062,7 +1803,7 @@ function CoupaForm() {
                         format="##.###.###.#-###.###"
                         mask={"_"}
                         control={control}
-                        readOnly={true}
+                        disabled={true}
                         rules={{
                           pattern: {
                             value: /^[0-9.-]+$/,
@@ -2083,7 +1824,7 @@ function CoupaForm() {
                       />
                     )}
                   </Grid>
-                  <Grid item xs={3}>
+                  <Grid item xs={4}>
                     <SelectComp
                       name="paymthd"
                       t={t}
@@ -2132,7 +1873,7 @@ function CoupaForm() {
                         name="nitku"
                         label={t("NITKU") + " *"}
                         control={control}
-                        readOnly={false}
+                        disabled={true}
                         t={t}
                         rules={{
                           required: "Please insert this field",
@@ -2172,35 +1913,33 @@ function CoupaForm() {
                 </AccordionSummary>
                 <AccordionDetails>
                   <Grid container spacing={2}>
-                    <Grid item xs={5}>
+                    <Grid item xs={4}>
                       <SelectComp
                         name="company"
                         t={t}
                         label={t("Company") + " *"}
                         control={control}
                         options={comps.current}
-                        // disabled={true}
+                        disabled={true}
                         rules={{
                           required: "Please insert this field",
                         }}
-                        onChangeovr={funChgComp}
                       />
                     </Grid>
-                    <Grid item xs={3}>
+                    <Grid item xs={4}>
                       <AutoSelectPurOrg
                         name="purchorg"
                         label="Purchasing Organization *"
                         control={control}
-                        readOnly={true}
+                        disabled={true}
                         rules={{
                           required: "Please insert this field",
                         }}
-                        company={chgComp}
                         t={t}
                       />
                     </Grid>
                     <Grid item xs={3}></Grid>
-                    <Grid item xs={3}>
+                    <Grid item xs={4}>
                       <SelectComp
                         name="vengroup"
                         t={t}
@@ -2214,7 +1953,7 @@ function CoupaForm() {
                         }}
                       />
                     </Grid>
-                    <Grid item xs={3}>
+                    <Grid item xs={4}>
                       <SelectComp
                         name="venacc"
                         t={t}
@@ -2231,7 +1970,7 @@ function CoupaForm() {
                         }}
                       />
                     </Grid>
-                    <Grid item xs={3}>
+                    <Grid item xs={4}>
                       <SelectComp
                         name="ventype"
                         t={t}
@@ -2250,8 +1989,7 @@ function CoupaForm() {
                         }}
                       />
                     </Grid>
-                    <Grid item xs={3}></Grid>
-                    <Grid item xs={3}>
+                    <Grid item xs={4}>
                       <SelectComp
                         name="currency"
                         t={t}
@@ -2273,7 +2011,7 @@ function CoupaForm() {
                         control={control}
                         format={["thousandSeparator"]}
                         currency={chgCurr}
-                        readOnly={true}
+                        disabled={true}
                         rules={{
                           required: chgVenacc === "TRADE" ? t("Please insert this field") : false,
                         }}
@@ -2285,20 +2023,20 @@ function CoupaForm() {
                         name="is_tender"
                         label={t("Vendor Tender Participant")}
                         control={control}
-                        readOnly={true}
+                        disabled={true}
                         onChangeovr={funChgTdr}
                       />
                       <CheckboxComp
                         name="is_priority"
                         label={t("Vendor Priority")}
                         control={control}
-                        readOnly={true}
+                        disabled={true}
                       />
                       <CheckboxComp
                         name="is_interest"
                         label={t("Interest Payment Priority")}
                         control={control}
-                        readOnly={true}
+                        disabled={true}
                       />
                     </Grid>
                     
@@ -2309,8 +2047,8 @@ function CoupaForm() {
                         label="Description *"
                         // helperText={t('Wajib diisi jika vendor mengikuti tender')}
                         control={control}
-                        readOnly={true}
-                        rules={{ required: "Please insert this field" }}
+                        disabled={true}
+                        // rules={{ required: "Please insert this field" }}
                         tooltip={t("Alasan memilih vendor tersebut menjadi rekanan KPN")}
                       />
                     </Grid>
@@ -2342,7 +2080,7 @@ function CoupaForm() {
             </AccordionSummary>
             <AccordionDetails>
               {errors.bank && <p style={{ color: "red" }}>{t("Please insert this field")}</p>}
-              <VenBankTableRefactor
+              <VenBankTableCoupa
                 control={control}
                 fields={fields}
                 append={append}
@@ -2352,7 +2090,7 @@ function CoupaForm() {
                 currencies={currencies}
                 watch={watch}
                 is_local={chgLocal === "LOCAL"}
-                is_allow={false}
+                is_allow={true}
                 t={t}
                 ven_id={loader_data.ven_id}
                 clearField={resetField}
