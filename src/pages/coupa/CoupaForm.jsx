@@ -824,7 +824,7 @@ function CoupaForm() {
     const jsonSend = {
       role: role === undefined ? "VENDOR" : role,
       is_draft: is_draft.current,
-      ticket_id: loader_data.ticket_id ?? "",
+      coupa_id: value.id_coupa ?? "",
       remarks: value.remarks ?? "",
       ticket_state: ticketState ?? "",
       ven_detail: ven_detail,
@@ -839,22 +839,26 @@ function CoupaForm() {
       let submit;
       if (role === undefined || data_form.type !== "form") {
         submit = await axios.post(
-          `${import.meta.env.VITE_URL_LOC}/ticket/newform/submit`,
+          `${import.meta.env.VITE_URL_LOC}/coupa/vendor/submit`,
           jsonSend
         );
         // console.log('submitting...');
       } else {
-        submit = await axiosPrivate.post(`/ticket/form/submit`, jsonSend);
+        submit = await axiosPrivate.post(`/coupa/vendor/submit`, jsonSend);
         // console.log('submitting...');
       }
       const response = submit.data;
+      console.log(response);
+      if(response){
+        const submitSAP = 0;
+      }
       setFormStat({ stat: true, type: "success", message: response.message });
       if (!is_draft.current) {
         setTimeout(() => {
           if (data_form.emp_role_id == "VENDOR") {
             navigate(0);
           } else {
-            navigate("../../dashboard/ticket");
+            navigate("../../dashboard/coupa");
           }
         }, 3000);
         // console.log('reloading...');
