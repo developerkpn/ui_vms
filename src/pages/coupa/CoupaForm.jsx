@@ -1,53 +1,40 @@
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
-  Container,
-  Grid,
-  Typography,
+  Alert,
+  Backdrop,
   Box,
   Button,
-  Snackbar,
-  Alert,
   CircularProgress,
-  Backdrop,
-  Dialog,
-  Link,
-  DialogTitle,
-  DialogActions,
-  AlertTitle,
+  Container,
+  Grid,
+  Snackbar,
   ToggleButton,
   ToggleButtonGroup,
-  TextField,
+  Typography,
 } from "@mui/material";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import useSessionStore from "src/store/useSessionStore";
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import UploadButton from "src/components/common/UploadButton";
-import { useNavigate, useParams } from "react-router-dom";
-import axios, { isAxiosError } from "axios";
-import { TextFieldComp } from "src/components/common/TextFieldComp";
-import SwitchComponent from "src/components/common/SwitchComponent";
-import SelectComp from "src/components/common/SelectComp";
+import { useTheme } from "@mui/material/styles";
+import { isAxiosError } from "axios";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useFieldArray, useForm, useFormState } from "react-hook-form";
+import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
+import AutoCompleteSelect from "src/components/common/AutoCompleteSelect";
+import AutoSelectPurOrg from "src/components/common/AutoSelectPurOrg";
 import CheckboxComp from "src/components/common/CheckboxComp";
 import NumericFieldComp from "src/components/common/NumericFieldComp";
-import { useForm, useFormState, useFieldArray } from "react-hook-form";
-import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import PatternFieldComp from "src/components/common/PatternFieldComp";
-import AutoCompleteSelect from "src/components/common/AutoCompleteSelect";
-import { LoadingButton } from "@mui/lab";
-import ConfirmComponent from "src/components/common/ConfirmComponent";
-import { useTranslation } from "react-i18next";
-import { useTheme } from "@mui/material/styles";
-import AutoSelectPurOrg from "src/components/common/AutoSelectPurOrg";
-import { v4 } from "uuid";
+import SelectComp from "src/components/common/SelectComp";
+import SwitchComponent from "src/components/common/SwitchComponent";
+import { TextFieldComp } from "src/components/common/TextFieldComp";
+import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import useTogglePanel, { FormTab } from "src/hooks/useTogglePanel";
+import useSessionStore from "src/store/useSessionStore";
 
-import RejectLog from "src/components/common/RejectLog";
-import VenBankTableRefactor from "src/components/FormVendor/VenBankTableRefactor";
-import VenBankTableCoupa from "./VenBankTableCoupa";
-import usePermissionStore from "src/store/userPermissionStore";
 import { useFormCoupa } from "./DirectCoupaForm";
+import VenBankTableCoupa from "./VenBankTableCoupa";
 
 const ventypeList = {
   "3RD_PARTY": [
@@ -844,7 +831,7 @@ function CoupaForm() {
       const response = submit.data;
       console.log(response);
       if (response) {
-        const submitSAP = 0;
+        await axiosPrivate.post("/coupa/vendor/update", { id: data_form.id });
       }
       setFormStat({ stat: true, type: "success", message: response.message });
       if (!is_draft.current) {
@@ -1749,18 +1736,18 @@ function CoupaForm() {
                         name="npwp"
                         t={t}
                         disabled={true}
-                        rules={{
-                          required:
-                            watch("localovs") == "LOCAL" ? "Please insert this field" : false,
-                          minLength: {
-                            value: 16,
-                            message: "Isi 16 digit",
-                          },
-                          maxLength: {
-                            value: 16,
-                            message: "Isi 16 digit",
-                          },
-                        }}
+                        // rules={{
+                        //   required:
+                        //     watch("localovs") == "LOCAL" ? "Please insert this field" : false,
+                        //   minLength: {
+                        //     value: 16,
+                        //     message: "Isi 16 digit",
+                        //   },
+                        //   maxLength: {
+                        //     value: 16,
+                        //     message: "Isi 16 digit",
+                        //   },
+                        // }}
                         label={t("Tax Number") + (watch("localovs") == "LOCAL" ? " *" : "")}
                         control={control}
                         thousandSeparator={false}
@@ -1849,13 +1836,13 @@ function CoupaForm() {
                       control={control}
                       disabled={true}
                       t={t}
-                      rules={{
-                        required: "Please insert this field",
-                        maxLength: {
-                          value: 100,
-                          message: "Max 100 Character",
-                        },
-                      }}
+                      // rules={{
+                      //   required: "Please insert this field",
+                      //   maxLength: {
+                      //     value: 100,
+                      //     message: "Max 100 Character",
+                      //   },
+                      // }}
                     />
                   </Grid>
                 </Grid>
