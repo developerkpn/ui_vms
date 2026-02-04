@@ -66,7 +66,6 @@ const ventypeList = {
   ],
   BANK: [{ value: "X", label: "X" }],
   SHAREHOLDERS: [{ value: "X", label: "X" }],
-
 };
 
 function CoupaForm() {
@@ -170,12 +169,6 @@ function CoupaForm() {
     rules: { required: true },
   });
 
-  const { handleSubmit: handleSubmit1, control: control1 } = useForm({
-    defaultValues: {
-      remarks: "",
-    },
-  });
-
   const { dirtyFields } = useFormState({ control: control });
 
   const [loader_data, setLoaderdata] = useState({
@@ -241,32 +234,38 @@ function CoupaForm() {
           });
         }
       }
-      
+
       const compsData = await axiosPrivate.get(`/master/company`, {
-          signal: controller.signal,
-        });
+        signal: controller.signal,
+      });
       const response = compsData.data.data;
       comps.current = response.data;
 
-      const upstream = comps.current["UPSTREAM"].map(item =>({
-        name : item.name,
-        code : item.code,
-        comp_id : item.comp_id
+      const upstream = comps.current["UPSTREAM"].map(item => ({
+        name: item.name,
+        code: item.code,
+        comp_id: item.comp_id,
       }));
 
-      const downstream = comps.current["DOWNSTREAM"].map(item =>({
-        name : item.name,
-        code : item.code,
-        comp_id : item.comp_id
+      const downstream = comps.current["DOWNSTREAM"].map(item => ({
+        name: item.name,
+        code: item.code,
+        comp_id: item.comp_id,
       }));
+
       comps.current = upstream.concat(downstream);
 
-      const company_code = data.vendor_detail.company_code ? data.vendor_detail.company_code.length > 2 ? data.vendor_detail.company_code.slice(0,2) : data.vendor_detail.company_code : "";
+      console.log("ini ben", comps.current);
+
+      const company_code = data.vendor_detail.company_code
+        ? data.vendor_detail.company_code.length > 2
+          ? data.vendor_detail.company_code.slice(0, 2)
+          : data.vendor_detail.company_code
+        : "";
       console.log(company_code);
-      const selectedCompany = comps.current.find(
-        c => c.code === company_code
-      );
-      
+
+      const selectedCompany = comps.current.find(c => c.code === company_code);
+
       const valueForm = {
         emailRequestor: data.email_proc ? data.email_proc : "",
         deptRequestor: data.dep_proc ? data.dep_proc : "",
@@ -303,7 +302,9 @@ function CoupaForm() {
         payterm: data.tax_payment.pay_term_code ? data.tax_payment.pay_term_code : "I30",
         ppn_type: data.tax_payment.ppn_code ?? "",
         company: selectedCompany ? selectedCompany.comp_id : "",
-        purchorg: data.vendor_detail.purch_org ? { value: data.vendor_detail.purch_org, label: data.vendor_detail.purch_org } : null,
+        purchorg: data.vendor_detail.purch_org
+          ? { value: data.vendor_detail.purch_org_code, label: data.vendor_detail.purch_org }
+          : null,
         vengroup: data.vendor_detail.ven_group ? data.vendor_detail.ven_group : "",
         venacc: data.vendor_detail.ven_acc ? data.vendor_detail.ven_acc : "",
         ventype: data.vendor_detail.ven_type ? data.vendor_detail.ven_type.toUpperCase() : "",
@@ -315,7 +316,7 @@ function CoupaForm() {
         vendorcode: data.ven_code ? data.ven_code : data.header,
         id_coupa: coupa_id ?? "",
         nitku: data.tax_payment.nitku ?? "",
-        limit: data.limit_vendor ? data.limit_vendor : "",
+        limit: data.limit_vendor ? data.limit_vendor : 0,
         search_term: data.search_term ? data.search_term : "",
         is_active: data.ticket_stat,
         website_url: data.social_media.website_url ?? "",
@@ -327,13 +328,20 @@ function CoupaForm() {
         no_telf_pic: data.company_organization.no_telf_pic ?? "",
         email_pic: data.company_organization.email_pic ?? "",
         email_fin: data.company_organization.email_finance ?? "",
-        bank: [{
-          bank_country: { value: data.bank_information.bank_country, label: data.bank_information.bank_country },
-          bank_id: { value: data.bank_information.bank_id, label: data.bank_information.bank_name},
-          bank_curr: data.bank_information.bank_curr ? { value: data.bank_information.bank_curr, label: data.bank_information.bank_curr } : null,
-          bank_acc: data.bank_information.bank_acc,
-          acc_hold: data.bank_information.acc_hold,
-        }],
+        bank: Array.isArray(data.bank_information)
+          ? data.bank_information.map(bank => ({
+              bank_country: bank.bank_country
+                ? { value: bank.bank_country, label: bank.bank_country }
+                : null,
+
+              bank_id: bank.bank_key ? { value: bank.bank_key, label: bank.bank_name } : null,
+
+              bank_curr: bank.bank_curr ? { value: bank.bank_curr, label: bank.bank_curr } : null,
+
+              bank_acc: bank.bank_acc ?? "",
+              acc_hold: bank.acc_hold ?? "",
+            }))
+          : [],
       };
 
       if (valueForm.name1 === "") {
@@ -665,7 +673,7 @@ function CoupaForm() {
       try {
         const banksData = await axiosPrivate.get(`/master/banksap`, {
           params: {
-            country: data_form.bank_information.bank_country
+            country: data_form.bank_information.bank_country,
           },
           signal: controller.signal,
         });
@@ -795,7 +803,7 @@ function CoupaForm() {
       ven_group: value.vengroup ?? "",
       ven_type: value.ventype ?? "",
       description: value.description ?? "",
-      limit_vendor: value.limit.toString().match(/\d+/g)?.join("") ?? "",
+      limit_vendor: 0,
       lim_curr: value.currency ?? "",
       ven_code: value.vendorcode ?? "",
       search_term: value.search_term ?? "",
@@ -810,46 +818,32 @@ function CoupaForm() {
       email_fin: value.email_fin.trim() ?? "",
       kawasan_berikat: value.kawasan_berikat ?? "",
       nitku: value.nitku ?? "",
-      coupa_id: value.id_coupa ?? ""
+      coupa_id: value.id_coupa ?? "",
     };
 
-    const ven_bank = (value.bank ?? []).map((bank) => ({
+    const ven_bank = (value.bank ?? []).map(bank => ({
       ...bank,
       bank_country: bank.bank_country?.value,
       bank_curr: bank.bank_curr?.value,
       bank_id: bank.bank_id?.value,
-      method: 'update',
+      method: "insert",
     }));
 
     const jsonSend = {
-      role: role === undefined ? "VENDOR" : role,
-      is_draft: is_draft.current,
-      coupa_id: value.id_coupa ?? "",
-      remarks: value.remarks ?? "",
       ticket_state: ticketState ?? "",
       ven_detail: ven_detail,
       ven_banks: ven_bank,
-      ven_files: filteredVenFile,
-      cur_pos: loader_data.cur_pos ?? "",
     };
 
     console.log(jsonSend);
     try {
       setLoading(true);
       let submit;
-      if (role === undefined || data_form.type !== "form") {
-        submit = await axios.post(
-          `${import.meta.env.VITE_URL_LOC}/coupa/vendor/submit`,
-          jsonSend
-        );
-        // console.log('submitting...');
-      } else {
-        submit = await axiosPrivate.post(`/coupa/vendor/submit`, jsonSend);
-        // console.log('submitting...');
-      }
+
+      submit = await axiosPrivate.post(`/coupa/vendor/submit`, jsonSend);
       const response = submit.data;
       console.log(response);
-      if(response){
+      if (response) {
         const submitSAP = 0;
       }
       setFormStat({ stat: true, type: "success", message: response.message });
@@ -988,7 +982,7 @@ function CoupaForm() {
                       regex={{ rule: /,+/g, value: "" }}
                     />
                   </Grid>
-                  
+
                   <Grid item xs={4}>
                     <PatternFieldComp
                       name="telf"
@@ -1018,13 +1012,6 @@ function CoupaForm() {
                       control={control}
                       t={t}
                       disabled={true}
-                      rules={{
-                        required: "Please insert this field",
-                        pattern: {
-                          value: /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/g,
-                          message: "invalid email address",
-                        },
-                      }}
                       toLowerCase={true}
                     />
                   </Grid>
@@ -1057,20 +1044,20 @@ function CoupaForm() {
                     </Grid>
                   )}
                   <Grid item xs={4}>
-                      <TextFieldComp
-                        name="id_coupa"
-                        label={t("ID COUPA") + " *"}
-                        control={control}
-                        disabled={true}
-                        t={t}
-                        rules={{
-                          required: "Please insert this field",
-                          maxLength: {
-                            value: 100,
-                            message: "Max 100 Character",
-                          },
-                        }}
-                      />
+                    <TextFieldComp
+                      name="id_coupa"
+                      label={t("ID COUPA") + " *"}
+                      control={control}
+                      disabled={true}
+                      t={t}
+                      rules={{
+                        required: "Please insert this field",
+                        maxLength: {
+                          value: 100,
+                          message: "Max 100 Character",
+                        },
+                      }}
+                    />
                   </Grid>
                 </Grid>
               </AccordionDetails>
@@ -1212,7 +1199,6 @@ function CoupaForm() {
                       disabled={true}
                       format={phoneNumber}
                       isNumString={false}
-                      rules={{ required: "Please insert this field" }}
                       tooltip={
                         t("Nomor handphone pihak vendor yang berhubungan dengan KPN") +
                         ". " +
@@ -1228,14 +1214,6 @@ function CoupaForm() {
                       control={control}
                       disabled={true}
                       toLowerCase={true}
-                      rules={{
-                        required: "Please insert this field",
-                        pattern: {
-                          value: /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/g,
-                          message: "invalid email address",
-                        },
-                        maxLength: { value: 500, message: "Max 500 Character" },
-                      }}
                       tooltip={t("Alamat email pihak vendor yang berhubungan dengan KPN")}
                     />
                   </Grid>
@@ -1247,14 +1225,6 @@ function CoupaForm() {
                       control={control}
                       disabled={true}
                       toLowerCase={true}
-                      rules={{
-                        required: "Please insert this field",
-                        pattern: {
-                          value: /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/g,
-                          message: "invalid email address",
-                        },
-                        maxLength: { value: 500, message: "Max 500 Character" },
-                      }}
                       tooltip={t("Email finance dari pihak vendor")}
                     />
                   </Grid>
@@ -1873,20 +1843,20 @@ function CoupaForm() {
                     />
                   </Grid>
                   <Grid item xs={4}>
-                      <TextFieldComp
-                        name="nitku"
-                        label={t("NITKU") + " *"}
-                        control={control}
-                        disabled={true}
-                        t={t}
-                        rules={{
-                          required: "Please insert this field",
-                          maxLength: {
-                            value: 100,
-                            message: "Max 100 Character",
-                          },
-                        }}
-                      />
+                    <TextFieldComp
+                      name="nitku"
+                      label={t("NITKU") + " *"}
+                      control={control}
+                      disabled={true}
+                      t={t}
+                      rules={{
+                        required: "Please insert this field",
+                        maxLength: {
+                          value: 100,
+                          message: "Max 100 Character",
+                        },
+                      }}
+                    />
                   </Grid>
                 </Grid>
               </AccordionDetails>
@@ -2043,7 +2013,7 @@ function CoupaForm() {
                         disabled={true}
                       />
                     </Grid>
-                    
+
                     <Grid item xs={12}>
                       <TextFieldComp
                         t={t}
@@ -2227,31 +2197,6 @@ function CoupaForm() {
         >
           <CircularProgress color="inherit" disableShrink />
         </Backdrop>
-        <Dialog open={formStat.stat && formStat.type === "success" && is_draft.current == false}>
-          <Box
-            sx={{
-              width: 500,
-              height: 200,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "success.main",
-            }}
-          >
-            <Typography variant="h4" sx={{ m: 2, borderRadius: 2 }} align="justify">
-              {formStat.message}
-            </Typography>
-          </Box>
-        </Dialog>
-        <ConfirmComponent
-          open={modalConfirmopen}
-          handleConfirm={confirmActionFun}
-          onCloseConf={modalConfclose}
-          sx={{ zIndex: theme => theme.zIndex.drawer - 2 }}
-          confirmText={`You're about to send this form to CEO/CFO, are you sure ?`}
-          t={t}
-        />
       </Container>
     </>
   );
