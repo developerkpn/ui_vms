@@ -136,8 +136,6 @@ function CoupaForm() {
   };
 
   const {
-    register,
-    unregister,
     handleSubmit,
     control,
     getValues,
@@ -240,18 +238,15 @@ function CoupaForm() {
         comp_id: item.comp_id,
       }));
 
-      comps.current = upstream.concat(downstream);
-
-      console.log("ini ben", comps.current);
+      const complist = upstream.concat(downstream);
 
       const company_code = data.vendor_detail.company_code
         ? data.vendor_detail.company_code.length > 2
           ? data.vendor_detail.company_code.slice(0, 2)
           : data.vendor_detail.company_code
         : "";
-      console.log(company_code);
 
-      const selectedCompany = comps.current.find(c => c.code === company_code);
+      const selectedCompany = complist.find(c => c.code === company_code);
 
       const valueForm = {
         emailRequestor: data.email_proc ? data.email_proc : "",
@@ -332,11 +327,9 @@ function CoupaForm() {
       };
 
       if (valueForm.name1 === "") {
-        setCheckex(true);
         toggle({ type: FormTab.RestrictForm });
       } else {
         setBtnclick(false);
-        setCheckex(false);
         toggle({ type: FormTab.OpenForm });
       }
 
@@ -351,56 +344,24 @@ function CoupaForm() {
         approval_pos: data.approval_pos,
         logrej_counter: data.counter,
       });
-      setChgComp(data.company || null);
     })();
 
     return () => {
       controller.abort();
     };
   }, [emp_role_id, data_form]);
-  const [chgComp, setChgComp] = useState();
   const [chgCountry, setChgCty] = useState(loader_data.data?.country);
   const [chgVengrp, setVengrp] = useState(loader_data.data?.vengroup);
   const [chgVenacc, setVenacc] = useState(loader_data.data?.venacc);
   const [chgCurr, setChgCurr] = useState(loader_data.data?.currency);
   const [phoneNumber, setPhnNum] = useState("+XX");
-  const [chgIsPTKP, setIsPTKP] = useState(false);
   const [chgLocal, setLocal] = useState("");
-  const [compTitle, setComptitle] = useState(loader_data.data?.titlecomp);
   const [compName, setCompname] = useState();
-  const [checkIsExist, setCheckex] = useState(true);
-  const [openAlert, setOpenAlert] = useState(false);
   const [isTender, setTender] = useState(loader_data.data?.is_tender);
   const [btnClicked, setBtnclick] = useState(true);
-  const [modalRejectopen, setModalopen] = useState(false);
-  const [modalConfirmopen, setConfOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState(false);
-  const [loadAddBank, setLoadAddBnk] = useState(false);
   const [langCode, setLang] = useState("id");
   const { t, i18n } = useTranslation("translation", { lng: langCode });
-  const [initDataFile, setInitDfile] = useState([]);
-  const fileCheck = useMemo(() => getValues("file_atth"), [watch("file_atth")]);
-  // const updateCurrentEdit = (rows) => {
-  //   setCurrentEdit(rows);
-  // };
-  const funChgCountry = useCallback(item => {
-    setChgCty(item);
-    countrycode.current = item;
-  }, []);
-  const funChgVgrp = useCallback(item => {
-    setVengrp(item);
-  }, []);
-  const funChgVacc = useCallback(item => {
-    setVenacc(item);
-    if (item !== "TRADE") {
-      clearErrors("currency");
-      clearErrors("limit");
-    }
-  }, []);
-
-  const funChgCurr = useCallback(item => {
-    setChgCurr(item);
-  }, []);
 
   const funChgLoc = useCallback(item => {
     if (item === "LOCAL") {
@@ -418,23 +379,16 @@ function CoupaForm() {
     }
   }, []);
 
-  const funChgTitle = useCallback(item => {
-    setComptitle(item);
-  }, []);
-
   const funChgname = useCallback(
     item => {
       if (item != compName && item !== "") {
-        setCheckex(true);
         toggle({ type: FormTab.RestrictForm });
         setBtnclick(true);
         setCompname(item);
       } else if (item == compName && item !== "") {
-        setCheckex(false);
         toggle({ type: FormTab.OpenForm });
         setBtnclick(false);
       } else {
-        setCheckex(true);
         toggle({ type: FormTab.RestrictForm });
         setBtnclick(true);
         setCompname(item);
@@ -443,18 +397,6 @@ function CoupaForm() {
     [compName]
   );
 
-  const modalRejectclose = useCallback(() => {
-    setModalopen(false);
-  }, []);
-
-  const modalConfclose = useCallback(() => {
-    setConfOpen(false);
-  }, []);
-
-  const confirmActionFun = useCallback(() => {
-    setConfirmAction(true);
-  }, []);
-
   useEffect(() => {
     reset(loader_data.data);
     setChgCty(loader_data.data?.country);
@@ -462,10 +404,8 @@ function CoupaForm() {
     setVenacc(loader_data.data?.venacc);
     setChgCurr(loader_data.data?.currency);
     setTender(loader_data.data?.is_tender);
-    setComptitle(loader_data.data?.titlecomp);
     setCompname(loader_data.data?.name1);
     setLocal(loader_data.data?.localovs);
-    setIsPTKP(loader_data.data?.ispkp);
   }, [loader_data]);
 
   useEffect(() => {
@@ -473,7 +413,6 @@ function CoupaForm() {
       return errors[field] ? field : a;
     }, null);
     if (firstError) {
-      // console.log(firstError);
       setFocus(firstError);
     }
   }, [errors, setFocus]);
@@ -489,23 +428,16 @@ function CoupaForm() {
   const navigate = useNavigate();
   const ticketState = useMemo(() => loader_data?.ticketState, [loader_data]);
   const countrycode = useRef(loader_data.data?.country);
-
   const countries = useRef([{ value: "", label: "" }]);
   const [currencies, setCurr] = useState([]);
   const allCurr = useRef([]);
-  const banks = useRef([{ value: "", label: "" }]);
   const payterm = useRef([{ value: "", label: "" }]);
   const comps = useRef([{ value: "", label: "" }]);
   const ppn_type = useRef([{ value: "", label: "" }]);
-
   const onLoad = useRef(false);
-
   const [cities, setCities] = useState([{ value: "", label: "" }]);
   const [loading, setLoading] = useState(false);
-  const [loadingEx, setLoadex] = useState(false);
   const is_draft = useRef(false);
-
-  const [loadingInitFile, setLoadInitFile] = useState(false);
 
   const vengroups = [
     { value: "3RD_PARTY", label: "3RD Party" },
@@ -532,27 +464,8 @@ function CoupaForm() {
     type: "info",
     message: "",
   });
-  const [ven_file, setVen_file] = useState([]);
   useMemo(() => ({ cities, countries, currencies }), [cities, countries, currencies]);
 
-  const getInitDataFile = useCallback(
-    async controller => {
-      setLoadInitFile(true);
-      try {
-        const fileInit = await axiosPrivate.get(`/vendor/file/${loader_data.ven_id}`, {
-          signal: controller.signal,
-        });
-        const result = fileInit.data.data;
-        setInitDfile(result.data);
-        setLoadInitFile(false);
-      } catch (err) {
-        setLoadInitFile(false);
-        console.error(err);
-        // alert(err.stack);
-      }
-    },
-    [loader_data]
-  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -631,61 +544,6 @@ function CoupaForm() {
       }
     };
 
-    const getCurr = async () => {
-      try {
-        const curr = await axiosPrivate.get(`/master/curr`, {
-          signal: controller.signal,
-        });
-        const response = curr.data;
-        const result = response.data;
-        setCurr(
-          result.data.map(item => ({
-            value: item.code === null ? "" : item.code,
-            label: item.code === null ? "" : item.code,
-            nation: item.nation,
-          }))
-        );
-        allCurr.current = result.data.map(item => ({
-          value: item.code === null ? "" : item.code,
-          label: item.code === null ? "" : item.code,
-          nation: item.nation,
-        }));
-      } catch (err) {
-        console.error(err);
-        // alert(err.stack);
-      }
-    };
-
-    const getBanks = async () => {
-      try {
-        const banksData = await axiosPrivate.get(`/master/banksap`, {
-          params: {
-            country: data_form.bank_information.bank_country,
-          },
-          signal: controller.signal,
-        });
-        const response = banksData.data;
-        const result = response.data;
-        banks.current = result;
-      } catch (error) {
-        console.log(error);
-        // alert(error.stack);
-      }
-    };
-
-    const getCompany = async () => {
-      try {
-        const compsData = await axiosPrivate.get(`/master/company`, {
-          signal: controller.signal,
-        });
-        const response = compsData.data;
-        const result = response.data;
-        comps.current = result.data;
-      } catch (error) {
-        console.error(error);
-      }
-    };
-
     const getPayterm = async () => {
       try {
         const paytermData = await axiosPrivate.get(`/master/payterm`, {
@@ -716,11 +574,6 @@ function CoupaForm() {
       (async () => {
         setLoading(true);
         await dynaCountry();
-        await getCurr();
-        await getBanks();
-        // await getInitDataBank(controller);
-        await getInitDataFile(controller);
-        await getCompany();
         await getPayterm();
         await getPPNType();
         setLoading(false);
@@ -746,7 +599,6 @@ function CoupaForm() {
   const submitForm = async value => {
     // setBtnclick(true);
     const controller = new AbortController();
-    const filteredVenFile = ven_file.filter(item => item.method !== "");
     const ven_detail = {
       ven_id: loader_data.ven_id ?? "",
       ticket_num: loader_data.ticket_num ?? "",
@@ -842,10 +694,7 @@ function CoupaForm() {
             navigate("../../dashboard/coupa");
           }
         }, 3000);
-        // console.log('reloading...');
       } else {
-        // getInitDataBank(controller);
-        getInitDataFile(controller);
       }
     } catch (err) {
       console.log(err.stack);
@@ -921,7 +770,6 @@ function CoupaForm() {
                       control={control}
                       t={t}
                       disabled={true}
-                      onChangeovr={funChgTitle}
                       options={title}
                       rules={{ required: "Please insert this field" }}
                     />
@@ -946,7 +794,6 @@ function CoupaForm() {
                       control={control}
                       disabled={true}
                       options={countries.current}
-                      onChangeovr={funChgCountry}
                       rules={{
                         required: "Please insert this field",
                       }}
@@ -1282,10 +1129,6 @@ function CoupaForm() {
                             value: 35,
                             message: "Max 35 Character, continue to field below if not enough",
                           },
-                          // pattern: {
-                          //   value: /^[^,]*$/,
-                          //   message: t(`Please fill without ',' (comma) character`),
-                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1299,10 +1142,6 @@ function CoupaForm() {
                             value: 35,
                             message: "Max 35 Character, continue to field below if not enough",
                           },
-                          // pattern: {
-                          //   value: /^[^,]*$/,
-                          //   message: `Please fill without ',' (comma) character`,
-                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1316,10 +1155,6 @@ function CoupaForm() {
                             value: 35,
                             message: "Max 35 Character, continue to field below if not enough",
                           },
-                          // pattern: {
-                          //   value: /^[^,]*$/,
-                          //   message: `Please fill without ',' (comma) character`,
-                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1330,10 +1165,6 @@ function CoupaForm() {
                         disabled={true}
                         rules={{
                           maxLength: { value: 35, message: "Max 35 Character" },
-                          // pattern: {
-                          //   value: /^[^,]*$/,
-                          //   message: `Please fill without ',' (comma) character`,
-                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1362,7 +1193,11 @@ function CoupaForm() {
                       control={control}
                       disabled={true}
                       rules={{
-                        required: chgLocal === "OVS" ? false : t("Please insert this field"),
+                        // required: chgLocal === "OVS" ? false : t("Please insert this field"),
+                        maxLength: chgLocal === "OVS" ? false :{
+                            value: 5,
+                            message: "Max 5 Character for Indonesia Postal Code",
+                          },
                       }}
                       format="################"
                       isNumString={false}
@@ -1435,10 +1270,7 @@ function CoupaForm() {
                             value: 35,
                             message: "Max 35 Character, continue to field below if not enough",
                           },
-                          // pattern: {
-                          //   value: /^[^,]*$/,
-                          //   message: `Please fill without ',' (comma) character`,
-                          // },
+
                         }}
                         toUpperCase={true}
                       />
@@ -1452,10 +1284,6 @@ function CoupaForm() {
                             value: 35,
                             message: "Max 35 Character, continue to field below if not enough",
                           },
-                          // pattern: {
-                          //   value: /^[^,]*$/,
-                          //   message: `Please fill without ',' (comma) character`,
-                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1469,10 +1297,6 @@ function CoupaForm() {
                             value: 35,
                             message: "Max 35 Character, continue to field below if not enough",
                           },
-                          // pattern: {
-                          //   value: /^[^,]*$/,
-                          //   message: `Please fill without ',' (comma) character`,
-                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1483,10 +1307,6 @@ function CoupaForm() {
                         disabled={true}
                         rules={{
                           maxLength: { value: 35, message: "Max 35 Character" },
-                          // pattern: {
-                          //   value: /^[^,]*$/,
-                          //   message: `Please fill without ',' (comma) character`,
-                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1515,7 +1335,11 @@ function CoupaForm() {
                       control={control}
                       disabled={true}
                       rules={{
-                        required: chgLocal === "OVS" ? false : "Please insert this field",
+                        // required: chgLocal === "OVS" ? false : "Please insert this field",
+                        maxLength: chgLocal === "OVS" ? false :{
+                            value: 5,
+                            message: "Max 5 Character for Indonesia Postal Code",
+                          },
                       }}
                       format="################"
                       isNumString={false}
@@ -1577,18 +1401,6 @@ function CoupaForm() {
                       >
                         {t("Alamat") + " *"}
                       </p>
-                      <p
-                        style={{
-                          position: "relative",
-                          fontSize: "8pt",
-                          margin: "0",
-                          color: theme.palette.grey[600],
-                        }}
-                      >
-                        {`Max 50 ${t("Karakter")} ${t(
-                          `Please fill without ',' (comma) character`
-                        )} ${t(`Mohon dilanjutkan ke kolom berikutnya jika tidak cukup`)}`}
-                      </p>
                       <TextFieldComp
                         name="street_sppkp"
                         t={t}
@@ -1600,10 +1412,6 @@ function CoupaForm() {
                             value: 35,
                             message: "Max 35 Character, continue to field below if not enough",
                           },
-                          // pattern: {
-                          //   value: /^[^,]*$/,
-                          //   message: `Please fill without ',' (comma) character`,
-                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1617,10 +1425,6 @@ function CoupaForm() {
                             value: 35,
                             message: "Max 35 Character, continue to field below if not enough",
                           },
-                          // pattern: {
-                          //   value: /^[^,]*$/,
-                          //   message: `Please fill without ',' (comma) character`,
-                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1634,10 +1438,6 @@ function CoupaForm() {
                             value: 35,
                             message: "Max 35 Character, continue to field below if not enough",
                           },
-                          // pattern: {
-                          //   value: /^[^,]*$/,
-                          //   message: `Please fill without ',' (comma) character`,
-                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1648,10 +1448,6 @@ function CoupaForm() {
                         disabled={true}
                         rules={{
                           maxLength: { value: 35, message: "Max 35 Character" },
-                          // pattern: {
-                          //   value: /^[^,]*$/,
-                          //   message: `Please fill without ',' (comma) character`,
-                          // },
                         }}
                         toUpperCase={true}
                       />
@@ -1680,7 +1476,11 @@ function CoupaForm() {
                       control={control}
                       disabled={true}
                       rules={{
-                        required: chgLocal === "OVS" ? false : "Please insert this field",
+                        // required: chgLocal === "OVS" ? false : "Please insert this field",
+                        maxLength: chgLocal === "OVS" ? false :{
+                            value: 5,
+                            message: "Max 5 Character for Indonesia Postal Code",
+                          },
                       }}
                       format="################"
                       isNumString={false}
@@ -1736,18 +1536,6 @@ function CoupaForm() {
                         name="npwp"
                         t={t}
                         disabled={true}
-                        // rules={{
-                        //   required:
-                        //     watch("localovs") == "LOCAL" ? "Please insert this field" : false,
-                        //   minLength: {
-                        //     value: 16,
-                        //     message: "Isi 16 digit",
-                        //   },
-                        //   maxLength: {
-                        //     value: 16,
-                        //     message: "Isi 16 digit",
-                        //   },
-                        // }}
                         label={t("Tax Number") + (watch("localovs") == "LOCAL" ? " *" : "")}
                         control={control}
                         thousandSeparator={false}
@@ -1836,13 +1624,6 @@ function CoupaForm() {
                       control={control}
                       disabled={true}
                       t={t}
-                      // rules={{
-                      //   required: "Please insert this field",
-                      //   maxLength: {
-                      //     value: 100,
-                      //     message: "Max 100 Character",
-                      //   },
-                      // }}
                     />
                   </Grid>
                 </Grid>
@@ -1907,7 +1688,6 @@ function CoupaForm() {
                         label="Vendor Group *"
                         control={control}
                         options={vengroups}
-                        onChangeovr={funChgVgrp}
                         disabled={true}
                         rules={{
                           required: "Please insert this field",
@@ -1924,7 +1704,6 @@ function CoupaForm() {
                           { value: "TRADE", label: "Trade" },
                           { value: "NON_TRADE", label: "Non Trade" },
                         ]}
-                        onChangeovr={funChgVacc}
                         disabled={true}
                         rules={{
                           required: "Please insert this field",
@@ -1957,7 +1736,6 @@ function CoupaForm() {
                         label={t("Limit Currency") + `${chgVenacc === "TRADE" ? " *" : ""}`}
                         control={control}
                         options={currencies}
-                        onChangeovr={funChgCurr}
                         disabled={true}
                         rules={{
                           required: chgVenacc === "TRADE" ? "Please insert this field" : false,
@@ -2009,7 +1787,6 @@ function CoupaForm() {
                         // helperText={t('Wajib diisi jika vendor mengikuti tender')}
                         control={control}
                         disabled={true}
-                        // rules={{ required: "Please insert this field" }}
                         tooltip={t("Alasan memilih vendor tersebut menjadi rekanan KPN")}
                       />
                     </Grid>
@@ -2121,7 +1898,6 @@ function CoupaForm() {
               )}
             </Box>
             <Box>
-              {!checkFieldRule("submit") && (
                 <Button
                   sx={{ height: 50, width: 100, margin: 2 }}
                   variant="contained"
@@ -2145,21 +1921,10 @@ function CoupaForm() {
                 >
                   {t("Submit")}
                 </Button>
-              )}
             </Box>
           </Box>
         </Container>
 
-        <Snackbar
-          open={formStat.stat}
-          onClose={handleSnackClose}
-          autoHideDuration={3000}
-          anchorOrigin={{ vertical: "top", horizontal: "right" }}
-        >
-          <Alert severity={formStat.type} onClose={handleSnackClose} variant="filled">
-            {formStat.message}
-          </Alert>
-        </Snackbar>
         <Snackbar
           open={
             (loader_data.ticket_type == "CREATE_NEW_VENDOR_UPS" ||
@@ -2179,7 +1944,6 @@ function CoupaForm() {
           sx={{ color: "#fff", zIndex: theme => theme.zIndex.drawer + 1 }}
           open={
             loading
-            // || loadingCountry || loadingCurr || loadingBanks || loadingInitFile || loadingComp || loadingPayterm
           }
         >
           <CircularProgress color="inherit" disableShrink />

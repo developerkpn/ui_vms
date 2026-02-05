@@ -1,12 +1,11 @@
 import { Visibility } from "@mui/icons-material";
-import { Box, Button, Grid, Skeleton } from "@mui/material";
+import { Box, Button, Grid, Skeleton, Backdrop, CircularProgress, Select, MenuItem } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import SearchFieldComp from "src/components/common/SearchFieldComp";
 import TooltipButton from "src/components/common/TooltipButton";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
-import usePermissionStore from "src/store/userPermissionStore";
 import useSessionStore from "src/store/useSessionStore";
 import BasicDatePicker from "./common/DatePicker";
 
@@ -20,33 +19,33 @@ export default function ListPage() {
   const axiosPrivate = useAxiosPrivate();
   const [selectDate, setSelectedDate] = useState("");
   const user_id = useSessionStore(state => state.user_id);
+  const [loading_state, setLoadingState] = useState(false);
+  // const [filterAct, setFilteract] = useState(true);
   const [q, setQ] = useState("");
 
   const showDataVerif = async controller => {
-    // fallback: today - 4 days
-    const fallbackDate = new Date();
-    fallbackDate.setDate(fallbackDate.getDate() - 4);
-    const defaultDate = fallbackDate.toISOString().split("T")[0];
+   setLoadingState(true);
+   try {
+      const fallbackDate = new Date();
+      fallbackDate.setDate(fallbackDate.getDate() - 4);
+      const defaultDate = fallbackDate.toISOString().split("T")[0];
 
-    const body = {
-      date: selectDate || defaultDate,
-    };
+      const body = {
+        date: selectDate || defaultDate,
+      };
 
-    const response = await axiosPrivate.post(`/coupa/vendor/list`, body, {
-      signal: controller.signal,
-    });
+      const response = await axiosPrivate.post(`/coupa/vendor/list`, body, {
+        signal: controller.signal,
+      });
 
-    setDataVerif(response.data.data);
-  };
-
-  const dataVerif = async controller => {
-    try {
-      await showDataVerif(controller);
-    } catch (error) {
+      setDataVerif(response.data.data);
+      
+   } catch (error) {
       console.error(error);
-    }
+   } finally{
+      setLoadingState(false);
+   }
   };
-
   const filteredData = useMemo(() => {
     if (!data_verif) return [];
     if (!q) return data_verif;
@@ -139,6 +138,18 @@ export default function ListPage() {
       <Grid container spacing={2} alignItems="center">
         {/* Search */}
         <Grid item xs={12} md={9}>
+          {/* <Select
+            sx={{ width: '10em', marginTop: "1em", marginRight: '1em' }}
+            id={'filterAct'}
+            value={filterAct}
+            onChange={(e) => {
+              setFilteract(e.target.value);
+              setRefresh(true);
+            }}
+          >
+            <MenuItem value={true}>New Vendor</MenuItem>
+            <MenuItem value={false}>History Vendor</MenuItem>
+          </Select> */}
           <SearchFieldComp
             setQuery={setQ}
             placeholder="Search Vendor Code, Vendor Name or Name..."
@@ -156,6 +167,7 @@ export default function ListPage() {
           >
             <BasicDatePicker
               label="Start Date"
+              value = {selectDate == "" ? null : selectDate}
               onChange={val => setSelectedDate(val ? val.format("YYYY-MM-DD") : "")}
             />
             <Button
@@ -201,6 +213,14 @@ export default function ListPage() {
           <Skeleton animation="wave" height={100} />
         </Box>
       )}
+      <Backdrop
+        sx={{ color: "#fff", zIndex: theme => theme.zIndex.drawer + 1 }}
+        open={
+          loading_state
+        }
+      >
+        <CircularProgress color="inherit" disableShrink />
+      </Backdrop>
     </Box>
   );
 }
