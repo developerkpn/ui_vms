@@ -17,7 +17,6 @@ export default function DirectCoupaForm() {
           id: predata.id
         };
         const { data } = await axiosPrivate.post(link, body);
-        console.log(data);
         setFormData({ ...data.data });
       } catch (error) {
         console.error(error);
