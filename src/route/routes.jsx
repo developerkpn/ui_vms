@@ -9,6 +9,7 @@ const VendorLandingPage = lazy(() => import("src/pages/vendor/VendorLandingPage"
 const VendorUsers = lazy(() => import("src/pages/vendor/VendorUsers"));
 const VerificationPage = lazy(() => import("src/pages/verification/VerificationPage"));
 const DirectFormCreateNew = lazy(() => import("src/pages/create_new/DirectFormCreateNew"));
+const DirectCoupaForm = lazy(() => import("src/pages/coupa/DirectCoupaForm"));
 const LookupMaterials = lazy(() => import("src/pages/dashboard/LookupMaterials"));
 const Subgroups = lazy(() => import("src/pages/dashboard/SubgroupMaterial"));
 const Materials = lazy(() => import("src/pages/dashboard/MaterialDetail"));
@@ -46,6 +47,7 @@ const RefactorFormVendorPage = lazy(() => import("src/pages/RefactorFormVendorPa
 const ListMasterBank = lazy(() => import("src/pages/dashboard/ListMasterBank"));
 const TicketInvalid = lazy(() => import("src/pages/TicketInvalid"));
 const ResetPassword = lazy(() => import("src/pages/ResetPassword"));
+const ListCoupa = lazy(() => import("src/pages/coupa/ListPage"));
 
 export const routes = createBrowserRouter([
   {
@@ -111,8 +113,21 @@ export const routes = createBrowserRouter([
         },
       },
       {
+        path: "form-coupa/:id",
+        element: <DirectCoupaForm />,
+        loader: ({ params }) => {
+          return {
+            id: params.id,
+          };
+        },
+      },
+      {
         path: "ticket",
         element: <ListTicket />,
+      },
+      {
+        path: "coupa",
+        element: <ListCoupa />,
       },
       {
         path: "vendor",
