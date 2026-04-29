@@ -22,7 +22,7 @@ export default function SearchSuggestionField({ setQuery, placeholder }) {
       } catch (err) {
         console.error("Suggestion fetch failed", err);
       }
-    }, 800),
+    }, 300),
     [axiosPrivate]
   );
 
