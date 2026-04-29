@@ -8,19 +8,24 @@ export default function SearchSuggestionField({ setQuery, placeholder }) {
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState([]);
   const [inputValue, setInputValue] = useState("");
+  const [loading, setLoading] = useState(false);
   const axiosPrivate = useAxiosPrivate();
 
   const fetchSuggestions = useMemo(() => 
     debounce(async (term) => {
       if (!term) {
         setOptions([]);
+        setLoading(false);
         return;
       }
+      setLoading(true);
       try {
         const response = await axiosPrivate.get(`/material/search/all?pageSize=10&q=${encodeURIComponent(term)}`);
         setOptions(response.data.data || []);
       } catch (err) {
         console.error("Suggestion fetch failed", err);
+      } finally {
+        setLoading(false);
       }
     }, 300),
     [axiosPrivate]
@@ -48,6 +53,18 @@ export default function SearchSuggestionField({ setQuery, placeholder }) {
       onOpen={() => setOpen(true)}
       onClose={() => setOpen(false)}
       inputValue={inputValue}
+      loading={loading}
+      loadingText={
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, py: 1, px: 2 }}>
+          <CircularProgress size={16} />
+          <Typography variant="body2" color="textSecondary">Searching materials...</Typography>
+        </Box>
+      }
+      noOptionsText={
+        <Typography variant="body2" color="textSecondary" sx={{ py: 1, px: 2 }}>
+          Material not found
+        </Typography>
+      }
       onInputChange={(event, newInputValue) => {
         setInputValue(newInputValue);
         fetchSuggestions(newInputValue);
