@@ -26,6 +26,22 @@ export default function SearchSuggestionField({ setQuery, placeholder }) {
     [axiosPrivate]
   );
 
+  const highlightMatch = (text, query) => {
+    if (!query) return text;
+    const parts = text.split(new RegExp(`(${query})`, "gi"));
+    return (
+      <span>
+        {parts.map((part, i) => 
+          part.toLowerCase() === query.toLowerCase() ? (
+            <b key={i} style={{ color: "#1976d2" }}>{part}</b>
+          ) : (
+            part
+          )
+        )}
+      </span>
+    );
+  };
+
   return (
     <Autocomplete
       open={open}
@@ -44,6 +60,19 @@ export default function SearchSuggestionField({ setQuery, placeholder }) {
       }}
       options={options}
       getOptionLabel={(option) => option.combined_description || option.name || ""}
+      renderOption={(props, option) => (
+        <Box component="li" {...props} sx={{ display: "flex", alignItems: "center", py: 1, borderBottom: "1px solid #eee" }}>
+          <Typography variant="body2" sx={{ fontWeight: "bold", width: "120px", color: "#333" }}>
+            {option.code}
+          </Typography>
+          <Typography variant="body2" sx={{ flex: 1, px: 2, color: "#555" }}>
+            {highlightMatch(option.combined_description || option.name || "", inputValue)}
+          </Typography>
+          <Typography variant="caption" sx={{ color: "#888", fontWeight: "medium" }}>
+            {option.unit_of_measurement || "-"}
+          </Typography>
+        </Box>
+      )}
       renderInput={(params) => (
         <TextField
           {...params}
