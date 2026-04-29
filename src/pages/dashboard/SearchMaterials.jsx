@@ -39,7 +39,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { debounce } from "lodash";
 import moment from "moment";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import SearchFieldComp from "src/components/common/SearchFieldComp";
+import SearchSuggestionField from "src/components/common/SearchSuggestionField";
 import TooltipButton from "src/components/common/TooltipButton";
 import TableSorting from "src/components/table/TableSorting";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
@@ -792,7 +792,7 @@ export default function SearchMaterials() {
 
           {/* Search field */}
           <Box sx={{ display: "flex", alignItems: "center" }}>
-            <SearchFieldComp
+            <SearchSuggestionField
               setQuery={handleSearchChange}
               placeholder="Search materials by name, code, description..."
             />
