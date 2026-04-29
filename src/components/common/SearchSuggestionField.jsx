@@ -60,15 +60,50 @@ export default function SearchSuggestionField({ setQuery, placeholder }) {
       }}
       options={options}
       getOptionLabel={(option) => option.combined_description || option.name || ""}
+      ListboxProps={{
+        sx: {
+          "& .MuiAutocomplete-listbox": {
+            padding: 0,
+          },
+        },
+      }}
+      PaperComponent={({ children }) => (
+        <Box sx={{ boxShadow: 3, borderRadius: "8px", overflow: "hidden", backgroundColor: "#fff" }}>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              py: 1.5,
+              px: 2,
+              backgroundColor: "#f5f5f5",
+              borderBottom: "2px solid #ddd",
+              position: "sticky",
+              top: 0,
+              zIndex: 1,
+            }}
+          >
+            <Typography variant="caption" sx={{ fontWeight: "bold", width: "120px", color: "#666" }}>
+              Material Code
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: "bold", flex: 1, px: 2, color: "#666" }}>
+              Material Desc
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: "bold", width: "40px", textAlign: "right", color: "#666" }}>
+              UoM
+            </Typography>
+          </Box>
+          {children}
+        </Box>
+      )}
       renderOption={(props, option) => (
-        <Box component="li" {...props} sx={{ display: "flex", alignItems: "center", py: 1, borderBottom: "1px solid #eee" }}>
+        <Box component="li" {...props} sx={{ display: "flex", alignItems: "center", py: 1, borderBottom: "1px solid #eee", px: 2 }}>
           <Typography variant="body2" sx={{ fontWeight: "bold", width: "120px", color: "#333" }}>
             {option.code}
           </Typography>
           <Typography variant="body2" sx={{ flex: 1, px: 2, color: "#555" }}>
             {highlightMatch(option.combined_description || option.name || "", inputValue)}
           </Typography>
-          <Typography variant="caption" sx={{ color: "#888", fontWeight: "medium" }}>
+          <Typography variant="caption" sx={{ width: "40px", textAlign: "right", color: "#888", fontWeight: "medium" }}>
             {option.unit_of_measurement || "-"}
           </Typography>
         </Box>
