@@ -4,7 +4,12 @@ import { useState, useCallback, useMemo } from "react";
 import { debounce } from "lodash";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 
-export default function SearchSuggestionField({ setQuery, placeholder }) {
+export default function SearchSuggestionField({ 
+  onSearch, 
+  placeholder, 
+  apiEndpoint = "/material/suggestions",
+  ...props
+}) {
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState([]);
   const [inputValue, setInputValue] = useState("");
@@ -13,14 +18,14 @@ export default function SearchSuggestionField({ setQuery, placeholder }) {
 
   const fetchSuggestions = useMemo(() => 
     debounce(async (term) => {
-      if (!term) {
+      if (!term || term.length < 2) {
         setOptions([]);
         setLoading(false);
         return;
       }
       setLoading(true);
       try {
-        const response = await axiosPrivate.get(`/material/search/all?pageSize=10&q=${encodeURIComponent(term)}`);
+        const response = await axiosPrivate.get(`${apiEndpoint}?limit=10&q=${encodeURIComponent(term)}`);
         setOptions(response.data.data || []);
       } catch (err) {
         console.error("Suggestion fetch failed", err);
@@ -28,7 +33,7 @@ export default function SearchSuggestionField({ setQuery, placeholder }) {
         setLoading(false);
       }
     }, 300),
-    [axiosPrivate]
+    [axiosPrivate, apiEndpoint]
   );
 
   const highlightMatch = (text, query) => {
@@ -49,10 +54,12 @@ export default function SearchSuggestionField({ setQuery, placeholder }) {
 
   return (
     <Autocomplete
+      {...props}
       open={open}
       onOpen={() => setOpen(true)}
       onClose={() => setOpen(false)}
       inputValue={inputValue}
+      filterOptions={(x) => x}
       loading={loading}
       loadingText={
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, py: 1, px: 2 }}>
@@ -72,7 +79,7 @@ export default function SearchSuggestionField({ setQuery, placeholder }) {
       onChange={(event, newValue) => {
         if (newValue) {
           // If code exists use it, otherwise name
-          setQuery(newValue.code || newValue.name);
+          onSearch(newValue.code || newValue.name);
         }
       }}
       options={options}
@@ -85,42 +92,43 @@ export default function SearchSuggestionField({ setQuery, placeholder }) {
         },
       }}
       PaperComponent={({ children }) => (
-        <Box sx={{ boxShadow: 3, borderRadius: "8px", overflow: "hidden", backgroundColor: "#fff" }}>
+        <Box sx={{ boxShadow: 3, borderRadius: "12px", overflow: "hidden", backgroundColor: "background.paper" }}>
           <Box
             sx={{
               display: "flex",
               alignItems: "center",
               py: 1.5,
               px: 2,
-              backgroundColor: "#f5f5f5",
-              borderBottom: "2px solid #ddd",
+              backgroundColor: "action.hover",
+              borderBottom: "1px solid",
+              borderColor: "divider",
               position: "sticky",
               top: 0,
               zIndex: 1,
             }}
           >
-            <Typography variant="caption" sx={{ fontWeight: "bold", width: "120px", color: "#666" }}>
-              Material Code
+            <Typography variant="caption" sx={{ fontWeight: 700, width: "100px", color: "text.secondary" }}>
+              CODE
             </Typography>
-            <Typography variant="caption" sx={{ fontWeight: "bold", flex: 1, px: 2, color: "#666" }}>
-              Material Desc
+            <Typography variant="caption" sx={{ fontWeight: 700, flex: 1, px: 2, color: "text.secondary" }}>
+              DESCRIPTION
             </Typography>
-            <Typography variant="caption" sx={{ fontWeight: "bold", width: "40px", textAlign: "right", color: "#666" }}>
-              UoM
+            <Typography variant="caption" sx={{ fontWeight: 700, width: "40px", textAlign: "right", color: "text.secondary" }}>
+              UOM
             </Typography>
           </Box>
           {children}
         </Box>
       )}
       renderOption={(props, option) => (
-        <Box component="li" {...props} sx={{ display: "flex", alignItems: "center", py: 1, borderBottom: "1px solid #eee", px: 2 }}>
-          <Typography variant="body2" sx={{ fontWeight: "bold", width: "120px", color: "#333" }}>
+        <Box component="li" {...props} sx={{ display: "flex", alignItems: "center", py: 1.5, borderBottom: "1px solid", borderColor: "divider", px: 2 }}>
+          <Typography variant="body2" sx={{ fontWeight: 600, width: "100px", color: "text.primary" }}>
             {option.code}
           </Typography>
-          <Typography variant="body2" sx={{ flex: 1, px: 2, color: "#555" }}>
+          <Typography variant="body2" sx={{ flex: 1, px: 2, color: "text.primary" }}>
             {highlightMatch(option.combined_description || option.name || "", inputValue)}
           </Typography>
-          <Typography variant="caption" sx={{ width: "40px", textAlign: "right", color: "#888", fontWeight: "medium" }}>
+          <Typography variant="caption" sx={{ width: "40px", textAlign: "right", color: "text.secondary", fontWeight: 600 }}>
             {option.unit_of_measurement || "-"}
           </Typography>
         </Box>
@@ -130,17 +138,18 @@ export default function SearchSuggestionField({ setQuery, placeholder }) {
           {...params}
           placeholder={placeholder}
           sx={{ 
-            width: "30rem",
+            width: "100%",
             "& .MuiOutlinedInput-root": {
-              borderRadius: "8px",
-              backgroundColor: "#fff",
-            }
+              borderRadius: "10px",
+              backgroundColor: "background.paper",
+            },
+            ...props.sx
           }}
           InputProps={{
             ...params.InputProps,
             endAdornment: (
               <InputAdornment position="end">
-                <IconButton onClick={() => setQuery(inputValue)} size="small">
+                <IconButton onClick={() => onSearch(inputValue)} size="small" edge="end">
                   <Search />
                 </IconButton>
                 {params.InputProps.endAdornment}
