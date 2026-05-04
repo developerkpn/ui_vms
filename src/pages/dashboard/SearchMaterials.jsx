@@ -75,8 +75,8 @@ const AuthenticatedImage = ({ src, sx, onClick }) => {
     };
   }, [src, axiosPrivate]);
 
-  if (loading) return <CircularProgress size={16} thickness={5} sx={{ color: 'grey.300' }} />;
-  if (error) return <ImageIcon sx={{ fontSize: 18, color: 'grey.400' }} />;
+  if (loading) return <CircularProgress size={16} thickness={5} sx={{ color: "grey.300" }} />;
+  if (error) return <ImageIcon sx={{ fontSize: 18, color: "grey.400" }} />;
 
   return (
     <Box
@@ -144,17 +144,32 @@ export default function SearchMaterials() {
     }
   };
 
+  // Remove redundant useEffect that resets page 1 automatically
+  // Handling reset in event handlers instead for better predictability
+
   useEffect(() => {
-    fetchMaterials();
+    fetchMaterials(pagination.page);
   }, [searchQuery, selectedGroup, pagination.page, sorting]);
 
   const fetchMaterials = useCallback(
-    async (pageNumber = pagination.page) => {
+    async (pageNumber = 1) => {
+      if (!searchQuery && !selectedGroup) {
+        setMaterials([]);
+        setPagination(prev => ({
+          ...prev,
+          totalCount: 0,
+          totalPages: 0,
+          page: 1,
+        }));
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       try {
         const response = await axiosPrivate.get("/material/search", {
           params: {
-            search: searchQuery,
+            q: searchQuery,
             groupId: selectedGroup,
             page: pageNumber,
             pageSize: pagination.pageSize,
@@ -184,8 +199,14 @@ export default function SearchMaterials() {
     setPagination(prev => ({ ...prev, page: 1 }));
   };
 
+  const handleGroupChange = e => {
+    setSelectedGroup(e.target.value);
+    setPagination(prev => ({ ...prev, page: 1 }));
+  };
+
   const handlePageChange = (event, value) => {
     setPagination(prev => ({ ...prev, page: value }));
+    // fetchMaterials will be called by useEffect
   };
 
   const handleActionMenuOpen = (event, material) => {
@@ -254,13 +275,18 @@ export default function SearchMaterials() {
       }),
       columnHelper.accessor("name", {
         header: "Material Description",
+        size: 280,
         cell: info => (
-          <Box>
-            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+          <Box sx={{ minWidth: 200 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary" }}>
               {info.getValue()}
             </Typography>
             {info.row.original.spec && (
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", mt: 0.5 }}
+              >
                 {info.row.original.spec}
               </Typography>
             )}
@@ -269,8 +295,9 @@ export default function SearchMaterials() {
       }),
       columnHelper.accessor("groupName", {
         header: "Group",
+        size: 200,
         cell: info => (
-          <Typography variant="body2">
+          <Typography variant="body2" sx={{ minWidth: 150 }}>
             {info.row.original.groupCode} - {info.getValue()}
           </Typography>
         ),
@@ -278,13 +305,18 @@ export default function SearchMaterials() {
       columnHelper.display({
         header: "Alias",
         id: "aliases",
+        size: 180,
         cell: ({ row }) => {
           const aliases_list = [
             row.original.alias1,
             row.original.alias2,
             row.original.alias3,
           ].filter(Boolean);
-          return <Typography variant="body2">{aliases_list.join(", ") || "-"}</Typography>;
+          return (
+            <Typography variant="body2" sx={{ minWidth: 120 }}>
+              {aliases_list.join(", ") || "-"}
+            </Typography>
+          );
         },
       }),
       columnHelper.accessor("unit_of_measurement", {
@@ -331,14 +363,25 @@ export default function SearchMaterials() {
 
           if (attachments.length === 0) {
             return (
-              <Typography variant="body2" sx={{ color: "text.disabled", textAlign: "center", width: "100%" }}>
+              <Typography
+                variant="body2"
+                sx={{ color: "text.disabled", textAlign: "center", width: "100%" }}
+              >
                 -
               </Typography>
             );
           }
 
           return (
-            <Box sx={{ display: "flex", justifyContent: "flex-start", alignItems: "center", gap: 0.75, minWidth: 140 }}>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "flex-start",
+                alignItems: "center",
+                gap: 0.75,
+                minWidth: 140,
+              }}
+            >
               {attachments.slice(0, MAX_DISPLAY).map((att, idx) => {
                 const isImg = isImage(att.attachment);
                 return (
@@ -361,8 +404,8 @@ export default function SearchMaterials() {
                         "&:hover": {
                           borderColor: "primary.main",
                           boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
-                          transform: "translateY(-2px)"
-                        }
+                          transform: "translateY(-2px)",
+                        },
                       }}
                       onClick={() => handleViewAttachment(att)}
                     >
@@ -379,18 +422,21 @@ export default function SearchMaterials() {
                 );
               })}
               {attachments.length > MAX_DISPLAY && (
-                <Typography variant="caption" sx={{ 
-                  fontWeight: 700, 
-                  color: "text.secondary",
-                  backgroundColor: "grey.100",
-                  width: 24,
-                  height: 24,
-                  borderRadius: "50%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 10
-                }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight: 700,
+                    color: "text.secondary",
+                    backgroundColor: "grey.100",
+                    width: 24,
+                    height: 24,
+                    borderRadius: "50%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 10,
+                  }}
+                >
                   +{attachments.length - MAX_DISPLAY}
                 </Typography>
               )}
@@ -402,25 +448,48 @@ export default function SearchMaterials() {
     []
   );
 
+  const isSearchActive = !!(searchQuery || selectedGroup);
+  const emptyMessage = !isSearchActive
+    ? "Silakan masukkan kata kunci atau pilih group untuk mencari material"
+    : "Maaf, data material tidak ditemukan. Coba gunakan kata kunci atau filter lain.";
+
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>
+    <>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: { xs: "column", sm: "row" },
+          justifyContent: "space-between",
+          alignItems: { xs: "flex-start", sm: "center" },
+          gap: 2,
+          mb: 4,
+        }}
+      >
+        <Typography
+          variant="h4"
+          sx={{ fontWeight: 800, color: "text.primary", letterSpacing: "-0.5px" }}
+        >
           Material Search
         </Typography>
-        <Button variant="contained" startIcon={<Download />} color="primary">
+        <Button
+          variant="contained"
+          startIcon={<Download />}
+          color="primary"
+          sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 600, px: 3 }}
+        >
           Download To Excel
         </Button>
       </Box>
 
-      <Box 
-        sx={{ 
-          mb: 4, 
-          display: "flex", 
-          flexDirection: "column", 
-          alignItems: "flex-start", 
-          gap: 2,
-          maxWidth: "800px"
+      <Box
+        sx={{
+          mb: 4,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-start",
+          gap: 2.5,
+          width: "100%",
+          maxWidth: { md: "800px" },
         }}
       >
         <Box sx={{ width: "100%" }}>
@@ -435,21 +504,55 @@ export default function SearchMaterials() {
           <Select
             displayEmpty
             value={selectedGroup}
-            onChange={e => setSelectedGroup(e.target.value)}
-            sx={{ bgcolor: "background.paper" }}
+            onChange={handleGroupChange}
+            renderValue={(selected) => {
+              if (selected === "") {
+                return <Typography sx={{ color: "text.secondary", fontSize: "0.875rem" }}>Select Material Group</Typography>;
+              }
+              const selectedOption = groups.find((g) => g.id === selected);
+              return (
+                <Typography sx={{ whiteSpace: "normal", wordBreak: "break-word", fontSize: "0.875rem", lineHeight: 1.2, py: 0.5 }}>
+                  {selectedOption ? `${selectedOption.code} - ${selectedOption.name}` : selected}
+                </Typography>
+              );
+            }}
+            sx={{ 
+              bgcolor: "background.paper",
+              "& .MuiSelect-select": {
+                whiteSpace: "normal !important",
+                display: "flex",
+                alignItems: "center",
+                minHeight: "1.5rem",
+                py: 1,
+              }
+            }}
             MenuProps={{
               PaperProps: {
-                style: {
-                  maxHeight: 300,
-                  width: 250,
+                sx: {
+                  width: "auto",
+               
+             
+                  maxHeight:400
                 },
               },
             }}
           >
-            <MenuItem value="">Select Material Group</MenuItem>
+            <MenuItem value="" sx={{whiteSpace:"normal" } }>Select Material Group</MenuItem>
             {groups.map(group => (
-              <MenuItem key={group.id} value={group.id} sx={{ whiteSpace: "normal", py: 1 }}>
-                {group.code} - {group.name}
+              <MenuItem 
+                key={group.id} 
+                value={group.id} 
+                sx={{ 
+                  whiteSpace: "normal", 
+                  py: 1.5,
+                  borderBottom: "1px solid",
+                  borderColor: "divider",
+                  "&:last-child": { borderBottom: 0 }
+                }}
+              >
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  {group.code} - {group.name}
+                </Typography>
               </MenuItem>
             ))}
           </Select>
@@ -462,10 +565,12 @@ export default function SearchMaterials() {
           columns={columns}
           sorting={sorting}
           setSorting={setSorting}
+          loading={loading}
+          emptyMessage={emptyMessage}
         />
       </Box>
 
-      <Box sx={{ mt: 3, display: "flex", justifyContent: "center" }}>
+      <Box sx={{ py: 3, display: "flex", justifyContent: "center" }}>
         <Pagination
           count={pagination.totalPages}
           page={pagination.page}
@@ -517,7 +622,16 @@ export default function SearchMaterials() {
       <Dialog open={aliasDialogOpen} onClose={handleCloseAliasDialog}>
         <DialogTitle>Material Aliases</DialogTitle>
         <DialogContent dividers>
-          <Box sx={{ pt: 1, display: "flex", flexDirection: "column", gap: 2, width: "100%", maxWidth: 400 }}>
+          <Box
+            sx={{
+              pt: 1,
+              display: "flex",
+              flexDirection: "column",
+              gap: 2,
+              width: "100%",
+              maxWidth: 400,
+            }}
+          >
             <TextField label="Alias 1" fullWidth value={aliases.alias1} disabled />
             <TextField label="Alias 2" fullWidth value={aliases.alias2} disabled />
             <TextField label="Alias 3" fullWidth value={aliases.alias3} disabled />
@@ -575,6 +689,6 @@ export default function SearchMaterials() {
           <ListItemText>Extend</ListItemText>
         </MenuItem>
       </Menu>
-    </Box>
+    </>
   );
 }

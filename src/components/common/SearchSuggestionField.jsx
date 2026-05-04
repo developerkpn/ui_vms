@@ -137,6 +137,11 @@ export default function SearchSuggestionField({
         <TextField
           {...params}
           placeholder={placeholder}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              onSearch(inputValue);
+            }
+          }}
           sx={{ 
             width: "100%",
             "& .MuiOutlinedInput-root": {
