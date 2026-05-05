@@ -11,10 +11,12 @@ const VerificationPage = lazy(() => import("src/pages/verification/VerificationP
 const DirectFormCreateNew = lazy(() => import("src/pages/create_new/DirectFormCreateNew"));
 const DirectCoupaForm = lazy(() => import("src/pages/coupa/DirectCoupaForm"));
 const LookupMaterials = lazy(() => import("src/pages/dashboard/LookupMaterials"));
+const RequestMaterials = lazy(() => import("src/pages/dashboard/RequestMaterials"));
 const Subgroups = lazy(() => import("src/pages/dashboard/SubgroupMaterial"));
 const Materials = lazy(() => import("src/pages/dashboard/MaterialDetail"));
 const SearchMaterials = lazy(() => import("src/pages/dashboard/SearchMaterials"));
 const ReportTicketPosition = lazy(() => import("src/pages/report/ReportTicketPosition"));
+const SingleRequestPage = lazy(() => import("src/pages/dashboard/SingleRequestPage"));
 // import ErrorPage from '../pages/ErrorPage';
 // import Error404 from 'src/pages/Error404';
 // import LoginPage from 'src/pages/LoginPage';
@@ -184,6 +186,22 @@ export const routes = createBrowserRouter([
       {
         path: "materials/lookup",
         element: <LookupMaterials />,
+      },
+      {
+        path: "materials/request",
+        element: <RequestMaterials />,
+      },
+      {
+        path: "materials/approvals",
+        element: <Navigate to="/dashboard/materials/request" replace />,
+      },
+      {
+        path: "materials/request/single",
+        element: <SingleRequestPage mode="single" />,
+      },
+      {
+        path: "materials/request/mass",
+        element: <SingleRequestPage mode="mass" />,
       },
       {
         path: "subgroups/:groupId",
