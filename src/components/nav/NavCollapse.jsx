@@ -1,9 +1,9 @@
-import { Collapse } from '@mui/material';
-import PropTypes from 'prop-types';
+import { Collapse } from "@mui/material";
+import PropTypes from "prop-types";
 
 NavCollapse.propTypes = {
   children: PropTypes.object,
-  parent: PropTypes.string,
+  parent: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
   curstate: PropTypes.object,
 };
 export default function NavCollapse({ children, parent, curstate }) {

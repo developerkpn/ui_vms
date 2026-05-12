@@ -29,8 +29,9 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 
 const GROUP_OPTIONS = [
   { value: "none", label: "Group By" },
@@ -38,6 +39,11 @@ const GROUP_OPTIONS = [
   { value: "ticketType", label: "Ticket Type" },
   { value: "assignedTo", label: "Assigned To" },
 ];
+
+const withRequestKey = item => ({
+  ...item,
+  requestKey: `${item.mode}:${item.id}`,
+});
 
 const INITIAL_REQUESTS = [
   {
@@ -137,7 +143,8 @@ const INITIAL_REQUESTS = [
       { title: "Master Data", owner: "master.data", status: "Done", date: "2026-01-14 14:00" },
     ],
   },
-];
+].map(withRequestKey);
+const INITIAL_MASS_REQUESTS = INITIAL_REQUESTS.filter(item => item.mode === "mass");
 
 function StatusPill({ status }) {
   const colorMap = {
@@ -159,15 +166,16 @@ function TicketTypePill({ value }) {
 
 export default function RequestMaterials() {
   const navigate = useNavigate();
-  const [requests, setRequests] = useState(INITIAL_REQUESTS);
-  const [activeTab, setActiveTab] = useState("mass");
+  const axiosPrivate = useAxiosPrivate();
+  const [requests, setRequests] = useState(INITIAL_MASS_REQUESTS);
+  const [activeTab, setActiveTab] = useState("single");
   const [searchQuery, setSearchQuery] = useState("");
   const [groupBy, setGroupBy] = useState("none");
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
-  const [addMenuAnchorEl, setAddMenuAnchorEl] = useState(null);
-  const [activeRequestId, setActiveRequestId] = useState(INITIAL_REQUESTS[0].id);
+  const [activeRequestId, setActiveRequestId] = useState(null);
   const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
   const [reworkDialogOpen, setReworkDialogOpen] = useState(false);
+  const [requestsLoading, setRequestsLoading] = useState(false);
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
@@ -177,12 +185,61 @@ export default function RequestMaterials() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
+  useEffect(() => {
+    const fetchSingleRequests = async () => {
+      try {
+        setRequestsLoading(true);
+        const response = await axiosPrivate.get("/material/requests/single");
+        const singleRequests = Array.isArray(response.data?.data)
+          ? response.data.data.map(item => ({
+              id: item.id,
+              mode: "single",
+              requestKey: `single:${item.id}`,
+              ticketNumber: item.ticket_number,
+              ticketType: item.ticket_type,
+              materialDescription: item.material_description,
+              uom: item.uom,
+              status: item.status,
+              createdBy: item.created_by,
+              createdAt: item.created_at,
+              assignedTo: item.assigned_to,
+              reworkReason: "",
+              approvalSteps: [],
+            }))
+          : [];
+
+        setRequests(prev => [...singleRequests, ...prev.filter(item => item.mode === "mass")]);
+      } catch (error) {
+        console.error("Failed to fetch single requests:", error);
+        openSnackbar("Failed to load single requests. Showing fallback data.", "warning");
+      } finally {
+        setRequestsLoading(false);
+      }
+    };
+
+    fetchSingleRequests();
+  }, [axiosPrivate]);
+
+  useEffect(() => {
+    const firstRowForActiveTab = requests.find(item => item.mode === activeTab);
+
+    if (!firstRowForActiveTab) {
+      setActiveRequestId(null);
+      return;
+    }
+
+    const activeRow = requests.find(item => item.requestKey === activeRequestId);
+    if (!activeRow || activeRow.mode !== activeTab) {
+      setActiveRequestId(firstRowForActiveTab.requestKey);
+    }
+  }, [activeRequestId, activeTab, requests]);
+
   const handleChangePage = (event, newPage) => {
     setPage(newPage - 1); // Pagination component is 1-indexed, but our state is 0-indexed
   };
 
   const selectedRequest = useMemo(
-    () => requests.find(item => item.id === activeRequestId) || null,
+    () => requests.find(item => item.requestKey === activeRequestId) || null,
     [activeRequestId, requests]
   );
 
@@ -232,13 +289,13 @@ export default function RequestMaterials() {
     }, []);
   }, [filteredRequests, groupBy]);
 
-  const openSnackbar = (message, severity = "success") => {
+  function openSnackbar(message, severity = "success") {
     setSnackbar({ open: true, message, severity });
-  };
+  }
 
   const handleMenuOpen = (event, request) => {
     setMenuAnchorEl(event.currentTarget);
-    setActiveRequestId(request.id);
+    setActiveRequestId(request.requestKey);
   };
 
   const handleMenuClose = () => {
@@ -246,28 +303,17 @@ export default function RequestMaterials() {
   };
 
   const handleCopyRequest = () => {
-    if (!selectedRequest) {
-      return;
-    }
-
-    const nextId = Math.max(...requests.map(item => item.id)) + 1;
-    const copyCount = requests.filter(item =>
-      item.ticketNumber.startsWith(selectedRequest.ticketNumber)
-    ).length;
-
-    setRequests(prev => [
-      {
-        ...selectedRequest,
-        id: nextId,
-        ticketNumber: `${selectedRequest.ticketNumber}-${copyCount}`,
-        status: "Waiting",
-        createdAt: "2026-05-04 10:30",
-      },
-      ...prev,
-    ]);
-
     handleMenuClose();
-    openSnackbar("Request copied to a new draft");
+    openSnackbar("Copy Request belum diaktifkan.", "info");
+  };
+
+  const handleCreateRequest = () => {
+    const routeByTab = {
+      single: "/dashboard/materials/request/single",
+      mass: "/dashboard/materials/request/mass",
+    };
+
+    navigate(routeByTab[activeTab] || routeByTab.single);
   };
 
   return (
@@ -361,53 +407,19 @@ export default function RequestMaterials() {
               </Select>
             </FormControl>
 
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: { xs: "column", sm: "row" },
-                  alignItems: { xs: "stretch", sm: "center" },
-                  gap: 1.25,
-                  width: { xs: "100%", md: "auto" },
-                }}
-              >
-                <Button
-                  variant="contained"
-                  startIcon={<Add />}
-                  onClick={(e) => setAddMenuAnchorEl(e.currentTarget)}
-                >
-                  New
-                </Button>
-                <Menu
-                  anchorEl={addMenuAnchorEl}
-                  open={Boolean(addMenuAnchorEl)}
-                  onClose={() => setAddMenuAnchorEl(null)}
-                  PaperProps={{
-                    elevation: 3,
-                    sx: {
-                      minWidth: 160,
-                      borderRadius: 2,
-                      mt: 0.5,
-                    },
-                  }}
-                >
-                  <MenuItem
-                    onClick={() => {
-                      setAddMenuAnchorEl(null);
-                      navigate("/dashboard/materials/request/single");
-                    }}
-                  >
-                    Single Request
-                  </MenuItem>
-                  <MenuItem
-                    onClick={() => {
-                      setAddMenuAnchorEl(null);
-                      navigate("/dashboard/materials/request/mass");
-                    }}
-                  >
-                    Mass Request
-                  </MenuItem>
-                </Menu>
-              </Box>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: { xs: "column", sm: "row" },
+                alignItems: { xs: "stretch", sm: "center" },
+                gap: 1.25,
+                width: { xs: "100%", md: "auto" },
+              }}
+            >
+              <Button variant="contained" startIcon={<Add />} onClick={handleCreateRequest}>
+                New
+              </Button>
+            </Box>
           </Box>
 
           {groupedSummary.length > 0 && (
@@ -441,13 +453,20 @@ export default function RequestMaterials() {
                 </TableRow>
               </TableHead>
               <TableBody>
+                {requestsLoading && (
+                  <TableRow>
+                    <TableCell colSpan={9} align="center">
+                      Loading requests...
+                    </TableCell>
+                  </TableRow>
+                )}
                 {filteredRequests
                   .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                   .map(row => (
                     <TableRow
-                      key={row.id}
+                      key={row.requestKey}
                       hover
-                      selected={row.id === activeRequestId}
+                      selected={row.requestKey === activeRequestId}
                       sx={{
                         "& .MuiTableCell-root": { verticalAlign: "top" },
                         backgroundColor: "transparent !important", // Ensure no zebra striping
@@ -462,7 +481,7 @@ export default function RequestMaterials() {
                         <Button
                           variant="text"
                           size="small"
-                          onClick={() => setActiveRequestId(row.id)}
+                          onClick={() => setActiveRequestId(row.requestKey)}
                           sx={{ px: 0, minWidth: 0, textTransform: "none", fontWeight: 600 }}
                         >
                           {row.ticketNumber}

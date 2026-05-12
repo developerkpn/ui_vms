@@ -27,6 +27,8 @@ const getIcon = icon => {
       return lazy(() => import("@mui/icons-material/Summarize"));
     case "Coupa":
       return lazy(() => import("@mui/icons-material/PrecisionManufacturing"));
+    case "AdminPanelSettings":
+      return lazy(() => import("@mui/icons-material/AdminPanelSettings"));
     default:
       return HelpOutlineIcon;
   }

@@ -1,0 +1,236 @@
+export const APPROVAL_GROUP_OPTIONS = [
+  { value: "none", label: "Group by" },
+  { value: "status", label: "Status" },
+  { value: "ticketType", label: "Ticket Type" },
+  { value: "assignedTo", label: "Assigned To" },
+];
+
+export const APPROVAL_FALLBACK_ROWS = [
+  {
+    id: 1,
+    ticketNumber: "1000000001",
+    ticketType: "Create",
+    materialDescription: "PUMP, CENTRIFUGAL INVESTA STR 1X1.5-8",
+    uom: "PC",
+    status: "Submit",
+    createdBy: "admin admin",
+    createdAt: "2026-01-10 16:30",
+    assignedTo: "master data",
+    approvalStage: "Approval 3",
+    materialGroupCode: "901",
+    materialGroupName: "Actuator & Solenoid Valve",
+    subMaterialGroupCode: "002",
+    subMaterialGroupName: "Actiar",
+    plantCode: "KPN1",
+    slocCode: "A001",
+    longText1: "SQ50 AMRI KSB II 2GDC IIC TX X PMAX 8100BAR",
+    templateValues: {
+      part_number: "P/N 404830243243",
+      model: "SQ50 AMRI",
+      size_dimension: "90X100X450MM",
+      type_bentuk: "NG160",
+      bahan_warna_material: "SS304",
+      brand: "ACTIAR",
+    },
+    attachments: [
+      { id: 1, file_name: "image1.jpg", file_type: "image/jpeg" },
+      { id: 2, file_name: "image2.jpg", file_type: "image/jpeg" },
+      { id: 3, file_name: "image3.jpg", file_type: "image/jpeg" },
+    ],
+    approval1Status: "APPROVED",
+    approval1UserId: "Approval 1",
+    approval1At: "2026-01-10 16:45",
+    approval2Status: "APPROVED",
+    approval2UserId: "Approval 2",
+    approval2At: "2026-01-10 17:05",
+    approval3Status: "WAITING",
+    approval3UserId: "master data",
+  },
+];
+
+export function normalizeApprovalRows(rows = []) {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
+  return rows.map(row => {
+    const normalized = {
+      id: row.id,
+      ticketNumber: stringOrFallback(row.ticket_number, row.ticketNumber, "-"),
+      ticketType: stringOrFallback(row.ticket_type, row.ticketType, "Create"),
+      materialDescription: stringOrFallback(row.material_description, row.materialDescription, "-"),
+      uom: stringOrFallback(row.uom, row.base_uom, row.baseUom, "-"),
+      status: stringOrFallback(row.status, "Submit"),
+      createdBy: stringOrFallback(row.created_by, row.createdBy, "-"),
+      createdAt: formatDateTime(row.created_at || row.createdAt),
+      assignedTo: stringOrFallback(row.assigned_to, row.assignedTo, "-"),
+      approvalStage: resolveApprovalStage(row),
+    };
+
+    addStringProp(normalized, "materialGroupCode", row.material_group_code, row.materialGroupCode);
+    addStringProp(normalized, "materialGroupName", row.material_group_name, row.materialGroupName);
+    addStringProp(
+      normalized,
+      "subMaterialGroupCode",
+      row.material_sub_group_code,
+      row.sub_material_group_code,
+      row.subMaterialGroupCode
+    );
+    addStringProp(
+      normalized,
+      "subMaterialGroupName",
+      row.material_sub_group_name,
+      row.sub_material_group_name,
+      row.subMaterialGroupName
+    );
+    addStringProp(normalized, "plantCode", row.plant_code, row.plantCode);
+    addStringProp(normalized, "slocCode", row.sloc_code, row.slocCode);
+    addStringProp(normalized, "longText1", row.long_text_1, row.longText1);
+    addStringProp(normalized, "longText2", row.long_text_2, row.longText2);
+    addStringProp(normalized, "longText3", row.long_text_3, row.longText3);
+    addRawProp(normalized, "templatePayload", row.template_payload, row.templatePayload);
+    addRawProp(normalized, "requestFields", row.request_fields, row.requestFields);
+    addRawProp(normalized, "templateValues", row.template_values, row.templateValues);
+    addRawProp(normalized, "attachments", row.attachments);
+
+    [1, 2, 3].forEach(step => {
+      addStringProp(
+        normalized,
+        `approval${step}UserId`,
+        row[`approval_${step}_user_id`],
+        row[`approval${step}UserId`]
+      );
+      addStringProp(
+        normalized,
+        `approval${step}Status`,
+        row[`approval_${step}_status`],
+        row[`approval${step}Status`]
+      );
+      addStringProp(
+        normalized,
+        `approval${step}At`,
+        row[`approval_${step}_at`],
+        row[`approval${step}At`]
+      );
+      addStringProp(
+        normalized,
+        `approval${step}Remark`,
+        row[`approval_${step}_remark`],
+        row[`approval${step}Remark`]
+      );
+    });
+
+    return normalized;
+  });
+}
+
+export function filterApprovalRows(rows = [], query = "") {
+  const normalizedQuery = String(query).trim().toLowerCase();
+
+  if (!normalizedQuery) {
+    return rows;
+  }
+
+  return rows.filter(row =>
+    [
+      row.ticketNumber,
+      row.ticketType,
+      row.materialDescription,
+      row.uom,
+      row.status,
+      row.createdBy,
+      row.assignedTo,
+    ]
+      .filter(Boolean)
+      .some(value => String(value).toLowerCase().includes(normalizedQuery))
+  );
+}
+
+export function summarizeApprovalGroups(rows = [], groupBy = "none") {
+  if (!groupBy || groupBy === "none") {
+    return [];
+  }
+
+  const counts = rows.reduce((acc, row) => {
+    const key = row[groupBy] || "Unassigned";
+    acc.set(key, (acc.get(key) || 0) + 1);
+    return acc;
+  }, new Map());
+
+  return Array.from(counts.entries()).map(([key, count]) => ({ key, count }));
+}
+
+export function sortApprovalRows(rows = [], groupBy = "none") {
+  if (!groupBy || groupBy === "none") {
+    return rows;
+  }
+
+  return [...rows].sort((left, right) =>
+    String(left[groupBy] || "").localeCompare(String(right[groupBy] || ""))
+  );
+}
+
+function resolveApprovalStage(row = {}) {
+  const approval1 = String(row.approval_1_status || "").toUpperCase();
+  const approval2 = String(row.approval_2_status || "").toUpperCase();
+  const approval3 = String(row.approval_3_status || "").toUpperCase();
+
+  if (!approval1 || approval1 === "WAITING") {
+    return "Approval 1";
+  }
+
+  if (approval1 === "APPROVED" && (!approval2 || approval2 === "WAITING")) {
+    return "Approval 2";
+  }
+
+  if (approval1 === "APPROVED" && approval2 === "APPROVED" && approval3 !== "APPROVED") {
+    return "Approval 3";
+  }
+
+  return "Completed";
+}
+
+function formatDateTime(value) {
+  if (!value) {
+    return "-";
+  }
+
+  if (typeof value === "string") {
+    const isoLikeMatch = value.match(/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}):(\d{2})/);
+    if (isoLikeMatch) {
+      return `${isoLikeMatch[1]} ${isoLikeMatch[2]}:${isoLikeMatch[3]}`;
+    }
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
+}
+
+function stringOrFallback(...values) {
+  const value = values.find(item => item !== undefined && item !== null && item !== "");
+  return value === undefined ? "-" : String(value);
+}
+
+function addStringProp(target, key, ...values) {
+  const value = values.find(item => item !== undefined && item !== null && item !== "");
+  if (value !== undefined) {
+    target[key] = String(value);
+  }
+}
+
+function addRawProp(target, key, ...values) {
+  const value = values.find(item => item !== undefined && item !== null && item !== "");
+  if (value !== undefined) {
+    target[key] = value;
+  }
+}

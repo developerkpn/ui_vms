@@ -1,117 +1,122 @@
-import { useState, useEffect, useCallback } from 'react';
-import { styled, useTheme } from '@mui/material/styles';
-import SvgIcon from '@mui/material/SvgIcon';
-import Box from '@mui/material/Box';
-import MuiDrawer from '@mui/material/Drawer';
-import MuiAppBar from '@mui/material/AppBar';
-import Toolbar from '@mui/material/Toolbar';
-import Typography from '@mui/material/Typography';
-import Divider from '@mui/material/Divider';
-import IconButton from '@mui/material/IconButton';
-import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import AvatarComp from 'src/components/common/AvatarComp';
-import { Outlet, Link, useLocation, Navigate } from 'react-router-dom';
-import NavSection from 'src/components/nav/NavSection';
-import { Menu } from 'src/_mock/Menu';
-import Cookies from 'js-cookie';
-import useAxiosPrivate from 'src/hooks/useAxiosPrivate';
-import KpnLogo from '../../images/kpn-logo-3.svg?react';
-import KpnNav from '../../images/kpn-logo.svg?react';
-import ResetPasswordDialog from './ResetPasswordDialog';
-import useSessionStore from 'src/store/useSessionStore';
-import useCheckResetPWD from 'src/store/useCheckResetPWD';
-import usePermissionStore from 'src/store/userPermissionStore';
-import useMenuStore from 'src/store/useMenuStore';
-import useAccessTokStore from 'src/store/useAccessTokStore';
+import { useState, useEffect, useCallback } from "react";
+import { styled, useTheme } from "@mui/material/styles";
+import SvgIcon from "@mui/material/SvgIcon";
+import Box from "@mui/material/Box";
+import MuiDrawer from "@mui/material/Drawer";
+import MuiAppBar from "@mui/material/AppBar";
+import Toolbar from "@mui/material/Toolbar";
+import Typography from "@mui/material/Typography";
+import Divider from "@mui/material/Divider";
+import IconButton from "@mui/material/IconButton";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import AvatarComp from "src/components/common/AvatarComp";
+import { Outlet, Link, useLocation, Navigate } from "react-router-dom";
+import NavSection from "src/components/nav/NavSection";
+import { Menu } from "src/_mock/Menu";
+import Cookies from "js-cookie";
+import useAxiosPrivate from "src/hooks/useAxiosPrivate";
+import KpnLogo from "../../images/kpn-logo-3.svg?react";
+import KpnNav from "../../images/kpn-logo.svg?react";
+import ResetPasswordDialog from "./ResetPasswordDialog";
+import useSessionStore from "src/store/useSessionStore";
+import useCheckResetPWD from "src/store/useCheckResetPWD";
+import usePermissionStore from "src/store/userPermissionStore";
+import useMenuStore from "src/store/useMenuStore";
+import useAccessTokStore from "src/store/useAccessTokStore";
+import {
+  buildTestingAdminMenu,
+  buildTestingAdminPermission,
+} from "src/helper/adminMenuTransform.mjs";
 
 const drawerWidth = 240;
 
-const openedMixin = (theme) => ({
+const openedMixin = theme => ({
   width: drawerWidth,
-  transition: theme.transitions.create('width', {
+  transition: theme.transitions.create("width", {
     easing: theme.transitions.easing.sharp,
     duration: theme.transitions.duration.enteringScreen,
   }),
-  overflowX: 'hidden',
+  overflowX: "hidden",
 });
 
-const closedMixin = (theme) => ({
+const closedMixin = theme => ({
   width: `calc(${theme.spacing(7)} + 1px)`,
-  [theme.breakpoints.up('sm')]: {
+  [theme.breakpoints.up("sm")]: {
     width: `calc(${theme.spacing(8)} + 1px)`,
   },
-  overflowX: 'hidden',
+  overflowX: "hidden",
 });
 
-const DrawerHeader = styled('div')(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'flex-end',
+const DrawerHeader = styled("div")(({ theme }) => ({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-end",
   padding: theme.spacing(0, 1),
   ...theme.mixins.toolbar,
 }));
 
 const AppBar = styled(MuiAppBar, {
-  shouldForwardProp: (prop) => prop !== 'open',
+  shouldForwardProp: prop => prop !== "open",
 })(({ theme, open }) => ({
   zIndex: theme.zIndex.drawer + 1,
-  transition: theme.transitions.create(['width', 'margin'], {
+  transition: theme.transitions.create(["width", "margin"], {
     easing: theme.transitions.easing.sharp,
     duration: theme.transitions.duration.leavingScreen,
   }),
   ...(open && {
     marginLeft: drawerWidth,
     width: `calc(100% - ${drawerWidth}px)`,
-    transition: theme.transitions.create(['width', 'margin'], {
+    transition: theme.transitions.create(["width", "margin"], {
       easing: theme.transitions.easing.sharp,
       duration: theme.transitions.duration.enteringScreen,
     }),
   }),
-  backgroundColor: '#fc3d32',
+  backgroundColor: "#fc3d32",
 }));
 
-const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' })(({ theme, open }) => ({
-  width: drawerWidth,
-  flexShrink: 0,
-  whiteSpace: 'nowrap',
-  boxSizing: 'border-box',
-  ...(open && {
-    ...openedMixin(theme),
-    '& .MuiDrawer-paper': openedMixin(theme),
-  }),
-  ...(!open && {
-    ...closedMixin(theme),
-    '& .MuiDrawer-paper': closedMixin(theme),
-  }),
-}));
+const Drawer = styled(MuiDrawer, { shouldForwardProp: prop => prop !== "open" })(
+  ({ theme, open }) => ({
+    width: drawerWidth,
+    flexShrink: 0,
+    whiteSpace: "nowrap",
+    boxSizing: "border-box",
+    ...(open && {
+      ...openedMixin(theme),
+      "& .MuiDrawer-paper": openedMixin(theme),
+    }),
+    ...(!open && {
+      ...closedMixin(theme),
+      "& .MuiDrawer-paper": closedMixin(theme),
+    }),
+  })
+);
 
 export default function MiniDrawer() {
   const theme = useTheme();
   const location = useLocation();
-  const setSessionStore = useSessionStore((state) => state.setSessionStore);
-  const resetSessionStore = useSessionStore((state) => state.resetSessionStore);
-  const setIsResetPWD = useCheckResetPWD((state) => state.setIsResetPWD);
-  const is_reset_pwd = useCheckResetPWD((state) => state.is_reset_pwd);
-  const setPermission = usePermissionStore((state) => state.setPermission);
-  const setMenu = useMenuStore((state) => state.setMenu);
-  const role = useSessionStore((state) => state.role);
+  const setSessionStore = useSessionStore(state => state.setSessionStore);
+  const resetSessionStore = useSessionStore(state => state.resetSessionStore);
+  const setIsResetPWD = useCheckResetPWD(state => state.setIsResetPWD);
+  const is_reset_pwd = useCheckResetPWD(state => state.is_reset_pwd);
+  const setPermission = usePermissionStore(state => state.setPermission);
+  const setMenu = useMenuStore(state => state.setMenu);
+  const role = useSessionStore(state => state.role);
   const axiosPrivate = useAxiosPrivate();
-  const accessToken = useAccessTokStore((state) => state.accessToken);
+  const accessToken = useAccessTokStore(state => state.accessToken);
 
   const [open, setOpen] = useState(false);
   const [openDialog, setOpenDialog] = useState(true);
   const [navCol, setNavcol] = useState({
-    head: '',
+    head: "",
     state: false,
   });
-  const [navMenu, setNavmenu] = useState('');
+  const [navMenu, setNavmenu] = useState("");
 
   useEffect(() => {
     (async () => {
       try {
         const { data } = await axiosPrivate.post(`/user/getsess`);
-        console.log(data);
         setSessionStore({
           fullname: data.fullname,
           username: data.username,
@@ -124,8 +129,8 @@ export default function MiniDrawer() {
           groupid: data.groupid,
         });
         setIsResetPWD(data.is_reset_pwd);
-        setPermission(data.permission);
-        setMenu(data.menu);
+        setPermission(buildTestingAdminPermission(data.permission));
+        setMenu(buildTestingAdminMenu(data.menu));
       } catch (error) {
         resetSessionStore();
         console.error(error);
@@ -142,8 +147,8 @@ export default function MiniDrawer() {
     setNavcol({ ...navCol, state: false });
   }, []);
 
-  const updateNavcol = useCallback((menu) => {
-    setNavcol((prevNav) => {
+  const updateNavcol = useCallback(menu => {
+    setNavcol(prevNav => {
       setOpen(prevNav.head != menu ? true : !prevNav.state);
       return {
         head: menu,
@@ -152,18 +157,18 @@ export default function MiniDrawer() {
     });
   }, []);
 
-  const updateNavmenu = useCallback((menu) => {
+  const updateNavmenu = useCallback(menu => {
     setNavmenu(menu);
   }, []);
 
-  if (!accessToken || accessToken === '') {
+  if (!accessToken || accessToken === "") {
     return <Navigate to="/login" />;
   }
 
   // if (Cookies.get('role') === 'VENDOR' && Cookies.get('is'))
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ display: "flex" }}>
       <AppBar position="fixed" open={open}>
         <Toolbar>
           <IconButton
@@ -173,10 +178,15 @@ export default function MiniDrawer() {
             edge="start"
             sx={{
               marginRight: 2,
-              ...(open && { display: 'none' }),
+              ...(open && { display: "none" }),
             }}
           >
-            <SvgIcon component={KpnNav} sx={{ width: '2rem', height: '2rem' }} viewBox="0 0 5000 5000" color="white" />
+            <SvgIcon
+              component={KpnNav}
+              sx={{ width: "2rem", height: "2rem" }}
+              viewBox="0 0 5000 5000"
+              color="white"
+            />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             Vendor Management System App
@@ -186,9 +196,13 @@ export default function MiniDrawer() {
       </AppBar>
       <Drawer variant="permanent" open={open}>
         <DrawerHeader>
-          <SvgIcon sx={{ width: '10rem', height: '2rem' }} component={KpnLogo} viewBox="10 50 700 100"></SvgIcon>
+          <SvgIcon
+            sx={{ width: "10rem", height: "2rem" }}
+            component={KpnLogo}
+            viewBox="10 50 700 100"
+          ></SvgIcon>
           <IconButton onClick={handleDrawerClose}>
-            {theme.direction === 'rtl' ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+            {theme.direction === "rtl" ? <ChevronRightIcon /> : <ChevronLeftIcon />}
           </IconButton>
         </DrawerHeader>
         <Divider />
@@ -202,9 +216,14 @@ export default function MiniDrawer() {
       </Drawer>
       <Box
         component="main"
-        sx={{ flexGrow: 1, p: 3, height: '90vh', width: open ? `calc(94% - ${drawerWidth}px)` : '94%' }}
+        sx={{
+          flexGrow: 1,
+          p: 3,
+          height: "90vh",
+          width: open ? `calc(94% - ${drawerWidth}px)` : "94%",
+        }}
       >
-        {role === 'VENDOR' && (is_reset_pwd == 'false' || !is_reset_pwd) && openDialog && (
+        {role === "VENDOR" && (is_reset_pwd == "false" || !is_reset_pwd) && openDialog && (
           <ResetPasswordDialog open={openDialog} setOpen={setOpenDialog} />
         )}
         <DrawerHeader />

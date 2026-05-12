@@ -1,4 +1,4 @@
-  import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Autocomplete,
   Box,
@@ -20,7 +20,7 @@ import SingleMaterialForm from "../../components/request-material/SingleMaterial
 import MassMaterialForm from "../../components/request-material/MassMaterialForm";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 
-const DEFAULT_MATERIAL_TYPE = "Non Trade Material";
+const DEFAULT_MATERIAL_TYPE = "SARS - Non Trade Material";
 const PREFERENCE_KEY = "material_request_preferences";
 
 export default function SingleRequestPage({ mode = "single" }) {
@@ -29,9 +29,15 @@ export default function SingleRequestPage({ mode = "single" }) {
   const [step, setStep] = useState(1);
   const [rememberPreference, setRememberPreference] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [prefetching, setPrefetching] = useState(false);
 
   // Data Master dari Database (Mapping Plant <-> Location)
   const [allLocations, setAllLocations] = useState([]);
+
+  // Pre-fetched schema cache: { [groupCode]: schemaData }
+  const [schemaCache, setSchemaCache] = useState({});
+  // Pre-fetched material groups list
+  const [materialGroupsList, setMaterialGroupsList] = useState([]);
 
   const [formData, setFormData] = useState({
     plant: "",
@@ -189,7 +195,8 @@ export default function SingleRequestPage({ mode = "single" }) {
     }));
   };
 
-  const handleNext = () => {
+  // Pre-fetch all material groups and their schemas when "Add" is clicked
+  const handleNext = async () => {
     if (rememberPreference) {
       localStorage.setItem(
         PREFERENCE_KEY,
@@ -202,6 +209,40 @@ export default function SingleRequestPage({ mode = "single" }) {
     } else {
       localStorage.removeItem(PREFERENCE_KEY);
     }
+
+    // Pre-fetch all material groups + all schemas in parallel
+    setPrefetching(true);
+    try {
+      // Step 1: Fetch material groups dropdown
+      const groupsResponse = await axiosPrivate.get("/material/groups/dropdown");
+      const groups = groupsResponse.data?.success ? groupsResponse.data.data || [] : [];
+      setMaterialGroupsList(groups);
+
+      // Step 2: Fetch all form-schemas in parallel for every group
+      const schemaPromises = groups.map(async group => {
+        try {
+          const res = await axiosPrivate.get(`/material/groups/${group.code}/form-schema`);
+          return { code: group.code, data: res.data?.data || null };
+        } catch {
+          // Template not found for this group is OK
+          return { code: group.code, data: null };
+        }
+      });
+
+      const results = await Promise.all(schemaPromises);
+      const cache = {};
+      for (const result of results) {
+        if (result.data) {
+          cache[result.code] = result.data;
+        }
+      }
+      setSchemaCache(cache);
+    } catch (error) {
+      console.error("Failed to pre-fetch schemas:", error);
+    } finally {
+      setPrefetching(false);
+    }
+
     setStep(2);
   };
 
@@ -310,10 +351,10 @@ export default function SingleRequestPage({ mode = "single" }) {
                     variant="contained"
                     disableElevation
                     onClick={handleNext}
-                    disabled={!formData.plant || !formData.storageLocation}
+                    disabled={!formData.plant || !formData.storageLocation || prefetching}
                     sx={{ px: 4, bgcolor: "#1976d2" }}
                   >
-                    Add
+                    {prefetching ? <CircularProgress size={20} sx={{ color: "white" }} /> : "Add"}
                   </Button>
                   <Button variant="text" onClick={handleBack} sx={{ color: "text.secondary" }}>
                     Cancel
@@ -345,7 +386,12 @@ export default function SingleRequestPage({ mode = "single" }) {
           <Typography color="text.primary">Single Request Form</Typography>
         </Breadcrumbs>
       </Box>
-      <SingleMaterialForm onBack={handleBack} formData={formData} />
+      <SingleMaterialForm
+        onBack={handleBack}
+        formData={formData}
+        prefetchedGroups={materialGroupsList}
+        schemaCache={schemaCache}
+      />
     </Box>
   );
 }

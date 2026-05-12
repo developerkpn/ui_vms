@@ -117,8 +117,9 @@ export default function ListTicket() {
       signal: controller.signal,
     });
     const result = response.data.data;
-    const load = result.map(item => ({
+    const load = result.map((item, index) => ({
       id: item.token,
+      unique_id: item.token ? `${item.token}-${index}` : index,
       is_active: item.is_active,
       ticket_num: item.ticket_id,
       updated_at: moment(item.updated_at).format("DD/MM/YYYY T HH:mm:ss"),
@@ -584,15 +585,33 @@ export default function ListTicket() {
             flexDirection: "column",
           }}
         >
-          <Box sx={{ width: "100%", height: "88%" }}>
+          <Box
+            sx={{
+              height: 500,
+              width: "100%",
+            }}
+          >
             <DataGrid
               sx={overrides}
               rows={showAll ? ticket : userOnlyTicket}
               columns={columnTable}
-              disableColumnFilter
-              disableColumnSelector
-              disableDensitySelector
-              hideFooterPagination
+              getRowId={row => row.unique_id}
+              initialState={{
+                pagination: {
+                  paginationModel: {
+                    pageSize: 10,
+                  },
+                },
+              }}
+              pageSizeOptions={[10, 20, 50, 100]}
+              disableRowSelectionOnClick
+              slots={{ toolbar: GridToolbar }}
+              slotProps={{
+                toolbar: {
+                  showQuickFilter: true,
+                  quickFilterProps: { debounceMs: 500 },
+                },
+              }}
             />
           </Box>
         </Box>

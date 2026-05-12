@@ -17,6 +17,7 @@ const Materials = lazy(() => import("src/pages/dashboard/MaterialDetail"));
 const SearchMaterials = lazy(() => import("src/pages/dashboard/SearchMaterials"));
 const ReportTicketPosition = lazy(() => import("src/pages/report/ReportTicketPosition"));
 const SingleRequestPage = lazy(() => import("src/pages/dashboard/SingleRequestPage"));
+const AdminApprovalView = lazy(() => import("src/pages/dashboard/AdminApprovalView"));
 // import ErrorPage from '../pages/ErrorPage';
 // import Error404 from 'src/pages/Error404';
 // import LoginPage from 'src/pages/LoginPage';
@@ -194,6 +195,10 @@ export const routes = createBrowserRouter([
       {
         path: "materials/approvals",
         element: <Navigate to="/dashboard/materials/request" replace />,
+      },
+      {
+        path: "administrator/approval",
+        element: <AdminApprovalView />,
       },
       {
         path: "materials/request/single",

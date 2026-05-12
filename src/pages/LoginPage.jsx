@@ -18,6 +18,11 @@ import { PasswordWithEyes } from "src/components/common/PasswordWithEyes";
 import imgbg from "../images/gama-tower.jpg";
 import KpnNav from "../images/kpn-logo.svg?react";
 import { LoadingButton } from "@mui/lab";
+import {
+  buildTestingAdminMenu,
+  buildTestingAdminPermission,
+} from "src/helper/adminMenuTransform.mjs";
+import { getLoginErrorMessage } from "src/helper/loginErrorMessage.mjs";
 // import Cookies from 'js-cookie';
 
 const defaultValue = {
@@ -44,13 +49,13 @@ export default function LoginPage() {
       navigate(`/frm/newform/${data.FormToken}`);
     } else {
       try {
-        const logindata = await axios.post(`${import.meta.env.VITE_URL_LOC}/user/login`, {
+        const apiBaseUrl = import.meta.env.VITE_URL_LOC;
+        const logindata = await axios.post(`${apiBaseUrl}/user/login`, {
           username: data.Username,
           password: data.Password,
         });
         const response = logindata.data;
         // setSession(response);
-        // console.log(response);
         setSessionStore({
           fullname: response.fullname,
           username: response.username,
@@ -62,12 +67,11 @@ export default function LoginPage() {
           role: response.role,
           groupid: response.groupid,
         });
-        setMenu(response.menu);
-        setPermission(response.permission);
+        setMenu(buildTestingAdminMenu(response.menu));
+        setPermission(buildTestingAdminPermission(response.permission));
         setAccessToken(response.accessToken);
         setIsResetPWD(response.is_reset_pwd);
         alert("Successfull login");
-        console.log(response);
         setTimeout(() => {
           if (response.dept_id == "MDM_MAT" || response.dept_id == "MATERIAL") {
             navigate("/dashboard/materials/lookup");
@@ -82,11 +86,7 @@ export default function LoginPage() {
         setOpenload(false);
         setBtnclicked(false);
         console.log(err);
-        if (!err.response) {
-          alert(err.message);
-        } else {
-          alert(err.response?.data?.message);
-        }
+        alert(getLoginErrorMessage(err, import.meta.env.VITE_URL_LOC));
       }
     }
   };

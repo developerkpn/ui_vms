@@ -1,0 +1,125 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const path = require("node:path");
+const { pathToFileURL } = require("node:url");
+
+const helperModuleUrl = pathToFileURL(path.resolve(__dirname, "adminApprovalView.mjs")).href;
+
+async function loadHelper() {
+  return import(helperModuleUrl);
+}
+
+test("normalizeApprovalRows maps API rows into My Approval table rows", async () => {
+  const { normalizeApprovalRows } = await loadHelper();
+
+  const rows = normalizeApprovalRows([
+    {
+      id: 12,
+      ticket_number: "1000000012",
+      ticket_type: "Create",
+      material_description: "PUMP, CENTRIFUGAL",
+      uom: "PC",
+      status: "Submit",
+      created_by: "admin.admin",
+      created_at: "2026-01-10T16:30:00.000Z",
+      assigned_to: "master data",
+      approval_1_status: "APPROVED",
+      approval_2_status: "WAITING",
+      approval_3_status: null,
+    },
+  ]);
+
+  assert.deepEqual(rows, [
+    {
+      id: 12,
+      ticketNumber: "1000000012",
+      ticketType: "Create",
+      materialDescription: "PUMP, CENTRIFUGAL",
+      uom: "PC",
+      status: "Submit",
+      createdBy: "admin.admin",
+      createdAt: "2026-01-10 16:30",
+      assignedTo: "master data",
+      approvalStage: "Approval 2",
+      approval1Status: "APPROVED",
+      approval2Status: "WAITING",
+    },
+  ]);
+});
+
+test("filterApprovalRows searches common visible columns", async () => {
+  const { filterApprovalRows } = await loadHelper();
+  const rows = [
+    {
+      ticketNumber: "1000000001",
+      ticketType: "Create",
+      materialDescription: "PUMP, CENTRIFUGAL",
+      status: "Submit",
+      createdBy: "admin.admin",
+      assignedTo: "master data",
+    },
+    {
+      ticketNumber: "1000000002",
+      ticketType: "Change",
+      materialDescription: "VALVE, GATE",
+      status: "Waiting",
+      createdBy: "budi.user",
+      assignedTo: "approval 1",
+    },
+  ];
+
+  assert.deepEqual(filterApprovalRows(rows, "valve"), [rows[1]]);
+  assert.deepEqual(filterApprovalRows(rows, "1000000001"), [rows[0]]);
+});
+
+test("summarizeApprovalGroups counts rows by selected group key", async () => {
+  const { summarizeApprovalGroups } = await loadHelper();
+  const rows = [
+    { status: "Submit", assignedTo: "master data" },
+    { status: "Submit", assignedTo: "master data" },
+    { status: "Waiting", assignedTo: "approval 1" },
+  ];
+
+  assert.deepEqual(summarizeApprovalGroups(rows, "status"), [
+    { key: "Submit", count: 2 },
+    { key: "Waiting", count: 1 },
+  ]);
+  assert.deepEqual(summarizeApprovalGroups(rows, "none"), []);
+});
+
+test("normalizeApprovalRows keeps filled form detail fields for View Approval", async () => {
+  const { normalizeApprovalRows } = await loadHelper();
+
+  const [row] = normalizeApprovalRows([
+    {
+      id: 31,
+      ticket_number: "1000000031",
+      material_group_code: "901",
+      material_group_name: "Actuator & Solenoid Valve",
+      material_sub_group_code: "002",
+      material_sub_group_name: "Actiar",
+      plant_code: "KPN1",
+      sloc_code: "A001",
+      long_text_1: "LINE 1",
+      template_payload: {
+        requestFields: { base_unit_of_measure: "PC" },
+        templateValues: { brand: "ACTIAR" },
+      },
+      attachments: [{ id: 5, file_name: "image1.jpg" }],
+      approval_1_user_id: "andi",
+      approval_1_status: "APPROVED",
+    },
+  ]);
+
+  assert.equal(row.materialGroupCode, "901");
+  assert.equal(row.materialGroupName, "Actuator & Solenoid Valve");
+  assert.equal(row.subMaterialGroupCode, "002");
+  assert.equal(row.subMaterialGroupName, "Actiar");
+  assert.equal(row.plantCode, "KPN1");
+  assert.equal(row.slocCode, "A001");
+  assert.equal(row.longText1, "LINE 1");
+  assert.deepEqual(row.templatePayload.templateValues, { brand: "ACTIAR" });
+  assert.deepEqual(row.attachments, [{ id: 5, file_name: "image1.jpg" }]);
+  assert.equal(row.approval1UserId, "andi");
+  assert.equal(row.approval1Status, "APPROVED");
+});

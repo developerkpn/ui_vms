@@ -1,14 +1,21 @@
-import { Visibility, VisibilityOff } from '@mui/icons-material';
-import { FormControl, InputLabel, OutlinedInput, InputAdornment, IconButton, FormHelperText } from '@mui/material';
-import { Controller } from 'react-hook-form';
-import { useState } from 'react';
+import { Visibility, VisibilityOff } from "@mui/icons-material";
+import {
+  FormControl,
+  InputLabel,
+  OutlinedInput,
+  InputAdornment,
+  IconButton,
+  FormHelperText,
+} from "@mui/material";
+import { Controller } from "react-hook-form";
+import { useState } from "react";
 
 export const PasswordWithEyes = ({ control, label, name, rules }) => {
   const [showPassword, setPwd] = useState(false);
 
-  const handleClickShowPassword = () => setPwd((show) => !show);
+  const handleClickShowPassword = () => setPwd(show => !show);
 
-  const handleMouseDownPassword = (event) => {
+  const handleMouseDownPassword = event => {
     event.preventDefault();
   };
   return (
@@ -22,11 +29,11 @@ export const PasswordWithEyes = ({ control, label, name, rules }) => {
             <InputLabel htmlFor="outlined-adornment-password">{label}</InputLabel>
             <OutlinedInput
               id="outlined-adornment-password"
-              type={showPassword ? 'text' : 'password'}
+              type={showPassword ? "text" : "password"}
               onChange={onChange}
               value={value}
-              error={error}
-              inputProps={{ autoComplete: 'new-password' }}
+              error={!!error}
+              inputProps={{ autoComplete: "new-password" }}
               endAdornment={
                 <InputAdornment position="end">
                   <IconButton

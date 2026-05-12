@@ -9,11 +9,12 @@ export default defineConfig(() => {
       include: ["@emotion/react", "@emotion/styled", "@mui/icons-material", "lodash"],
     },
     build: {
-      outDir: '../vms-backend/public/build',
+      outDir: "../vms-backend/public/build",
       emptyOutDir: true,
     },
     server: {
       port: 3000,
+      strictPort: true,
       open: "",
     },
     plugins: [

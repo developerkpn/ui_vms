@@ -38,9 +38,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import SearchSuggestionField from "src/components/common/SearchSuggestionField";
 import TableSorting from "src/components/table/TableSorting";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
+import attachmentPlaceholder from "src/images/material-attachment-placeholder.svg";
 import usePermissionStore from "src/store/userPermissionStore";
 
 const columnHelper = createColumnHelper();
+const MAX_ATTACHMENT_PREVIEW = 3;
 
 const AuthenticatedImage = ({ src, sx, onClick }) => {
   const axiosPrivate = useAxiosPrivate();
@@ -56,11 +58,13 @@ const AuthenticatedImage = ({ src, sx, onClick }) => {
         if (isMounted) {
           const url = URL.createObjectURL(response.data);
           setImgSrc(url);
+          setError(false);
           setLoading(false);
         }
       } catch (err) {
         if (isMounted) {
           setError(true);
+          setImgSrc(null);
           setLoading(false);
         }
       }
@@ -76,17 +80,17 @@ const AuthenticatedImage = ({ src, sx, onClick }) => {
   }, [src, axiosPrivate]);
 
   if (loading) return <CircularProgress size={16} thickness={5} sx={{ color: "grey.300" }} />;
-  if (error) return <ImageIcon sx={{ fontSize: 18, color: "grey.400" }} />;
 
   return (
     <Box
       component="img"
-      src={imgSrc}
+      src={error ? attachmentPlaceholder : imgSrc}
       sx={{
         ...sx,
         transition: "transform 0.2s",
         "&:hover": { transform: "scale(1.1)" },
       }}
+      onError={() => setError(true)}
       onClick={onClick}
     />
   );
@@ -95,6 +99,7 @@ const AuthenticatedImage = ({ src, sx, onClick }) => {
 export default function SearchMaterials() {
   const axiosPrivate = useAxiosPrivate();
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchMode, setSearchMode] = useState("idle");
   const [materials, setMaterials] = useState([]);
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState("");
@@ -149,11 +154,11 @@ export default function SearchMaterials() {
 
   useEffect(() => {
     fetchMaterials(pagination.page);
-  }, [searchQuery, selectedGroup, pagination.page, sorting]);
+  }, [searchQuery, selectedGroup, pagination.page, sorting, searchMode]);
 
   const fetchMaterials = useCallback(
     async (pageNumber = 1) => {
-      if (!searchQuery && !selectedGroup) {
+      if (searchMode !== "selected") {
         setMaterials([]);
         setPagination(prev => ({
           ...prev,
@@ -178,12 +183,21 @@ export default function SearchMaterials() {
           },
         });
 
-        setMaterials(response.data.data || []);
+        const data = response.data.data || [];
+        const normalizedQuery = (searchQuery || "").toLowerCase().trim();
+        const exactMatches = data.filter(item => {
+          const code = (item.code || "").toLowerCase();
+          const name = (item.name || "").toLowerCase();
+          return code === normalizedQuery || name === normalizedQuery;
+        });
+        const singleRow = exactMatches.length > 0 ? [exactMatches[0]] : data.slice(0, 1);
+
+        setMaterials(singleRow);
         setPagination(prev => ({
           ...prev,
-          totalCount: response.data.pagination.totalCount,
-          totalPages: response.data.pagination.totalPages,
-          page: response.data.pagination.page,
+          totalCount: singleRow.length,
+          totalPages: singleRow.length ? 1 : 0,
+          page: 1,
         }));
       } catch (error) {
         console.error("Failed to fetch materials:", error);
@@ -191,12 +205,49 @@ export default function SearchMaterials() {
         setLoading(false);
       }
     },
-    [searchQuery, selectedGroup, pagination.pageSize, sorting, axiosPrivate]
+    [searchMode, searchQuery, selectedGroup, pagination.pageSize, sorting, axiosPrivate]
   );
 
-  const handleSearchChange = value => {
-    setSearchQuery(value);
-    setPagination(prev => ({ ...prev, page: 1 }));
+  const resetTableState = () => {
+    setMaterials([]);
+    setPagination(prev => ({
+      ...prev,
+      totalCount: 0,
+      totalPages: 0,
+      page: 1,
+    }));
+  };
+
+  const handleSearchChange = payload => {
+    if (!payload) return;
+
+    if (payload.type === "select" || payload.type === "enter-top" || payload.type === "icon-top") {
+      setSearchMode("selected");
+      setSearchQuery(payload.keyword || "");
+      setPagination(prev => ({ ...prev, page: 1 }));
+      return;
+    }
+
+    if (payload.type === "not-found") {
+      setSearchMode("no-match");
+      setSearchQuery("");
+      resetTableState();
+      return;
+    }
+  };
+
+  const handleSearchInputChange = value => {
+    if (searchMode === "selected" || searchMode === "no-match") {
+      setSearchMode("idle");
+      setSearchQuery("");
+      resetTableState();
+    }
+
+    if (!value) {
+      setSearchMode("idle");
+      setSearchQuery("");
+      resetTableState();
+    }
   };
 
   const handleGroupChange = e => {
@@ -354,23 +405,18 @@ export default function SearchMaterials() {
         size: 160,
         cell: ({ row }) => {
           const attachments = row.original.attachments || [];
-          const MAX_DISPLAY = 3;
           const isImage = file => {
             if (!file) return false;
             const ext = file.split(".").pop().toLowerCase();
             return ["jpg", "jpeg", "png", "gif", "webp"].includes(ext);
           };
-
-          if (attachments.length === 0) {
-            return (
-              <Typography
-                variant="body2"
-                sx={{ color: "text.disabled", textAlign: "center", width: "100%" }}
-              >
-                -
-              </Typography>
-            );
-          }
+          const previewItems =
+            attachments.length > 0
+              ? attachments.slice(0, MAX_ATTACHMENT_PREVIEW)
+              : Array.from({ length: MAX_ATTACHMENT_PREVIEW }, (_, idx) => ({
+                  attachment: `placeholder-${idx}`,
+                  isPlaceholder: true,
+                }));
 
           return (
             <Box
@@ -382,10 +428,15 @@ export default function SearchMaterials() {
                 minWidth: 140,
               }}
             >
-              {attachments.slice(0, MAX_DISPLAY).map((att, idx) => {
+              {previewItems.map((att, idx) => {
+                const isPlaceholder = Boolean(att.isPlaceholder);
                 const isImg = isImage(att.attachment);
                 return (
-                  <Tooltip key={idx} title={att.attachment} arrow>
+                  <Tooltip
+                    key={idx}
+                    title={isPlaceholder ? "Attachment placeholder" : att.attachment}
+                    arrow
+                  >
                     <Box
                       sx={{
                         width: 42,
@@ -406,22 +457,42 @@ export default function SearchMaterials() {
                           boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
                           transform: "translateY(-2px)",
                         },
+                        ...(isPlaceholder && {
+                          cursor: "default",
+                          "&:hover": {
+                            borderColor: "divider",
+                            boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+                            transform: "none",
+                          },
+                        }),
                       }}
-                      onClick={() => handleViewAttachment(att)}
+                      onClick={isPlaceholder ? undefined : () => handleViewAttachment(att)}
                     >
-                      {isImg ? (
+                      {isPlaceholder ? (
+                        <Box
+                          component="img"
+                          src={attachmentPlaceholder}
+                          alt="Attachment placeholder"
+                          sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      ) : isImg ? (
                         <AuthenticatedImage
                           src={`/material/file/${att.attachment}`}
                           sx={{ width: "100%", height: "100%", objectFit: "cover" }}
                         />
                       ) : (
-                        <InsertDriveFile sx={{ fontSize: 20, color: "primary.main" }} />
+                        <Box
+                          component="img"
+                          src={attachmentPlaceholder}
+                          alt="Attachment placeholder"
+                          sx={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
                       )}
                     </Box>
                   </Tooltip>
                 );
               })}
-              {attachments.length > MAX_DISPLAY && (
+              {attachments.length > MAX_ATTACHMENT_PREVIEW && (
                 <Typography
                   variant="caption"
                   sx={{
@@ -437,7 +508,7 @@ export default function SearchMaterials() {
                     fontSize: 10,
                   }}
                 >
-                  +{attachments.length - MAX_DISPLAY}
+                  +{attachments.length - MAX_ATTACHMENT_PREVIEW}
                 </Typography>
               )}
             </Box>
@@ -448,9 +519,9 @@ export default function SearchMaterials() {
     []
   );
 
-  const isSearchActive = !!(searchQuery || selectedGroup);
+  const isSearchActive = searchMode === "selected" || searchMode === "no-match";
   const emptyMessage = !isSearchActive
-    ? "Silakan masukkan kata kunci atau pilih group untuk mencari material"
+    ? "Silakan pilih material dari suggestion untuk menampilkan data"
     : "Maaf, data material tidak ditemukan. Coba gunakan kata kunci atau filter lain.";
 
   return (
@@ -494,8 +565,9 @@ export default function SearchMaterials() {
       >
         <Box sx={{ width: "100%" }}>
           <SearchSuggestionField
-            placeholder="Search materials by name, code, description..."
+            placeholder="Search materials by name, code, description, alias, UoM..."
             onSearch={handleSearchChange}
+            onInputValueChange={handleSearchInputChange}
             apiEndpoint="/material/suggestions"
             sx={{ bgcolor: "background.paper" }}
           />
@@ -505,18 +577,30 @@ export default function SearchMaterials() {
             displayEmpty
             value={selectedGroup}
             onChange={handleGroupChange}
-            renderValue={(selected) => {
+            renderValue={selected => {
               if (selected === "") {
-                return <Typography sx={{ color: "text.secondary", fontSize: "0.875rem" }}>Select Material Group</Typography>;
+                return (
+                  <Typography sx={{ color: "text.secondary", fontSize: "0.875rem" }}>
+                    Select Material Group
+                  </Typography>
+                );
               }
-              const selectedOption = groups.find((g) => g.id === selected);
+              const selectedOption = groups.find(g => g.id === selected);
               return (
-                <Typography sx={{ whiteSpace: "normal", wordBreak: "break-word", fontSize: "0.875rem", lineHeight: 1.2, py: 0.5 }}>
+                <Typography
+                  sx={{
+                    whiteSpace: "normal",
+                    wordBreak: "break-word",
+                    fontSize: "0.875rem",
+                    lineHeight: 1.2,
+                    py: 0.5,
+                  }}
+                >
                   {selectedOption ? `${selectedOption.code} - ${selectedOption.name}` : selected}
                 </Typography>
               );
             }}
-            sx={{ 
+            sx={{
               bgcolor: "background.paper",
               "& .MuiSelect-select": {
                 whiteSpace: "normal !important",
@@ -524,30 +608,31 @@ export default function SearchMaterials() {
                 alignItems: "center",
                 minHeight: "1.5rem",
                 py: 1,
-              }
+              },
             }}
             MenuProps={{
               PaperProps: {
                 sx: {
                   width: "auto",
-               
-             
-                  maxHeight:400
+
+                  maxHeight: 400,
                 },
               },
             }}
           >
-            <MenuItem value="" sx={{whiteSpace:"normal" } }>Select Material Group</MenuItem>
+            <MenuItem value="" sx={{ whiteSpace: "normal" }}>
+              Select Material Group
+            </MenuItem>
             {groups.map(group => (
-              <MenuItem 
-                key={group.id} 
-                value={group.id} 
-                sx={{ 
-                  whiteSpace: "normal", 
+              <MenuItem
+                key={group.id}
+                value={group.id}
+                sx={{
+                  whiteSpace: "normal",
                   py: 1.5,
                   borderBottom: "1px solid",
                   borderColor: "divider",
-                  "&:last-child": { borderBottom: 0 }
+                  "&:last-child": { borderBottom: 0 },
                 }}
               >
                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
