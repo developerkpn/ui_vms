@@ -23,7 +23,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.mjs";
 
 const approvalStatusColors = {
@@ -77,6 +77,39 @@ function ReadOnlyField({ label, value, multiline = false, rows = 1 }) {
           },
         }}
       />
+    </Box>
+  );
+}
+
+function ReadOnlyLongTextFields({ label, values = [] }) {
+  const lines = [0, 1, 2].map(index => values[index] || "-");
+
+  return (
+    <Box>
+      <Typography variant="caption" sx={{ display: "block", mb: 0.75, fontWeight: 800 }}>
+        {label}
+      </Typography>
+      <Stack spacing={1}>
+        {lines.map((line, index) => (
+          <TextField
+            key={`${label}-${index + 1}`}
+            fullWidth
+            size="small"
+            value={line}
+            InputProps={{ readOnly: true }}
+            sx={{
+              "& .MuiInputBase-root": {
+                bgcolor: "#fbfcfe",
+                color: "text.primary",
+              },
+              "& .MuiOutlinedInput-notchedOutline": {
+                borderColor: "#cfd8dc",
+                borderStyle: "dashed",
+              },
+            }}
+          />
+        ))}
+      </Stack>
     </Box>
   );
 }
@@ -162,16 +195,53 @@ function AttachmentItem({ attachment, index }) {
   );
 }
 
-export default function AdminApprovalFormDialog({ open, row, onClose, onAction }) {
+export default function AdminApprovalFormDialog({
+  open,
+  row,
+  onClose,
+  onAction,
+  submitting = false,
+}) {
   const detail = useMemo(() => buildApprovalDetail(row || {}), [row]);
-  const longTextValue = detail.longTextLines.length > 0 ? detail.longTextLines.join("\n") : "-";
 
   const [remarkDialogOpen, setRemarkDialogOpen] = useState(false);
   const [currentAction, setCurrentAction] = useState(""); // 'Approve', 'Rework', 'Reject'
   const [remarkText, setRemarkText] = useState("");
 
+  useEffect(() => {
+    if (!open) {
+      setRemarkDialogOpen(false);
+      setCurrentAction("");
+      setRemarkText("");
+    }
+  }, [open, row]);
+
+  const handleDialogClose = (_, reason) => {
+    if (submitting && (reason === "backdropClick" || reason === "escapeKeyDown")) {
+      return;
+    }
+
+    if (submitting) {
+      return;
+    }
+
+    onClose?.();
+  };
+
+  const handleRemarkDialogClose = (_, reason) => {
+    if (submitting && (reason === "backdropClick" || reason === "escapeKeyDown")) {
+      return;
+    }
+
+    if (submitting) {
+      return;
+    }
+
+    setRemarkDialogOpen(false);
+  };
+
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg" scroll="paper">
+    <Dialog open={open} onClose={handleDialogClose} fullWidth maxWidth="lg" scroll="paper">
       <Box
         sx={{
           px: { xs: 2, md: 3 },
@@ -207,7 +277,7 @@ export default function AdminApprovalFormDialog({ open, row, onClose, onAction }
           </Stack>
         </Box>
 
-        <IconButton onClick={onClose} aria-label="Close approval form">
+        <IconButton onClick={handleDialogClose} disabled={submitting} aria-label="Close approval form">
           <Close />
         </IconButton>
       </Box>
@@ -289,7 +359,7 @@ export default function AdminApprovalFormDialog({ open, row, onClose, onAction }
                 <ReadOnlyField label="Storage Location" value={detail.basicInfo.storageLocation} />
               </Grid>
               <Grid item xs={12}>
-                <ReadOnlyField label="Long Text" value={longTextValue} multiline rows={3} />
+                <ReadOnlyLongTextFields label="Long Text" values={detail.longTextLines} />
               </Grid>
             </Grid>
           </Box>
@@ -358,7 +428,8 @@ export default function AdminApprovalFormDialog({ open, row, onClose, onAction }
       >
         <Button
           variant="contained"
-          onClick={onClose}
+          onClick={handleDialogClose}
+          disabled={submitting}
           sx={{ bgcolor: "#546e7a", textTransform: "none" }}
         >
           Close
@@ -367,6 +438,7 @@ export default function AdminApprovalFormDialog({ open, row, onClose, onAction }
           <Button
             variant="contained"
             startIcon={<CheckCircle />}
+            disabled={submitting}
             onClick={() => {
               setCurrentAction("Approve");
               setRemarkText("");
@@ -376,36 +448,38 @@ export default function AdminApprovalFormDialog({ open, row, onClose, onAction }
           >
             Approve
           </Button>
-          <Button
-            variant="contained"
-            startIcon={<Replay />}
-            onClick={() => {
-              setCurrentAction("Rework");
-              setRemarkText("");
-              setRemarkDialogOpen(true);
-            }}
-            sx={{ bgcolor: "#fb8c00", textTransform: "none", fontWeight: 800 }}
-          >
-            Rework
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<Cancel />}
-            onClick={() => {
-              setCurrentAction("Reject");
-              setRemarkText("");
-              setRemarkDialogOpen(true);
-            }}
-            sx={{ bgcolor: "#c62828", textTransform: "none", fontWeight: 800 }}
-          >
-            Reject
-          </Button>
+          <Tooltip title="Belum masuk scope">
+            <span>
+              <Button
+                variant="contained"
+                startIcon={<Replay />}
+                disabled
+                title="Belum masuk scope"
+                sx={{ bgcolor: "#fb8c00", textTransform: "none", fontWeight: 800 }}
+              >
+                Rework
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip title="Belum masuk scope">
+            <span>
+              <Button
+                variant="contained"
+                startIcon={<Cancel />}
+                disabled
+                title="Belum masuk scope"
+                sx={{ bgcolor: "#c62828", textTransform: "none", fontWeight: 800 }}
+              >
+                Reject
+              </Button>
+            </span>
+          </Tooltip>
         </Stack>
       </DialogActions>
 
       <Dialog
         open={remarkDialogOpen}
-        onClose={() => setRemarkDialogOpen(false)}
+        onClose={handleRemarkDialogClose}
         maxWidth="xs"
         fullWidth
       >
@@ -435,7 +509,8 @@ export default function AdminApprovalFormDialog({ open, row, onClose, onAction }
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button
-            onClick={() => setRemarkDialogOpen(false)}
+            onClick={handleRemarkDialogClose}
+            disabled={submitting}
             sx={{ color: "text.secondary", textTransform: "none" }}
           >
             Close
@@ -444,14 +519,11 @@ export default function AdminApprovalFormDialog({ open, row, onClose, onAction }
             variant="contained"
             onClick={() => {
               onAction?.(currentAction, detail, remarkText);
-              setRemarkDialogOpen(false);
             }}
-            disabled={
-              (currentAction === "Rework" || currentAction === "Reject") && !remarkText.trim()
-            }
+            disabled={submitting}
             sx={{ textTransform: "none", fontWeight: 800 }}
           >
-            Save
+            {submitting ? "Saving..." : "Save"}
           </Button>
         </DialogActions>
       </Dialog>

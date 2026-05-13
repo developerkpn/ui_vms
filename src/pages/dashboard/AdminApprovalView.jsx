@@ -27,11 +27,10 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AdminApprovalFormDialog from "src/components/admin-approval/AdminApprovalFormDialog";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import {
-  APPROVAL_FALLBACK_ROWS,
   APPROVAL_GROUP_OPTIONS,
   filterApprovalRows,
   normalizeApprovalRows,
@@ -101,10 +100,12 @@ function TicketTypeBadge({ value }) {
 
 export default function AdminApprovalView() {
   const axiosPrivate = useAxiosPrivate();
-  const [approvalRows, setApprovalRows] = useState(APPROVAL_FALLBACK_ROWS);
+  const refreshWarningTimeoutRef = useRef(null);
+  const [approvalRows, setApprovalRows] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [groupBy, setGroupBy] = useState("none");
   const [loading, setLoading] = useState(false);
+  const [submittingAction, setSubmittingAction] = useState(false);
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
   const [activeRow, setActiveRow] = useState(null);
   const [approvalDialogRow, setApprovalDialogRow] = useState(null);
@@ -114,26 +115,50 @@ export default function AdminApprovalView() {
     message: "",
   });
 
+  const fetchApprovalRows = async () => {
+    const response = await axiosPrivate.get("/material/requests/single/approval-inbox");
+    const rows = normalizeApprovalRows(response.data?.data);
+    setApprovalRows(rows);
+  };
+
+  const clearRefreshWarningTimeout = () => {
+    if (refreshWarningTimeoutRef.current) {
+      clearTimeout(refreshWarningTimeoutRef.current);
+      refreshWarningTimeoutRef.current = null;
+    }
+  };
+
+  const getApprovalSuccessMessage = nextStage => {
+    if (nextStage === "Approval 2") {
+      return "Approval 1 berhasil. Request dipindahkan ke Approval 2";
+    }
+
+    if (nextStage === "Completed") {
+      return "Approval 2 berhasil. Approval 3 otomatis diapprove oleh sistem.";
+    }
+
+    return "Approval berhasil diproses.";
+  };
+
   useEffect(() => {
-    const fetchApprovalRows = async () => {
+    const run = async () => {
       try {
         setLoading(true);
-        const response = await axiosPrivate.get("/material/requests/single");
-        const rows = normalizeApprovalRows(response.data?.data);
-        setApprovalRows(rows);
+        await fetchApprovalRows();
       } catch (error) {
         console.error("Failed to fetch approval rows:", error);
-        setApprovalRows(APPROVAL_FALLBACK_ROWS);
-        openSnackbar(
-          "Data approval belum bisa dimuat. Menampilkan sample untuk pengecekan UI.",
-          "warning"
-        );
+        setApprovalRows([]);
+        openSnackbar("Data approval belum bisa dimuat. Silakan refresh halaman lagi.", "warning");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchApprovalRows();
+    run();
+
+    return () => {
+      clearRefreshWarningTimeout();
+    };
   }, [axiosPrivate]);
 
   const visibleRows = useMemo(() => {
@@ -168,16 +193,48 @@ export default function AdminApprovalView() {
     );
   };
 
-  const handleApprovalAction = (action, detail, remark) => {
-    openSnackbar(
-      `${action} untuk tiket ${detail?.ticketNumber || "-"} dengan pesan: "${
-        remark || "-"
-      }" akan disambungkan ke API approval.`,
-      "info"
-    );
+  const handleApprovalAction = async (action, detail, remark) => {
+    clearRefreshWarningTimeout();
+
+    if (action !== "Approve") {
+      openSnackbar(`${action} belum masuk scope approval saat ini.`, "info");
+      return;
+    }
+
+    try {
+      setSubmittingAction(true);
+      const response = await axiosPrivate.post(
+        `/material/requests/single/${detail.id}/approve`,
+        { remark }
+      );
+
+      const nextStage = response.data?.data?.next_stage;
+      setApprovalDialogRow(null);
+      openSnackbar(getApprovalSuccessMessage(nextStage), "success");
+
+      try {
+        await fetchApprovalRows();
+      } catch (refreshError) {
+        console.error("Failed to refresh approval rows after approval:", refreshError);
+        refreshWarningTimeoutRef.current = setTimeout(() => {
+          openSnackbar(
+            "Approval berhasil diproses, tetapi inbox belum berhasil diperbarui. Silakan refresh halaman.",
+            "warning"
+          );
+          refreshWarningTimeoutRef.current = null;
+        }, 1600);
+      }
+    } catch (error) {
+      const message =
+        error?.response?.data?.message || "Approval gagal diproses. Silakan coba lagi.";
+      openSnackbar(message, "error");
+    } finally {
+      setSubmittingAction(false);
+    }
   };
 
   function openSnackbar(message, severity = "info") {
+    clearRefreshWarningTimeout();
     setSnackbar({ open: true, message, severity });
   }
 
@@ -471,6 +528,7 @@ export default function AdminApprovalView() {
         row={approvalDialogRow}
         onClose={() => setApprovalDialogRow(null)}
         onAction={handleApprovalAction}
+        submitting={submittingAction}
       />
 
       <Snackbar

@@ -47,6 +47,53 @@ test("normalizeApprovalRows maps API rows into My Approval table rows", async ()
   ]);
 });
 
+test("normalizeApprovalRows marks rows as Approval 1 when first approval is waiting", async () => {
+  const { normalizeApprovalRows } = await loadHelper();
+
+  const [row] = normalizeApprovalRows([
+    {
+      id: 21,
+      ticket_number: "1000000021",
+      approval_1_status: "WAITING",
+      approval_2_status: "WAITING",
+      approval_3_status: "WAITING",
+    },
+  ]);
+
+  assert.equal(row.approvalStage, "Approval 1");
+});
+
+test("normalizeApprovalRows marks rows as Approval 1 when first approval status is absent", async () => {
+  const { normalizeApprovalRows } = await loadHelper();
+
+  const [row] = normalizeApprovalRows([
+    {
+      id: 23,
+      ticket_number: "1000000023",
+      approval_2_status: "WAITING",
+      approval_3_status: "WAITING",
+    },
+  ]);
+
+  assert.equal(row.approvalStage, "Approval 1");
+});
+
+test("normalizeApprovalRows keeps Approval 3 label for already escalated rows", async () => {
+  const { normalizeApprovalRows } = await loadHelper();
+
+  const [row] = normalizeApprovalRows([
+    {
+      id: 22,
+      ticket_number: "1000000022",
+      approval_1_status: "APPROVED",
+      approval_2_status: "APPROVED",
+      approval_3_status: "WAITING",
+    },
+  ]);
+
+  assert.equal(row.approvalStage, "Approval 3");
+});
+
 test("filterApprovalRows searches common visible columns", async () => {
   const { filterApprovalRows } = await loadHelper();
   const rows = [

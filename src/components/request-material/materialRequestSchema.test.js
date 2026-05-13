@@ -154,3 +154,39 @@ test("applyMaterialGroupSchema filters hidden fields out of visible sections and
     visible_field: "A",
   });
 });
+
+test("applyMaterialGroupSchema preserves static long text fields not present in DB rules", () => {
+  const state = createDynamicFormState({
+    materialGroup: "MECH",
+    requestFieldValues: {
+      long_text_1: "LINE 1",
+      long_text_2: "LINE 2",
+      long_text_3: "LINE 3",
+    },
+  });
+
+  const schema = {
+    materialGroup: {
+      code: "MECH",
+    },
+    subgroups: [],
+    sections: [
+      {
+        key: "basic_info",
+        fields: [
+          {
+            fieldKey: "material_description",
+            defaultValue: "",
+            isHidden: false,
+          },
+        ],
+      },
+    ],
+  };
+
+  const nextState = applyMaterialGroupSchema(state, schema);
+
+  assert.equal(nextState.requestFieldValues.long_text_1, "LINE 1");
+  assert.equal(nextState.requestFieldValues.long_text_2, "LINE 2");
+  assert.equal(nextState.requestFieldValues.long_text_3, "LINE 3");
+});

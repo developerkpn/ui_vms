@@ -15,6 +15,9 @@ const RequestMaterials = lazy(() => import("src/pages/dashboard/RequestMaterials
 const Subgroups = lazy(() => import("src/pages/dashboard/SubgroupMaterial"));
 const Materials = lazy(() => import("src/pages/dashboard/MaterialDetail"));
 const SearchMaterials = lazy(() => import("src/pages/dashboard/SearchMaterials"));
+const MaterialsAdministratorPlaceholder = lazy(
+  () => import("src/pages/dashboard/MaterialsAdministratorPlaceholder")
+);
 const ReportTicketPosition = lazy(() => import("src/pages/report/ReportTicketPosition"));
 const SingleRequestPage = lazy(() => import("src/pages/dashboard/SingleRequestPage"));
 const AdminApprovalView = lazy(() => import("src/pages/dashboard/AdminApprovalView"));
@@ -195,6 +198,10 @@ export const routes = createBrowserRouter([
       {
         path: "materials/approvals",
         element: <Navigate to="/dashboard/materials/request" replace />,
+      },
+      {
+        path: "materials/administrator",
+        element: <MaterialsAdministratorPlaceholder />,
       },
       {
         path: "administrator/approval",

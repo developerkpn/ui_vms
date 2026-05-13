@@ -115,4 +115,8 @@ const resetForMaterialGroupChange = currentState => ({
   requestFieldValues: {},
 });
 
-export { createDynamicFormState, applyMaterialGroupSchema, resetForMaterialGroupChange };
+module.exports = {
+  createDynamicFormState,
+  applyMaterialGroupSchema,
+  resetForMaterialGroupChange,
+};
