@@ -24,10 +24,6 @@ import useCheckResetPWD from "src/store/useCheckResetPWD";
 import usePermissionStore from "src/store/userPermissionStore";
 import useMenuStore from "src/store/useMenuStore";
 import useAccessTokStore from "src/store/useAccessTokStore";
-import {
-  buildTestingAdminMenu,
-  buildTestingAdminPermission,
-} from "src/helper/adminMenuTransform.mjs";
 
 const drawerWidth = 240;
 
@@ -129,8 +125,8 @@ export default function MiniDrawer() {
           groupid: data.groupid,
         });
         setIsResetPWD(data.is_reset_pwd);
-        setPermission(buildTestingAdminPermission(data.permission));
-        setMenu(buildTestingAdminMenu(data.menu));
+        setPermission(data.permission);
+        setMenu(data.menu);
       } catch (error) {
         resetSessionStore();
         console.error(error);

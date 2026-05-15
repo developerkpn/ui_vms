@@ -197,7 +197,11 @@ export const routes = createBrowserRouter([
       },
       {
         path: "materials/approvals",
-        element: <Navigate to="/dashboard/materials/request" replace />,
+        element: <Navigate to="/dashboard/materials/approval" replace />,
+      },
+      {
+        path: "materials/approval",
+        element: <AdminApprovalView />,
       },
       {
         path: "materials/administrator",
@@ -205,7 +209,7 @@ export const routes = createBrowserRouter([
       },
       {
         path: "administrator/approval",
-        element: <AdminApprovalView />,
+        element: <Navigate to="/dashboard/materials/approval" replace />,
       },
       {
         path: "materials/request/single",

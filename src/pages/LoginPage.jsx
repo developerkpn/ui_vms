@@ -18,10 +18,6 @@ import { PasswordWithEyes } from "src/components/common/PasswordWithEyes";
 import imgbg from "../images/gama-tower.jpg";
 import KpnNav from "../images/kpn-logo.svg?react";
 import { LoadingButton } from "@mui/lab";
-import {
-  buildTestingAdminMenu,
-  buildTestingAdminPermission,
-} from "src/helper/adminMenuTransform.mjs";
 import { getLoginErrorMessage } from "src/helper/loginErrorMessage.mjs";
 // import Cookies from 'js-cookie';
 
@@ -67,8 +63,8 @@ export default function LoginPage() {
           role: response.role,
           groupid: response.groupid,
         });
-        setMenu(buildTestingAdminMenu(response.menu));
-        setPermission(buildTestingAdminPermission(response.permission));
+        setMenu(response.menu);
+        setPermission(response.permission);
         setAccessToken(response.accessToken);
         setIsResetPWD(response.is_reset_pwd);
         alert("Successfull login");

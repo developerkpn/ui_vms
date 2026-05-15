@@ -135,12 +135,15 @@ export default function MaterialsAdministratorPlaceholder() {
       const approval2Option = approverPools.manualApprovers.find(o => o.id === row.approval2UserId);
       const approval2Label = approval2Option ? approval2Option.label : "";
 
+      const approval3Option = approverPools.mdmApprovers.find(o => o.id === row.approval3UserId) || approverPools.manualApprovers.find(o => o.id === row.approval3UserId);
+      const approval3Label = approval3Option ? approval3Option.username : (row.approval3UserId || "");
+
       return [
         row.requesterUsername,
         row.requestNumber,
         approval1Label,
         approval2Label,
-        row.approval3UserId,
+        approval3Label,
       ]
         .filter(Boolean)
         .some(value => String(value).toLowerCase().includes(query));
@@ -269,6 +272,9 @@ export default function MaterialsAdministratorPlaceholder() {
                   const approval1Option = approval1Options.find(o => o.id === row.approval1UserId) || null;
                   const approval2Option = approval2Options.find(o => o.id === row.approval2UserId) || null;
 
+                  const approval3Option = approverPools.mdmApprovers.find(o => o.id === row.approval3UserId) || approverPools.manualApprovers.find(o => o.id === row.approval3UserId);
+                  const approval3Label = approval3Option ? approval3Option.username : (row.approval3UserId || "By system");
+
                   return (
                     <TableRow
                       key={row.id}
@@ -362,7 +368,7 @@ export default function MaterialsAdministratorPlaceholder() {
 
                       <TableCell>
                         <Chip
-                          label={row.approval3UserId || "By system"}
+                          label={approval3Label}
                           size="small"
                           sx={{
                             bgcolor: row.approval3UserId ? "#dcfce7" : "#e8f0ff",
