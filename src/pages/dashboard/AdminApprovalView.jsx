@@ -15,6 +15,7 @@ import {
   InputAdornment,
   Menu,
   MenuItem,
+  Pagination,
   Paper,
   Snackbar,
   Stack,
@@ -32,8 +33,11 @@ import AdminApprovalFormDialog from "src/components/admin-approval/AdminApproval
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import {
   APPROVAL_GROUP_OPTIONS,
+  APPROVAL_STATUS_FILTER_OPTIONS,
   filterApprovalRows,
+  filterApprovalRowsByStatus,
   normalizeApprovalRows,
+  paginateApprovalRows,
   sortApprovalRows,
   summarizeApprovalGroups,
 } from "src/helper/adminApprovalView.mjs";
@@ -104,6 +108,9 @@ export default function AdminApprovalView() {
   const [approvalRows, setApprovalRows] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [groupBy, setGroupBy] = useState("none");
+  const [statusFilter, setStatusFilter] = useState("Submit");
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [loading, setLoading] = useState(false);
   const [submittingAction, setSubmittingAction] = useState(false);
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
@@ -162,9 +169,31 @@ export default function AdminApprovalView() {
   }, [axiosPrivate]);
 
   const visibleRows = useMemo(() => {
-    const filteredRows = filterApprovalRows(approvalRows, searchQuery);
-    return sortApprovalRows(filteredRows, groupBy);
-  }, [approvalRows, groupBy, searchQuery]);
+    const statusRows = filterApprovalRowsByStatus(approvalRows, statusFilter);
+    const searchRows = filterApprovalRows(statusRows, searchQuery);
+    return sortApprovalRows(searchRows, groupBy);
+  }, [approvalRows, groupBy, searchQuery, statusFilter]);
+
+  const pagedRows = useMemo(
+    () => paginateApprovalRows(visibleRows, page, rowsPerPage),
+    [page, rowsPerPage, visibleRows]
+  );
+
+  const totalPages = Math.max(1, Math.ceil(visibleRows.length / rowsPerPage));
+
+  const handleChangePage = (event, nextPage) => {
+    setPage(nextPage - 1);
+  };
+
+  const handleStatusFilterChange = event => {
+    setStatusFilter(event.target.value);
+    setPage(0);
+  };
+
+  const handleRowsPerPageChange = event => {
+    setRowsPerPage(Number(event.target.value) || 10);
+    setPage(0);
+  };
 
   const groupedSummary = useMemo(
     () => summarizeApprovalGroups(visibleRows, groupBy),
@@ -360,6 +389,57 @@ export default function AdminApprovalView() {
           ))}
         </TextField>
 
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={2}
+          useFlexGap
+          flexWrap="wrap"
+        >
+          <TextField
+            select
+            size="small"
+            value={statusFilter}
+            onChange={handleStatusFilterChange}
+            SelectProps={{ native: true }}
+            sx={{
+              width: { xs: "100%", md: 240 },
+              bgcolor: "background.paper",
+              "& .MuiOutlinedInput-root": {
+                borderRadius: "7px",
+                minHeight: 50,
+              },
+            }}
+          >
+            {APPROVAL_STATUS_FILTER_OPTIONS.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </TextField>
+
+          <TextField
+            select
+            size="small"
+            value={rowsPerPage}
+            onChange={handleRowsPerPageChange}
+            SelectProps={{ native: true }}
+            sx={{
+              width: { xs: "100%", md: 160 },
+              bgcolor: "background.paper",
+              "& .MuiOutlinedInput-root": {
+                borderRadius: "7px",
+                minHeight: 50,
+              },
+            }}
+          >
+            {[10, 25, 50].map(option => (
+              <option key={option} value={option}>
+                {option} / page
+              </option>
+            ))}
+          </TextField>
+        </Stack>
+
         {groupedSummary.length > 0 && (
           <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
             {groupedSummary.map(item => (
@@ -419,7 +499,7 @@ export default function AdminApprovalView() {
                 )}
 
                 {!loading &&
-                  visibleRows.map(row => (
+                  pagedRows.map(row => (
                     <TableRow
                       key={row.id || row.ticketNumber}
                       hover
@@ -490,10 +570,10 @@ export default function AdminApprovalView() {
                   <TableRow>
                     <TableCell colSpan={9} align="center" sx={{ py: 5 }}>
                       <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                        No approval item found
+                        No {statusFilter} item found
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Coba ubah keyword pencarian atau cek assignment approval.
+                        Coba ubah filter status, keyword pencarian, atau cek assignment approval.
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -503,6 +583,26 @@ export default function AdminApprovalView() {
           </TableContainer>
         </Paper>
       </Box>
+
+      {!loading && visibleRows.length > 0 && (
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            py: 2,
+            mt: 1,
+          }}
+        >
+          <Pagination
+            count={totalPages}
+            page={page + 1}
+            onChange={handleChangePage}
+            color="primary"
+            disabled={totalPages <= 1}
+            size="medium"
+          />
+        </Box>
+      )}
 
       <Menu
         anchorEl={menuAnchorEl}
