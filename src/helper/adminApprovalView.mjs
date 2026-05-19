@@ -5,6 +5,43 @@ export const APPROVAL_GROUP_OPTIONS = [
   { value: "assignedTo", label: "Assigned To" },
 ];
 
+export const APPROVAL_STATUS_FILTER_OPTIONS = [
+  { value: "Submit", label: "Submit" },
+  { value: "Rework", label: "Rework" },
+  { value: "Cancel", label: "Cancel" },
+  { value: "Done", label: "Done" },
+];
+
+export function normalizeApprovalStatusForFilter(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+
+  if (normalized === "REWORK") {
+    return "Rework";
+  }
+
+  if (["REJECT", "REJECTED", "CANCEL", "CANCELLED"].includes(normalized)) {
+    return "Cancel";
+  }
+
+  if (normalized === "DONE") {
+    return "Done";
+  }
+
+  return "Submit";
+}
+
+export function filterApprovalRowsByStatus(rows = [], statusFilter = "Submit") {
+  const normalizedFilter = normalizeApprovalStatusForFilter(statusFilter);
+  return rows.filter(row => normalizeApprovalStatusForFilter(row.status) === normalizedFilter);
+}
+
+export function paginateApprovalRows(rows = [], page = 0, rowsPerPage = 10) {
+  const safePage = Math.max(0, Number(page) || 0);
+  const safeRowsPerPage = Math.max(1, Number(rowsPerPage) || 10);
+  const startIndex = safePage * safeRowsPerPage;
+  return rows.slice(startIndex, startIndex + safeRowsPerPage);
+}
+
 export const APPROVAL_FALLBACK_ROWS = [
   {
     id: 1,
@@ -61,7 +98,7 @@ export function normalizeApprovalRows(rows = []) {
       ticketType: stringOrFallback(row.ticket_type, row.ticketType, "Create"),
       materialDescription: stringOrFallback(row.material_description, row.materialDescription, "-"),
       uom: stringOrFallback(row.uom, row.base_uom, row.baseUom, "-"),
-      status: stringOrFallback(row.status, "Submit"),
+      status: normalizeApprovalStatusForFilter(row.status || "Submit"),
       createdBy: stringOrFallback(row.created_by, row.createdBy, "-"),
       createdAt: formatDateTime(row.created_at || row.createdAt),
       assignedTo: stringOrFallback(row.assigned_to, row.assignedTo, "-"),

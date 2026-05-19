@@ -170,3 +170,56 @@ test("normalizeApprovalRows keeps filled form detail fields for View Approval", 
   assert.equal(row.approval1UserId, "andi");
   assert.equal(row.approval1Status, "APPROVED");
 });
+
+test("normalizeApprovalRows maps reject-like statuses into Cancel for filter UI", async () => {
+  const { normalizeApprovalRows } = await loadHelper();
+
+  const [row] = normalizeApprovalRows([
+    {
+      id: 41,
+      ticket_number: "1000000041",
+      status: "REJECTED",
+      approval_1_status: "APPROVED",
+      approval_2_status: "APPROVED",
+      approval_3_status: "REJECTED",
+    },
+  ]);
+
+  assert.equal(row.status, "Cancel");
+});
+
+test("filterApprovalRowsByStatus keeps only submit rows by default", async () => {
+  const { filterApprovalRowsByStatus } = await loadHelper();
+  const rows = [
+    { id: 1, status: "Submit" },
+    { id: 2, status: "Done" },
+    { id: 3, status: "Rework" },
+  ];
+
+  assert.deepEqual(filterApprovalRowsByStatus(rows, "Submit"), [{ id: 1, status: "Submit" }]);
+});
+
+test("filterApprovalRowsByStatus treats rejected rows as Cancel", async () => {
+  const { filterApprovalRowsByStatus } = await loadHelper();
+  const rows = [
+    { id: 1, status: "Reject" },
+    { id: 2, status: "Rejected" },
+    { id: 3, status: "Cancel" },
+    { id: 4, status: "Done" },
+  ];
+
+  assert.deepEqual(
+    filterApprovalRowsByStatus(rows, "Cancel").map(row => row.id),
+    [1, 2, 3]
+  );
+});
+
+test("paginateApprovalRows slices rows for the requested page", async () => {
+  const { paginateApprovalRows } = await loadHelper();
+  const rows = Array.from({ length: 12 }, (_, index) => ({ id: index + 1 }));
+
+  assert.deepEqual(
+    paginateApprovalRows(rows, 1, 5).map(row => row.id),
+    [6, 7, 8, 9, 10]
+  );
+});
