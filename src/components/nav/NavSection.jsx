@@ -17,6 +17,8 @@ function NavSection({ menu, collapsemen, navmen, onUpNavCol, onUpNavMenu }) {
     <List>
       {Object.values(menu_sess).map((item) => {
         if (permission[item.text]?.read === true) {
+          const headUrl = item.url || (item.children?.length === 1 ? item.children[0].url : "");
+
           return (
             <div key={`div-${item.key}`}>
               <NavHead
@@ -24,6 +26,7 @@ function NavSection({ menu, collapsemen, navmen, onUpNavCol, onUpNavMenu }) {
                 keyhead={item.key}
                 text={item.text}
                 icon={item.icon}
+                url={headUrl}
                 upNav={onClickNavHead}
                 curstate={collapsemen}
               />

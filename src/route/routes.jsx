@@ -1,6 +1,7 @@
 import axios from "axios";
 import { lazy } from "react";
 import { Navigate, createBrowserRouter } from "react-router-dom";
+import DashboardIndexRedirect from "src/route/DashboardIndexRedirect";
 import ESubmissionDir from "src/pages/dashboard/ESubmissionDir";
 import FormVendorClient from "src/pages/dashboard/FormVendorClient";
 const NavigateETender = lazy(() => import("src/pages/e-tender/NavigateETender"));
@@ -104,10 +105,10 @@ export const routes = createBrowserRouter([
     },
     errorElement: <ErrorPage />,
     children: [
-      // {
-      //   path: '',
-      //   element: <VendorLandingPage />,
-      // },
+      {
+        path: "",
+        element: <DashboardIndexRedirect />,
+      },
       {
         path: "form/:token",
         element: <DirectFormCreateNew />,

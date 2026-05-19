@@ -133,8 +133,8 @@ export default function AdminApprovalView() {
       return "Approval 1 berhasil. Request dipindahkan ke Approval 2";
     }
 
-    if (nextStage === "Completed") {
-      return "Approval 2 berhasil. Approval 3 otomatis diapprove oleh sistem.";
+    if (nextStage === "Approval 3") {
+      return "Approval 2 berhasil. Approval 3 otomatis di-assign oleh sistem dan menunggu approval.";
     }
 
     return "Approval berhasil diproses.";

@@ -1,6 +1,7 @@
 import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
 import { ListItem, ListItemButton, ListItemIcon, ListItemText } from "@mui/material";
 import { Suspense, lazy, useMemo } from "react";
+import { Link } from "react-router-dom";
 
 const getIcon = icon => {
   // add as many icons as you need
@@ -34,18 +35,26 @@ const getIcon = icon => {
   }
 };
 
-export default function NavHead({ keyhead, text, icon, curstate, upNav }) {
+export default function NavHead({ keyhead, text, icon, curstate, upNav, url }) {
   const updateNavcol = item => () => {
     upNav(item);
   };
 
   const SelectedIcon = useMemo(() => getIcon(icon), [icon]);
+  const linkProps = url
+    ? {
+        component: Link,
+        to: url,
+      }
+    : {};
+
   return (
     <ListItem disablePadding key={`item-${keyhead}`} sx={{ display: "block" }}>
       <ListItemButton
         key={`button-${keyhead}`}
         onClick={updateNavcol(keyhead)}
         selected={keyhead === curstate.head}
+        {...linkProps}
       >
         <ListItemIcon key={`icon-${keyhead}`}>
           <ListItemIcon key={`icon-${keyhead}`}>
