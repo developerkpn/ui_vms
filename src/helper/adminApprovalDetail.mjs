@@ -1,3 +1,8 @@
+import {
+  buildApprovalFieldHistory,
+  buildTemplatePayloadFieldKey,
+} from "./adminApprovalFieldHistory.mjs";
+
 const SPEC_FIELD_LABELS = {
   part_number: "Part Number",
   partNumber: "Part Number",
@@ -20,6 +25,12 @@ const SPEC_FIELD_ORDER = [
   "brand",
 ];
 
+const APPROVAL_STEP_LABELS = {
+  1: "Approval 1",
+  2: "Approval 2",
+  3: "Master Data",
+};
+
 export function buildApprovalDetail(row = {}) {
   const payload = parsePayload(row.templatePayload ?? row.template_payload);
   const requestFields = {
@@ -30,6 +41,10 @@ export function buildApprovalDetail(row = {}) {
     ...(payload.templateValues || {}),
     ...(row.templateValues || row.template_values || {}),
   };
+  const editHistory = Array.isArray(row.editHistory ?? row.edit_history)
+    ? row.editHistory ?? row.edit_history
+    : [];
+  const fieldHistory = buildFieldHistoryIndex(row, templateValues);
 
   const ticketNumber = pickText(row.ticketNumber, row.ticket_number, row.requestNo, row.request_no);
   const materialDescription = pickText(
@@ -44,9 +59,13 @@ export function buildApprovalDetail(row = {}) {
     requestFields.base_unit_of_measure,
     requestFields.base_uom
   );
+  const approvalHistory = buildApprovalHistory(row);
 
   return {
     id: row.id ?? null,
+    rawRow: row,
+    editHistory,
+    fieldHistory,
     title: "Form Material",
     ticketNumber,
     ticketType: pickText(row.ticketType, row.ticket_type, "Create"),
@@ -78,9 +97,10 @@ export function buildApprovalDetail(row = {}) {
       ),
     },
     longTextLines: buildLongTextLines(row, requestFields),
-    specificationFields: buildSpecificationFields(templateValues),
+    specificationFields: buildSpecificationFields(templateValues, fieldHistory),
     attachments: normalizeAttachments(row.attachments),
-    approvalHistory: buildApprovalHistory(row),
+    approvalHistory,
+    reworkSummary: buildReworkSummary(approvalHistory, row),
   };
 }
 
@@ -98,7 +118,7 @@ function buildLongTextLines(row, requestFields) {
     .filter(value => value !== "-");
 }
 
-function buildSpecificationFields(templateValues) {
+function buildSpecificationFields(templateValues, fieldHistory = {}) {
   const orderedKeys = [
     ...SPEC_FIELD_ORDER,
     ...Object.keys(templateValues || {}).filter(key => !SPEC_FIELD_ORDER.includes(key)),
@@ -118,11 +138,71 @@ function buildSpecificationFields(templateValues) {
 
     fields.push({
       key,
+      historyKey: buildTemplatePayloadFieldKey(key),
+      historySections: fieldHistory[buildTemplatePayloadFieldKey(key)] || [],
       label: SPEC_FIELD_LABELS[key] || titleize(key),
       value,
     });
     return fields;
   }, []);
+}
+
+function buildFieldHistoryIndex(row, templateValues) {
+  const index = {};
+  const historicalTemplateKeys = collectHistoricalTemplateKeys(row);
+  const templateFieldKeys = [...new Set([...Object.keys(templateValues || {}), ...historicalTemplateKeys])];
+  const trackedFieldKeys = [
+    "material_sub_group_id",
+    "plant_code",
+    "sloc_code",
+    "material_description",
+    "base_uom",
+    "long_text_1",
+    "long_text_2",
+    "long_text_3",
+    ...templateFieldKeys.map(buildTemplatePayloadFieldKey),
+  ];
+
+  trackedFieldKeys.forEach(fieldKey => {
+    if (!fieldKey || index[fieldKey]) {
+      return;
+    }
+
+    index[fieldKey] = buildApprovalFieldHistory({
+      fieldKey,
+      currentRow: row,
+    });
+  });
+
+  templateFieldKeys.forEach(specKey => {
+    const historyKey = buildTemplatePayloadFieldKey(specKey);
+    if (historyKey && !index[specKey]) {
+      index[specKey] = index[historyKey] || [];
+    }
+  });
+
+  return index;
+}
+
+function collectHistoricalTemplateKeys(row) {
+  const rawHistory = row.editHistory ?? row.edit_history;
+  if (!Array.isArray(rawHistory)) {
+    return [];
+  }
+
+  const keys = new Set();
+
+  rawHistory.forEach(snapshot => {
+    const payload = parsePayload(snapshot?.template_payload ?? snapshot?.templatePayload);
+    Object.keys(payload.templateValues || {}).forEach(key => {
+      keys.add(key);
+    });
+    Object.keys(snapshot?.templateValues || snapshot?.template_values || {}).forEach(key => {
+      keys.add(key);
+    });
+  });
+
+  return [...keys];
 }
 
 function normalizeAttachments(attachments = []) {
@@ -139,23 +219,111 @@ function normalizeAttachments(attachments = []) {
 }
 
 function buildApprovalHistory(row) {
+  if (Array.isArray(row.approvalSteps) && row.approvalSteps.length > 0) {
+    return [1, 2, 3].map(step => {
+      const source =
+        row.approvalSteps.find(item => resolveApprovalStepNumber(item) === step) ||
+        row.approvalSteps[step - 1] ||
+        {};
+
+      return {
+        step,
+        label: APPROVAL_STEP_LABELS[step] || `Approval ${step}`,
+        approver: pickText(source.approver, source.owner, source.user, source.username),
+        status: normalizeApprovalStatus(source.status),
+        approvedAt: pickText(source.approvedAt, source.date, source.time, source.actionAt),
+        remark: pickText(source.remark, source.reason, source.note),
+      };
+    });
+  }
+
   return [1, 2, 3].map(step => ({
     step,
-    label: `Approval ${step}`,
+    label: APPROVAL_STEP_LABELS[step] || `Approval ${step}`,
     approver: pickText(
       row[`approval${step}UserId`],
       row[`approval_${step}_user_id`],
       row[`approval${step}UserName`],
       row[`approval_${step}_user_name`]
     ),
-    status: pickText(
-      row[`approval${step}Status`],
-      row[`approval_${step}_status`],
-      "WAITING"
-    ).toUpperCase(),
+    status: normalizeApprovalStatus(
+      pickText(row[`approval${step}Status`], row[`approval_${step}_status`], "WAITING")
+    ),
     approvedAt: pickText(row[`approval${step}At`], row[`approval_${step}_at`]),
     remark: pickText(row[`approval${step}Remark`], row[`approval_${step}_remark`]),
   }));
+}
+
+function buildReworkSummary(approvalHistory, row) {
+  const matchedStep = approvalHistory.find(item => item.status === "REWORK");
+
+  if (matchedStep) {
+    return {
+      ...matchedStep,
+      reason: pickText(matchedStep.remark),
+    };
+  }
+
+  return {
+    step: null,
+    label: "-",
+    approver: "-",
+    status: "-",
+    approvedAt: "-",
+    remark: pickText(row.reworkReason, row.rework_reason),
+    reason: pickText(row.reworkReason, row.rework_reason),
+  };
+}
+
+function resolveApprovalStepNumber(item = {}) {
+  const rawStep = item.step ?? item.index;
+  const parsedStep = Number.parseInt(rawStep, 10);
+
+  if (Number.isInteger(parsedStep) && parsedStep >= 1 && parsedStep <= 3) {
+    return parsedStep;
+  }
+
+  const title = String(item.title || item.label || "").trim().toLowerCase();
+
+  if (title.includes("master")) {
+    return 3;
+  }
+
+  if (title.includes("approval 2")) {
+    return 2;
+  }
+
+  return 1;
+}
+
+function normalizeApprovalStatus(value) {
+  const normalizedValue = String(value || "")
+    .trim()
+    .toUpperCase();
+
+  if (
+    normalizedValue === "APPROVE" ||
+    normalizedValue === "APPROVED" ||
+    normalizedValue === "DONE" ||
+    normalizedValue === "COMPLETED"
+  ) {
+    return "APPROVED";
+  }
+
+  if (normalizedValue === "REWORK") {
+    return "REWORK";
+  }
+
+  if (
+    normalizedValue === "REJECT" ||
+    normalizedValue === "REJECTED" ||
+    normalizedValue === "CANCEL" ||
+    normalizedValue === "CANCELLED"
+  ) {
+    return "REJECTED";
+  }
+
+  return "WAITING";
 }
 
 function parsePayload(payload) {

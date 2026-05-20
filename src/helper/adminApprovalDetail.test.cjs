@@ -61,16 +61,150 @@ test("buildApprovalDetail maps a single request row into a filled approval form"
   assert.equal(detail.basicInfo.baseUom, "PC");
   assert.deepEqual(detail.longTextLines, ["SQ50 AMRI", "KSB II"]);
   assert.deepEqual(detail.specificationFields, [
-    { key: "part_number", label: "Part Number", value: "P/N 404830243243" },
-    { key: "model", label: "Model", value: "SQ50 AMRI" },
-    { key: "size_dimension", label: "Size / Dimension", value: "90X100X450MM" },
-    { key: "type_bentuk", label: "Type / Bentuk", value: "NG160" },
-    { key: "bahan_warna_material", label: "Bahan / Warna Material", value: "SS304" },
-    { key: "brand", label: "Brand", value: "ACTIAR" },
+    {
+      key: "part_number",
+      historyKey: "template_payload.templateValues.part_number",
+      historySections: [],
+      label: "Part Number",
+      value: "P/N 404830243243",
+    },
+    {
+      key: "model",
+      historyKey: "template_payload.templateValues.model",
+      historySections: [],
+      label: "Model",
+      value: "SQ50 AMRI",
+    },
+    {
+      key: "size_dimension",
+      historyKey: "template_payload.templateValues.size_dimension",
+      historySections: [],
+      label: "Size / Dimension",
+      value: "90X100X450MM",
+    },
+    {
+      key: "type_bentuk",
+      historyKey: "template_payload.templateValues.type_bentuk",
+      historySections: [],
+      label: "Type / Bentuk",
+      value: "NG160",
+    },
+    {
+      key: "bahan_warna_material",
+      historyKey: "template_payload.templateValues.bahan_warna_material",
+      historySections: [],
+      label: "Bahan / Warna Material",
+      value: "SS304",
+    },
+    {
+      key: "brand",
+      historyKey: "template_payload.templateValues.brand",
+      historySections: [],
+      label: "Brand",
+      value: "ACTIAR",
+    },
   ]);
   assert.equal(detail.attachments[0].name, "image1.jpg");
+  assert.equal(detail.approvalHistory[2].label, "Master Data");
   assert.deepEqual(
     detail.approvalHistory.map(item => item.status),
     ["APPROVED", "WAITING", "WAITING"]
   );
+});
+
+test("buildApprovalDetail derives rework summary from the matching approval step", async () => {
+  const { buildApprovalDetail } = await loadHelper();
+
+  const detail = buildApprovalDetail({
+    ticket_number: "1000000099",
+    material_description: "MOTOR STARTER",
+    approval_1_user_id: "superior.user",
+    approval_1_status: "APPROVED",
+    approval_1_at: "2026-03-22 09:00",
+    approval_2_user_id: "manager.user",
+    approval_2_status: "REWORK",
+    approval_2_at: "2026-03-22 10:15",
+    approval_2_remark: "Mohon lengkapi drawing dan pressure rating.",
+  });
+
+  assert.equal(detail.reworkSummary.label, "Approval 2");
+  assert.equal(detail.reworkSummary.approver, "manager.user");
+  assert.equal(detail.reworkSummary.status, "REWORK");
+  assert.equal(detail.reworkSummary.approvedAt, "2026-03-22 10:15");
+  assert.equal(detail.reworkSummary.reason, "Mohon lengkapi drawing dan pressure rating.");
+});
+
+test("buildApprovalDetail exposes raw history inputs and per-field history sections", async () => {
+  const { buildApprovalDetail } = await loadHelper();
+
+  const row = {
+    id: 77,
+    created_by: "REQ-01",
+    material_description: "Current desc",
+    template_payload: {
+      requestFields: {},
+      templateValues: {
+        density: "1.4",
+      },
+    },
+    edit_history: [
+      {
+        approval_stage: "Approval 2",
+        approved_by_user_id: "APP-02",
+        approved_at: "2026-05-20T11:30:00.000Z",
+        material_description: "Changed once",
+        template_payload: {
+          templateValues: {
+            density: "1.4",
+          },
+        },
+        created_by: "REQ-01",
+      },
+      {
+        approval_stage: "Approval 1",
+        approved_by_user_id: "APP-01",
+        approved_at: "2026-05-20T09:15:00.000Z",
+        material_description: "Original desc",
+        template_payload: {
+          templateValues: {
+            density: "1.2",
+          },
+        },
+        created_by: "REQ-01",
+      },
+    ],
+  };
+
+  const detail = buildApprovalDetail(row);
+
+  assert.equal(detail.rawRow, row);
+  assert.equal(detail.editHistory, row.edit_history);
+  assert.deepEqual(detail.fieldHistory.material_description, [
+    {
+      stage: "Approval 2",
+      beforeValue: "Changed once",
+      afterValue: "Current desc",
+      sourceBy: "APP-01",
+      changedBy: "APP-02",
+      approvedAt: "2026-05-20T11:30:00.000Z",
+    },
+    {
+      stage: "Approval 1",
+      beforeValue: "Original desc",
+      afterValue: "Changed once",
+      sourceBy: "REQ-01",
+      changedBy: "APP-01",
+      approvedAt: "2026-05-20T09:15:00.000Z",
+    },
+  ]);
+  assert.deepEqual(detail.fieldHistory["template_payload.templateValues.density"], [
+    {
+      stage: "Approval 1",
+      beforeValue: "1.2",
+      afterValue: "1.4",
+      sourceBy: "REQ-01",
+      changedBy: "APP-01",
+      approvedAt: "2026-05-20T09:15:00.000Z",
+    },
+  ]);
 });

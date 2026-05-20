@@ -222,7 +222,7 @@ export default function AdminApprovalView() {
     );
   };
 
-  const handleApprovalAction = async (action, detail, remark) => {
+  const handleApprovalAction = async (action, detail, payload) => {
     clearRefreshWarningTimeout();
 
     if (action !== "Approve") {
@@ -234,7 +234,10 @@ export default function AdminApprovalView() {
       setSubmittingAction(true);
       const response = await axiosPrivate.post(
         `/material/requests/single/${detail.id}/approve`,
-        { remark }
+        {
+          remark: payload?.remark ?? null,
+          editedRequest: payload?.editedRequest ?? {},
+        }
       );
 
       const nextStage = response.data?.data?.next_stage;

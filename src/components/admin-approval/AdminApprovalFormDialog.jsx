@@ -9,6 +9,7 @@ import {
   WarningAmber,
 } from "@mui/icons-material";
 import {
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -18,6 +19,7 @@ import {
   Grid,
   IconButton,
   Paper,
+  Popover,
   Stack,
   TextField,
   Tooltip,
@@ -25,13 +27,98 @@ import {
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.mjs";
+import { buildApprovalFieldHistory } from "src/helper/adminApprovalFieldHistory.mjs";
 
 const approvalStatusColors = {
   APPROVED: { bgcolor: "#e8f5e9", color: "#1b5e20" },
   WAITING: { bgcolor: "#eef2f7", color: "#546e7a" },
   REWORK: { bgcolor: "#fff7ed", color: "#c2410c" },
   REJECT: { bgcolor: "#fee2e2", color: "#b91c1c" },
+  REJECTED: { bgcolor: "#fee2e2", color: "#b91c1c" },
 };
+
+const EDITABLE_FIELD_KEYS = [
+  "material_sub_group_id",
+  "plant_code",
+  "sloc_code",
+  "material_description",
+  "base_uom",
+  "long_text_1",
+  "long_text_2",
+  "long_text_3",
+  "template_payload",
+];
+
+const isEditableApprovalField = fieldKey => EDITABLE_FIELD_KEYS.includes(fieldKey);
+
+const shouldShowFieldHistoryIcon = sections =>
+  Array.isArray(sections) && sections.length > 0;
+
+function FieldHistoryLabel({ label, sections }) {
+  const [anchorEl, setAnchorEl] = useState(null);
+
+  return (
+    <Stack direction="row" spacing={0.75} alignItems="center">
+      <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+        {label}
+      </Typography>
+      {shouldShowFieldHistoryIcon(sections) ? (
+        <>
+          <IconButton size="small" onClick={event => setAnchorEl(event.currentTarget)}>
+            <InfoOutlined sx={{ fontSize: 18, color: "#3f51b5" }} />
+          </IconButton>
+          <Popover
+            open={Boolean(anchorEl)}
+            anchorEl={anchorEl}
+            onClose={() => setAnchorEl(null)}
+            anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+          >
+            <Stack spacing={1.5} sx={{ p: 2, width: 440, maxHeight: 380, overflowY: "auto" }}>
+              {sections.map(section => (
+                <Paper key={`${section.stage}-${section.approvedAt}`} variant="outlined" sx={{ p: 1.5 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 900, mb: 1 }}>
+                    {section.stage}
+                  </Typography>
+                  <Stack direction="row" spacing={1.5}>
+                    <Box sx={{ flex: 1, border: "1px solid #d7dde6", p: 1 }}>
+                      <Typography variant="caption">Before</Typography>
+                      <Typography variant="body2">{section.beforeValue || "-"}</Typography>
+                    </Box>
+                    <Box sx={{ flex: 1, border: "1px solid #d7dde6", p: 1, bgcolor: "#f5f8ff" }}>
+                      <Typography variant="caption">After</Typography>
+                      <Typography variant="body2">{section.afterValue || "-"}</Typography>
+                    </Box>
+                  </Stack>
+                  <Typography variant="caption" sx={{ display: "block", mt: 1 }}>
+                    Source By: {section.sourceBy || "-"}
+                  </Typography>
+                  <Typography variant="caption" sx={{ display: "block" }}>
+                    Changed By: {section.changedBy || "-"}
+                  </Typography>
+                </Paper>
+              ))}
+            </Stack>
+          </Popover>
+        </>
+      ) : null}
+    </Stack>
+  );
+}
+
+function createApprovalDraft(detail) {
+  const raw = detail.rawRow || {};
+  return {
+    material_sub_group_id: raw.material_sub_group_id ?? null,
+    plant_code: raw.plant_code ?? raw.plant ?? null,
+    sloc_code: raw.sloc_code ?? raw.storage_location ?? null,
+    material_description: raw.material_description ?? detail.basicInfo?.materialDescription ?? "",
+    base_uom: raw.base_uom ?? detail.basicInfo?.baseUom ?? "",
+    long_text_1: raw.long_text_1 ?? "",
+    long_text_2: raw.long_text_2 ?? "",
+    long_text_3: raw.long_text_3 ?? "",
+    template_payload: raw.template_payload ?? raw.templatePayload ?? {},
+  };
+}
 
 function SectionLabel({ children }) {
   return (
@@ -201,11 +288,13 @@ export default function AdminApprovalFormDialog({
   onClose,
   onAction,
   submitting = false,
+  subGroups = [],
 }) {
   const detail = useMemo(() => buildApprovalDetail(row || {}), [row]);
 
+  const [draftValues, setDraftValues] = useState(() => createApprovalDraft(detail));
   const [remarkDialogOpen, setRemarkDialogOpen] = useState(false);
-  const [currentAction, setCurrentAction] = useState(""); // 'Approve', 'Rework', 'Reject'
+  const [currentAction, setCurrentAction] = useState("");
   const [remarkText, setRemarkText] = useState("");
 
   useEffect(() => {
@@ -215,6 +304,10 @@ export default function AdminApprovalFormDialog({
       setRemarkText("");
     }
   }, [open, row]);
+
+  useEffect(() => {
+    setDraftValues(createApprovalDraft(detail));
+  }, [detail]);
 
   const handleDialogClose = (_, reason) => {
     if (submitting && (reason === "backdropClick" || reason === "escapeKeyDown")) {
@@ -338,28 +431,133 @@ export default function AdminApprovalFormDialog({
                 <ReadOnlyField label="Material Group *" value={detail.basicInfo.materialGroup} />
               </Grid>
               <Grid item xs={12} md={6}>
-                <ReadOnlyField
+                <FieldHistoryLabel
                   label="Sub Material Group *"
-                  value={detail.basicInfo.subMaterialGroup}
+                  sections={detail.fieldHistory?.material_sub_group_id || []}
+                />
+                <Autocomplete
+                  fullWidth
+                  size="small"
+                  value={
+                    subGroups.find(
+                      sg => sg.id === draftValues.material_sub_group_id
+                    ) || null
+                  }
+                  options={subGroups}
+                  getOptionLabel={option => option.name || option.subGroupName || `Sub Group ${option.id}`}
+                  onChange={(_, newValue) =>
+                    setDraftValues(current => ({
+                      ...current,
+                      material_sub_group_id: newValue?.id ?? null,
+                    }))
+                  }
+                  renderInput={params => (
+                    <TextField
+                      {...params}
+                      size="small"
+                      placeholder="Select sub material group"
+                    />
+                  )}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
-                <ReadOnlyField
+                <FieldHistoryLabel
                   label="Material Description *"
-                  value={detail.basicInfo.materialDescription}
+                  sections={detail.fieldHistory?.material_description || []}
+                />
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Material Description *"
+                  value={draftValues.material_description}
+                  onChange={event =>
+                    setDraftValues(current => ({
+                      ...current,
+                      material_description: event.target.value,
+                    }))
+                  }
                 />
               </Grid>
               <Grid item xs={12} md={6}>
-                <ReadOnlyField label="Base UoM *" value={detail.basicInfo.baseUom} />
+                <FieldHistoryLabel
+                  label="Base UoM *"
+                  sections={detail.fieldHistory?.base_uom || []}
+                />
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Base UoM *"
+                  value={draftValues.base_uom}
+                  onChange={event =>
+                    setDraftValues(current => ({
+                      ...current,
+                      base_uom: event.target.value,
+                    }))
+                  }
+                />
               </Grid>
               <Grid item xs={12} md={6}>
-                <ReadOnlyField label="Plant" value={detail.basicInfo.plant} />
+                <FieldHistoryLabel
+                  label="Plant"
+                  sections={detail.fieldHistory?.plant_code || []}
+                />
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Plant"
+                  value={draftValues.plant_code || ""}
+                  onChange={event =>
+                    setDraftValues(current => ({
+                      ...current,
+                      plant_code: event.target.value,
+                    }))
+                  }
+                />
               </Grid>
               <Grid item xs={12} md={6}>
-                <ReadOnlyField label="Storage Location" value={detail.basicInfo.storageLocation} />
+                <FieldHistoryLabel
+                  label="Storage Location"
+                  sections={detail.fieldHistory?.sloc_code || []}
+                />
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Storage Location"
+                  value={draftValues.sloc_code || ""}
+                  onChange={event =>
+                    setDraftValues(current => ({
+                      ...current,
+                      sloc_code: event.target.value,
+                    }))
+                  }
+                />
               </Grid>
               <Grid item xs={12}>
-                <ReadOnlyLongTextFields label="Long Text" values={detail.longTextLines} />
+                <FieldHistoryLabel
+                  label="Long Text"
+                  sections={[]}
+                />
+                <Stack spacing={1}>
+                  {[
+                    { key: "long_text_1", label: "Long Text 1" },
+                    { key: "long_text_2", label: "Long Text 2" },
+                    { key: "long_text_3", label: "Long Text 3" },
+                  ].map(({ key, label }) => (
+                    <TextField
+                      key={key}
+                      fullWidth
+                      size="small"
+                      label={label}
+                      value={draftValues[key] || ""}
+                      onChange={event =>
+                        setDraftValues(current => ({
+                          ...current,
+                          [key]: event.target.value,
+                        }))
+                      }
+                    />
+                  ))}
+                </Stack>
               </Grid>
             </Grid>
           </Box>
@@ -368,21 +566,53 @@ export default function AdminApprovalFormDialog({
             <SectionLabel>Specification</SectionLabel>
             {detail.specificationFields.length > 0 ? (
               <Grid container spacing={2.5}>
-                {detail.specificationFields.map(field => (
-                  <Grid item xs={12} md={6} key={field.key}>
-                    <Box sx={{ display: "flex", alignItems: "flex-end", gap: 1 }}>
-                      <Box sx={{ flex: 1 }}>
-                        <ReadOnlyField label={field.label} value={field.value} />
+                {detail.specificationFields.map(field => {
+                  const historySections = field.historySections || [];
+                  const isEditable = isEditableApprovalField(field.key) || field.historyKey;
+                  const fieldValue = draftValues.template_payload?.templateValues?.[field.key] ?? field.value;
+
+                  return (
+                    <Grid item xs={12} md={6} key={field.key}>
+                      <Box sx={{ display: "flex", alignItems: "flex-end", gap: 1 }}>
+                        <Box sx={{ flex: 1 }}>
+                          <FieldHistoryLabel
+                            label={field.label}
+                            sections={historySections}
+                          />
+                          {isEditable ? (
+                            <TextField
+                              fullWidth
+                              size="small"
+                              value={fieldValue || ""}
+                              onChange={event =>
+                                setDraftValues(current => ({
+                                  ...current,
+                                  template_payload: {
+                                    ...(current.template_payload || {}),
+                                    templateValues: {
+                                      ...(current.template_payload?.templateValues || {}),
+                                      [field.key]: event.target.value,
+                                    },
+                                  },
+                                }))
+                              }
+                            />
+                          ) : (
+                            <ReadOnlyField label={field.label} value={fieldValue} />
+                          )}
+                        </Box>
+                        {!shouldShowFieldHistoryIcon(historySections) && (
+                          <Tooltip
+                            title="Field ini berasal dari specification template saat request dibuat."
+                            arrow
+                          >
+                            <InfoOutlined sx={{ mb: 1, color: "#3f51b5", fontSize: 20 }} />
+                          </Tooltip>
+                        )}
                       </Box>
-                      <Tooltip
-                        title="Field ini berasal dari specification template saat request dibuat."
-                        arrow
-                      >
-                        <InfoOutlined sx={{ mb: 1, color: "#3f51b5", fontSize: 20 }} />
-                      </Tooltip>
-                    </Box>
-                  </Grid>
-                ))}
+                    </Grid>
+                  );
+                })}
               </Grid>
             ) : (
               <Typography variant="body2" color="text.secondary">
@@ -518,7 +748,20 @@ export default function AdminApprovalFormDialog({
           <Button
             variant="contained"
             onClick={() => {
-              onAction?.(currentAction, detail, remarkText);
+              onAction?.(currentAction, detail, {
+                remark: remarkText,
+                editedRequest: {
+                  material_sub_group_id: draftValues.material_sub_group_id,
+                  plant_code: draftValues.plant_code,
+                  sloc_code: draftValues.sloc_code,
+                  material_description: draftValues.material_description,
+                  base_uom: draftValues.base_uom,
+                  long_text_1: draftValues.long_text_1,
+                  long_text_2: draftValues.long_text_2,
+                  long_text_3: draftValues.long_text_3,
+                  template_payload: draftValues.template_payload,
+                },
+              });
             }}
             disabled={submitting}
             sx={{ textTransform: "none", fontWeight: 800 }}
