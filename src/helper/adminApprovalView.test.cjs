@@ -140,6 +140,8 @@ test("normalizeApprovalRows keeps filled form detail fields for View Approval", 
   const [row] = normalizeApprovalRows([
     {
       id: 31,
+      material_group_id: 12,
+      material_sub_group_id: 44,
       ticket_number: "1000000031",
       material_group_code: "901",
       material_group_name: "Actuator & Solenoid Valve",
@@ -152,23 +154,87 @@ test("normalizeApprovalRows keeps filled form detail fields for View Approval", 
         requestFields: { base_unit_of_measure: "PC" },
         templateValues: { brand: "ACTIAR" },
       },
+      edit_history: [
+        {
+          id: 7,
+          approval_stage: "Approval 1",
+          material_description: "OLD DESC",
+        },
+      ],
       attachments: [{ id: 5, file_name: "image1.jpg" }],
       approval_1_user_id: "andi",
+      approval_1_user_name: "Andi Saputra",
       approval_1_status: "APPROVED",
     },
   ]);
 
+  assert.equal(row.materialGroupId, 12);
   assert.equal(row.materialGroupCode, "901");
   assert.equal(row.materialGroupName, "Actuator & Solenoid Valve");
+  assert.equal(row.materialSubGroupId, 44);
   assert.equal(row.subMaterialGroupCode, "002");
   assert.equal(row.subMaterialGroupName, "Actiar");
   assert.equal(row.plantCode, "KPN1");
   assert.equal(row.slocCode, "A001");
   assert.equal(row.longText1, "LINE 1");
+  assert.equal(row.approval1UserId, "andi");
+  assert.equal(row.approval1UserName, "Andi Saputra");
   assert.deepEqual(row.templatePayload.templateValues, { brand: "ACTIAR" });
+  assert.deepEqual(row.editHistory, [
+    {
+      id: 7,
+      approval_stage: "Approval 1",
+      material_description: "OLD DESC",
+    },
+  ]);
   assert.deepEqual(row.attachments, [{ id: 5, file_name: "image1.jpg" }]);
   assert.equal(row.approval1UserId, "andi");
   assert.equal(row.approval1Status, "APPROVED");
+});
+
+test("normalizeApprovalRows includes latest rework metadata from backend rows", async () => {
+  const { normalizeApprovalRows } = await loadHelper();
+
+  const [row] = normalizeApprovalRows([
+    {
+      id: 51,
+      ticket_number: "1000000051",
+      status: "REWORK",
+      rework_stage: "Approval 2",
+      rework_by_user_id: "manager01",
+      rework_by_username: "manager.user",
+      rework_at: "2026-05-18T09:30:00.000Z",
+      rework_reason: "Lengkapi datasheet dan lampiran revisi.",
+      approval_1_status: "APPROVED",
+      approval_2_status: "REWORK",
+      approval_3_status: "WAITING",
+    },
+  ]);
+
+  assert.equal(row.status, "Rework");
+  assert.equal(row.reworkStage, "Approval 2");
+  assert.equal(row.reworkByUserId, "manager01");
+  assert.equal(row.reworkByUsername, "manager.user");
+  assert.equal(row.reworkAt, "2026-05-18 09:30");
+  assert.equal(row.reworkReason, "Lengkapi datasheet dan lampiran revisi.");
+});
+
+test("normalizeApprovalRows maps backend CANCEL status into Cancel", async () => {
+  const { normalizeApprovalRows } = await loadHelper();
+
+  const [row] = normalizeApprovalRows([
+    {
+      id: 42,
+      ticket_number: "1000000042",
+      status: "CANCEL",
+      assigned_to: "Cancelled",
+      approval_1_status: "REJECTED",
+    },
+  ]);
+
+  assert.equal(row.status, "Cancel");
+  assert.equal(row.assignedTo, "Cancelled");
+  assert.equal(row.approvalStage, "Cancelled");
 });
 
 test("normalizeApprovalRows maps reject-like statuses into Cancel for filter UI", async () => {

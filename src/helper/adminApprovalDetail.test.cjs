@@ -134,6 +134,43 @@ test("buildApprovalDetail derives rework summary from the matching approval step
   assert.equal(detail.reworkSummary.reason, "Mohon lengkapi drawing dan pressure rating.");
 });
 
+test("buildApprovalDetail shows approval user names before user ids", async () => {
+  const { buildApprovalDetail } = await loadHelper();
+
+  const detail = buildApprovalDetail({
+    ticket_number: "1000000100",
+    approval_1_user_id: "a53be537-fdec-4af7-818d-bd57d79fe556",
+    approval_1_user_name: "Andi Saputra",
+    approval_1_status: "APPROVED",
+    approval_2_user_id: "8e109b96-4146-4f1e-a923-2a438348a81d",
+    approval_2_user_name: "Budi Manager",
+    approval_2_status: "WAITING",
+  });
+
+  assert.equal(detail.approvalHistory[0].approver, "Andi Saputra");
+  assert.equal(detail.approvalHistory[1].approver, "Budi Manager");
+});
+
+test("buildApprovalDetail prefers latest backend rework fields for rework summary", async () => {
+  const { buildApprovalDetail } = await loadHelper();
+
+  const detail = buildApprovalDetail({
+    ticket_number: "1000000101",
+    rework_stage: "Master Data",
+    rework_by_user_id: "md.user",
+    rework_by_username: "master.data.user",
+    rework_at: "2026-05-18 14:22",
+    rework_reason: "Gunakan spesifikasi dan attachment revisi terbaru.",
+    approval_3_status: "WAITING",
+  });
+
+  assert.equal(detail.reworkSummary.label, "Master Data");
+  assert.equal(detail.reworkSummary.approver, "master.data.user");
+  assert.equal(detail.reworkSummary.status, "REWORK");
+  assert.equal(detail.reworkSummary.approvedAt, "2026-05-18 14:22");
+  assert.equal(detail.reworkSummary.reason, "Gunakan spesifikasi dan attachment revisi terbaru.");
+});
+
 test("buildApprovalDetail exposes raw history inputs and per-field history sections", async () => {
   const { buildApprovalDetail } = await loadHelper();
 
@@ -141,6 +178,7 @@ test("buildApprovalDetail exposes raw history inputs and per-field history secti
     id: 77,
     created_by: "REQ-01",
     material_description: "Current desc",
+    long_text_1: "Current line 1",
     template_payload: {
       requestFields: {},
       templateValues: {
@@ -151,8 +189,10 @@ test("buildApprovalDetail exposes raw history inputs and per-field history secti
       {
         approval_stage: "Approval 2",
         approved_by_user_id: "APP-02",
+        approved_by_username: "approval.user.two",
         approved_at: "2026-05-20T11:30:00.000Z",
         material_description: "Changed once",
+        long_text_1: "Changed line 1",
         template_payload: {
           templateValues: {
             density: "1.4",
@@ -163,8 +203,10 @@ test("buildApprovalDetail exposes raw history inputs and per-field history secti
       {
         approval_stage: "Approval 1",
         approved_by_user_id: "APP-01",
+        approved_by_username: "approval.user.one",
         approved_at: "2026-05-20T09:15:00.000Z",
         material_description: "Original desc",
+        long_text_1: "Original line 1",
         template_payload: {
           templateValues: {
             density: "1.2",
@@ -184,8 +226,8 @@ test("buildApprovalDetail exposes raw history inputs and per-field history secti
       stage: "Approval 2",
       beforeValue: "Changed once",
       afterValue: "Current desc",
-      sourceBy: "APP-01",
-      changedBy: "APP-02",
+      sourceBy: "approval.user.one",
+      changedBy: "approval.user.two",
       approvedAt: "2026-05-20T11:30:00.000Z",
     },
     {
@@ -193,7 +235,25 @@ test("buildApprovalDetail exposes raw history inputs and per-field history secti
       beforeValue: "Original desc",
       afterValue: "Changed once",
       sourceBy: "REQ-01",
-      changedBy: "APP-01",
+      changedBy: "approval.user.one",
+      approvedAt: "2026-05-20T09:15:00.000Z",
+    },
+  ]);
+  assert.deepEqual(detail.fieldHistory.long_text_1, [
+    {
+      stage: "Approval 2",
+      beforeValue: "Changed line 1",
+      afterValue: "Current line 1",
+      sourceBy: "approval.user.one",
+      changedBy: "approval.user.two",
+      approvedAt: "2026-05-20T11:30:00.000Z",
+    },
+    {
+      stage: "Approval 1",
+      beforeValue: "Original line 1",
+      afterValue: "Changed line 1",
+      sourceBy: "REQ-01",
+      changedBy: "approval.user.one",
       approvedAt: "2026-05-20T09:15:00.000Z",
     },
   ]);
@@ -203,7 +263,7 @@ test("buildApprovalDetail exposes raw history inputs and per-field history secti
       beforeValue: "1.2",
       afterValue: "1.4",
       sourceBy: "REQ-01",
-      changedBy: "APP-01",
+      changedBy: "approval.user.one",
       approvedAt: "2026-05-20T09:15:00.000Z",
     },
   ]);

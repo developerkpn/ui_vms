@@ -14,7 +14,7 @@ import {
   FormControlLabel,
   CircularProgress,
 } from "@mui/material";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowBack } from "@mui/icons-material";
 import SingleMaterialForm from "../../components/request-material/SingleMaterialForm";
 import MassMaterialForm from "../../components/request-material/MassMaterialForm";
@@ -23,9 +23,73 @@ import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 const DEFAULT_MATERIAL_TYPE = "SARS - Non Trade Material";
 const PREFERENCE_KEY = "material_request_preferences";
 
+const parseTemplatePayload = payload => {
+  if (!payload) {
+    return {};
+  }
+
+  if (typeof payload === "object") {
+    return payload;
+  }
+
+  try {
+    return JSON.parse(payload);
+  } catch {
+    return {};
+  }
+};
+
+const normalizeInitialLocations = rawLocations => {
+  const seenLocations = new Set();
+
+  return (Array.isArray(rawLocations) ? rawLocations : []).filter(location => {
+    const plantCode = location?.plant_code?.trim?.() || "";
+    const storageLocation = location?.storage_location?.trim?.() || "";
+
+    if (!plantCode || !storageLocation) {
+      return false;
+    }
+
+    const key = `${plantCode}::${storageLocation}`;
+    if (seenLocations.has(key)) {
+      return false;
+    }
+
+    seenLocations.add(key);
+    return true;
+  });
+};
+
+const resolveLocationSelection = ({ locations, plant, storageLocation }) => {
+  const matchedByPlantAndStorage = locations.find(
+    location =>
+      location.plant_code === plant &&
+      location.storage_location === storageLocation
+  );
+  const matchedByStorageOnly = locations.find(
+    location => location.storage_location === storageLocation
+  );
+  const matchedPlant = locations.some(location => location.plant_code === plant)
+    ? plant
+    : matchedByStorageOnly?.plant_code || "";
+
+  return {
+    plant: matchedPlant,
+    storageLocation:
+      matchedByPlantAndStorage?.storage_location ||
+      matchedByStorageOnly?.storage_location ||
+      "",
+  };
+};
+
 export default function SingleRequestPage({ mode = "single" }) {
+  const { id: requestId } = useParams();
   const navigate = useNavigate();
   const axiosPrivate = useAxiosPrivate();
+  const isMassMode = mode === "mass";
+  const isReworkMode = mode === "rework";
+  const isSingleCreateMode = mode === "single";
+  const usesInitialScreen = isSingleCreateMode || isReworkMode;
   const [step, setStep] = useState(1);
   const [rememberPreference, setRememberPreference] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -56,38 +120,62 @@ export default function SingleRequestPage({ mode = "single" }) {
     brand: "",
   });
 
-  // 1. Ambil Data Master saat halaman dibuka
   useEffect(() => {
-    if (mode !== "single") {
+    if (!usesInitialScreen) {
       setLoading(false);
       return undefined;
     }
 
+    let active = true;
+
     const fetchData = async () => {
       try {
         setLoading(true);
-        const response = await axiosPrivate.get("/material/initial-screen-data");
-        if (response.data.success) {
-          const rawLocations = response.data?.data?.locations || [];
-          const seenLocations = new Set();
-          const locations = rawLocations.filter(location => {
-            const plantCode = location?.plant_code?.trim?.() || "";
-            const storageLocation = location?.storage_location?.trim?.() || "";
+        const [initialResponse, reworkResponse] = await Promise.all([
+          axiosPrivate.get("/material/initial-screen-data"),
+          isReworkMode && requestId
+            ? axiosPrivate.get(`/material/requests/single/${requestId}`)
+            : Promise.resolve({ data: { data: null } }),
+        ]);
 
-            if (!plantCode || !storageLocation) {
-              return false;
-            }
+        if (!active) {
+          return;
+        }
 
-            const key = `${plantCode}::${storageLocation}`;
-            if (seenLocations.has(key)) {
-              return false;
-            }
-
-            seenLocations.add(key);
-            return true;
-          });
+        if (initialResponse.data.success) {
+          const locations = normalizeInitialLocations(
+            initialResponse.data?.data?.locations || []
+          );
 
           setAllLocations(locations);
+
+          if (isReworkMode) {
+            const row = reworkResponse.data?.data || {};
+            const payload = parseTemplatePayload(row?.template_payload ?? row?.templatePayload);
+            const requestFields = payload?.requestFields || {};
+            const selection = resolveLocationSelection({
+              locations,
+              plant: row?.plant_code || row?.plantCode || requestFields.plant || "",
+              storageLocation:
+                row?.sloc_code ||
+                row?.slocCode ||
+                requestFields.storage_location ||
+                requestFields.storageLocation ||
+                "",
+            });
+
+            setFormData(prev => ({
+              ...prev,
+              plant: selection.plant,
+              storageLocation: selection.storageLocation,
+              materialType:
+                requestFields.material_type ||
+                requestFields.materialType ||
+                DEFAULT_MATERIAL_TYPE,
+            }));
+            setRememberPreference(false);
+            return;
+          }
 
           const saved = localStorage.getItem(PREFERENCE_KEY);
           if (!saved) {
@@ -109,26 +197,16 @@ export default function SingleRequestPage({ mode = "single" }) {
           const savedPlant = typeof parsed.plant === "string" ? parsed.plant : "";
           const savedStorageLocation =
             typeof parsed.storageLocation === "string" ? parsed.storageLocation : "";
-
-          const matchedByPlantAndStorage = locations.find(
-            location =>
-              location.plant_code === savedPlant &&
-              location.storage_location === savedStorageLocation
-          );
-          const matchedByStorageOnly = locations.find(
-            location => location.storage_location === savedStorageLocation
-          );
-          const matchedPlant = locations.some(location => location.plant_code === savedPlant)
-            ? savedPlant
-            : matchedByStorageOnly?.plant_code || "";
+          const selection = resolveLocationSelection({
+            locations,
+            plant: savedPlant,
+            storageLocation: savedStorageLocation,
+          });
 
           setFormData(prev => ({
             ...prev,
-            plant: matchedPlant,
-            storageLocation:
-              matchedByPlantAndStorage?.storage_location ||
-              matchedByStorageOnly?.storage_location ||
-              "",
+            plant: selection.plant,
+            storageLocation: selection.storageLocation,
             materialType: DEFAULT_MATERIAL_TYPE,
           }));
           setRememberPreference(Boolean(savedPlant || savedStorageLocation));
@@ -140,7 +218,10 @@ export default function SingleRequestPage({ mode = "single" }) {
       }
     };
     fetchData();
-  }, [axiosPrivate, mode]);
+    return () => {
+      active = false;
+    };
+  }, [axiosPrivate, isReworkMode, requestId, usesInitialScreen]);
 
   // 2. Logika Filtering
 
@@ -197,17 +278,19 @@ export default function SingleRequestPage({ mode = "single" }) {
 
   // Pre-fetch all material groups and their schemas when "Add" is clicked
   const handleNext = async () => {
-    if (rememberPreference) {
-      localStorage.setItem(
-        PREFERENCE_KEY,
-        JSON.stringify({
-          plant: formData.plant,
-          storageLocation: formData.storageLocation,
-          materialType: formData.materialType,
-        })
-      );
-    } else {
-      localStorage.removeItem(PREFERENCE_KEY);
+    if (isSingleCreateMode) {
+      if (rememberPreference) {
+        localStorage.setItem(
+          PREFERENCE_KEY,
+          JSON.stringify({
+            plant: formData.plant,
+            storageLocation: formData.storageLocation,
+            materialType: formData.materialType,
+          })
+        );
+      } else {
+        localStorage.removeItem(PREFERENCE_KEY);
+      }
     }
 
     // Pre-fetch all material groups + all schemas in parallel
@@ -248,7 +331,7 @@ export default function SingleRequestPage({ mode = "single" }) {
 
   const handleBack = () => (step === 2 ? setStep(1) : navigate("/dashboard/materials/request"));
 
-  if (mode === "mass") {
+  if (isMassMode) {
     return (
       <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -272,16 +355,21 @@ export default function SingleRequestPage({ mode = "single" }) {
     );
   }
 
-  if (step === 1) {
+  const initialScreenTitle = isReworkMode ? "Revise Material Request" : "Create Material";
+  const initialScreenSubtitle = isReworkMode
+    ? "Select initial master data for your revised item."
+    : "Select initial master data for your new item.";
+
+  if (usesInitialScreen && step === 1) {
     return (
       <Box sx={{ maxWidth: 500, mx: "auto", mt: 8 }}>
         <Card elevation={0} sx={{ borderRadius: 0, border: "1px solid", borderColor: "divider" }}>
           <Box sx={{ p: 2.5, borderBottom: "1px solid", borderColor: "divider" }}>
             <Typography variant="h5" sx={{ fontWeight: 800, color: "#1a237e" }}>
-              Create Material
+              {initialScreenTitle}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Select initial master data for your new item.
+              {initialScreenSubtitle}
             </Typography>
           </Box>
           <CardContent sx={{ p: 3 }}>
@@ -335,16 +423,18 @@ export default function SingleRequestPage({ mode = "single" }) {
                   InputProps={{ readOnly: true }}
                 />
 
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      size="small"
-                      checked={rememberPreference}
-                      onChange={e => setRememberPreference(e.target.checked)}
-                    />
-                  }
-                  label={<Typography variant="body2">Remember my preference</Typography>}
-                />
+                {isSingleCreateMode && (
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={rememberPreference}
+                        onChange={e => setRememberPreference(e.target.checked)}
+                      />
+                    }
+                    label={<Typography variant="body2">Remember my preference</Typography>}
+                  />
+                )}
 
                 <Box sx={{ display: "flex", gap: 1.5 }}>
                   <Button
@@ -383,7 +473,9 @@ export default function SingleRequestPage({ mode = "single" }) {
           >
             My Request
           </MuiLink>
-          <Typography color="text.primary">Single Request Form</Typography>
+          <Typography color="text.primary">
+            {isReworkMode ? "Revise Single Request" : "Single Request Form"}
+          </Typography>
         </Breadcrumbs>
       </Box>
       <SingleMaterialForm
@@ -391,6 +483,8 @@ export default function SingleRequestPage({ mode = "single" }) {
         formData={formData}
         prefetchedGroups={materialGroupsList}
         schemaCache={schemaCache}
+        mode={isReworkMode ? "rework" : "create"}
+        requestId={requestId}
       />
     </Box>
   );

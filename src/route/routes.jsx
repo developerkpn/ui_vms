@@ -217,6 +217,10 @@ export const routes = createBrowserRouter([
         element: <SingleRequestPage mode="single" />,
       },
       {
+        path: "materials/request/single/:id/rework",
+        element: <SingleRequestPage mode="rework" />,
+      },
+      {
         path: "materials/request/mass",
         element: <SingleRequestPage mode="mass" />,
       },

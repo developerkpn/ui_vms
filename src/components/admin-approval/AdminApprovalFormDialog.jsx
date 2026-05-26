@@ -1,4 +1,5 @@
 import {
+  AccessTimeOutlined,
   AttachFile,
   Cancel,
   CheckCircle,
@@ -27,7 +28,19 @@ import {
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.mjs";
-import { buildApprovalFieldHistory } from "src/helper/adminApprovalFieldHistory.mjs";
+import { createApprovalDraft } from "src/helper/adminApprovalDraft.mjs";
+import { buildCombinedLongTextHistory } from "src/helper/adminApprovalFieldHistory.mjs";
+import {
+  buildApprovalFieldHints,
+  buildApprovalSpecificationFields,
+  normalizeApprovalInputValue,
+  validateApprovalDraft,
+} from "src/helper/adminApprovalValidation.mjs";
+import {
+  buildApprovalSubGroupOptions,
+  findSubGroupOptionById,
+  formatSubGroupOptionLabel,
+} from "src/helper/adminApprovalSubGroup.mjs";
 
 const approvalStatusColors = {
   APPROVED: { bgcolor: "#e8f5e9", color: "#1b5e20" },
@@ -54,7 +67,28 @@ const isEditableApprovalField = fieldKey => EDITABLE_FIELD_KEYS.includes(fieldKe
 const shouldShowFieldHistoryIcon = sections =>
   Array.isArray(sections) && sections.length > 0;
 
-function FieldHistoryLabel({ label, sections }) {
+function renderDefaultHistoryValue(value) {
+  return <Typography variant="body2">{value || "-"}</Typography>;
+}
+
+function renderLongTextHistoryValue(value) {
+  const lines = Array.isArray(value) ? value : [value || "-"];
+
+  return (
+    <Stack spacing={0.75}>
+      {lines.map((lineValue, index) => (
+        <Box key={`long-text-history-${index}`}>
+          <Typography variant="caption" sx={{ fontWeight: 800, color: "text.secondary" }}>
+            Long Text {index + 1}
+          </Typography>
+          <Typography variant="body2">{lineValue || "-"}</Typography>
+        </Box>
+      ))}
+    </Stack>
+  );
+}
+
+function FieldHistoryLabel({ label, sections, renderSectionValue = renderDefaultHistoryValue }) {
   const [anchorEl, setAnchorEl] = useState(null);
 
   return (
@@ -64,9 +98,23 @@ function FieldHistoryLabel({ label, sections }) {
       </Typography>
       {shouldShowFieldHistoryIcon(sections) ? (
         <>
-          <IconButton size="small" onClick={event => setAnchorEl(event.currentTarget)}>
-            <InfoOutlined sx={{ fontSize: 18, color: "#3f51b5" }} />
-          </IconButton>
+          <Tooltip title="View change history" arrow placement="top">
+            <IconButton
+              size="small"
+              onClick={event => setAnchorEl(event.currentTarget)}
+              sx={{
+                width: 24,
+                height: 24,
+                bgcolor: "#fff7e6",
+                border: "1px solid #fde68a",
+                "&:hover": {
+                  bgcolor: "#ffefbf",
+                },
+              }}
+            >
+              <AccessTimeOutlined sx={{ fontSize: 15, color: "#d97706" }} />
+            </IconButton>
+          </Tooltip>
           <Popover
             open={Boolean(anchorEl)}
             anchorEl={anchorEl}
@@ -82,11 +130,11 @@ function FieldHistoryLabel({ label, sections }) {
                   <Stack direction="row" spacing={1.5}>
                     <Box sx={{ flex: 1, border: "1px solid #d7dde6", p: 1 }}>
                       <Typography variant="caption">Before</Typography>
-                      <Typography variant="body2">{section.beforeValue || "-"}</Typography>
+                      {renderSectionValue(section.beforeValue)}
                     </Box>
                     <Box sx={{ flex: 1, border: "1px solid #d7dde6", p: 1, bgcolor: "#f5f8ff" }}>
                       <Typography variant="caption">After</Typography>
-                      <Typography variant="body2">{section.afterValue || "-"}</Typography>
+                      {renderSectionValue(section.afterValue)}
                     </Box>
                   </Stack>
                   <Typography variant="caption" sx={{ display: "block", mt: 1 }}>
@@ -103,21 +151,6 @@ function FieldHistoryLabel({ label, sections }) {
       ) : null}
     </Stack>
   );
-}
-
-function createApprovalDraft(detail) {
-  const raw = detail.rawRow || {};
-  return {
-    material_sub_group_id: raw.material_sub_group_id ?? null,
-    plant_code: raw.plant_code ?? raw.plant ?? null,
-    sloc_code: raw.sloc_code ?? raw.storage_location ?? null,
-    material_description: raw.material_description ?? detail.basicInfo?.materialDescription ?? "",
-    base_uom: raw.base_uom ?? detail.basicInfo?.baseUom ?? "",
-    long_text_1: raw.long_text_1 ?? "",
-    long_text_2: raw.long_text_2 ?? "",
-    long_text_3: raw.long_text_3 ?? "",
-    template_payload: raw.template_payload ?? raw.templatePayload ?? {},
-  };
 }
 
 function SectionLabel({ children }) {
@@ -289,25 +322,139 @@ export default function AdminApprovalFormDialog({
   onAction,
   submitting = false,
   subGroups = [],
+  formSchema = null,
+  serverValidationErrors = {},
+  onClearServerValidationErrors,
 }) {
   const detail = useMemo(() => buildApprovalDetail(row || {}), [row]);
+  const subGroupOptions = useMemo(
+    () => buildApprovalSubGroupOptions(subGroups, row || {}),
+    [subGroups, row]
+  );
+  const requestFieldIndex = useMemo(() => {
+    const fields = Array.isArray(formSchema?.sections)
+      ? formSchema.sections.flatMap(section => section.fields || [])
+      : [];
+
+    return fields.reduce((index, field) => {
+      if (field?.kind !== "request_rule") {
+        return index;
+      }
+
+      if (field.fieldKey === "base_unit_of_measure") {
+        index.base_uom = field;
+      } else if (field.fieldKey === "plant") {
+        index.plant_code = field;
+      } else if (field.fieldKey === "storage_location") {
+        index.sloc_code = field;
+      } else {
+        index[field.fieldKey] = field;
+      }
+
+      return index;
+    }, {});
+  }, [formSchema]);
+  const fieldHints = useMemo(() => buildApprovalFieldHints(formSchema), [formSchema]);
+  const specificationFields = useMemo(
+    () =>
+      buildApprovalSpecificationFields({
+        detailFields: detail.specificationFields,
+        formSchema,
+      }),
+    [detail.specificationFields, formSchema]
+  );
+  const longTextHistorySections = useMemo(
+    () => buildCombinedLongTextHistory({ currentRow: detail.rawRow }),
+    [detail.rawRow]
+  );
 
   const [draftValues, setDraftValues] = useState(() => createApprovalDraft(detail));
   const [remarkDialogOpen, setRemarkDialogOpen] = useState(false);
   const [currentAction, setCurrentAction] = useState("");
   const [remarkText, setRemarkText] = useState("");
+  const [remarkError, setRemarkError] = useState("");
+  const [clientFieldErrors, setClientFieldErrors] = useState({});
+  const [hasInteracted, setHasInteracted] = useState(false);
 
   useEffect(() => {
     if (!open) {
       setRemarkDialogOpen(false);
       setCurrentAction("");
       setRemarkText("");
+      setClientFieldErrors({});
+      setHasInteracted(false);
     }
   }, [open, row]);
 
   useEffect(() => {
     setDraftValues(createApprovalDraft(detail));
+    setClientFieldErrors({});
+    setHasInteracted(false);
   }, [detail]);
+
+  useEffect(() => {
+    if (!hasInteracted) {
+      return;
+    }
+
+    setClientFieldErrors(
+      validateApprovalDraft({
+        draftValues,
+        formSchema,
+      })
+    );
+  }, [draftValues, formSchema, hasInteracted]);
+
+  const normalizedDetailStatus = String(detail.status || "").trim().toUpperCase();
+  const canSubmitApprovalAction = normalizedDetailStatus === "SUBMIT";
+
+  const displayFieldErrors = useMemo(
+    () => ({
+      ...clientFieldErrors,
+      ...(serverValidationErrors || {}),
+    }),
+    [clientFieldErrors, serverValidationErrors]
+  );
+
+  const updateDraftValues = updater => {
+    setHasInteracted(true);
+    onClearServerValidationErrors?.();
+    setDraftValues(current => updater(current));
+  };
+
+  const handleApproveClick = () => {
+    const nextErrors = validateApprovalDraft({
+      draftValues,
+      formSchema,
+    });
+
+    setHasInteracted(true);
+    setClientFieldErrors(nextErrors);
+    onClearServerValidationErrors?.();
+
+    if (Object.keys(nextErrors).length > 0) {
+      return;
+    }
+
+    setCurrentAction("Approve");
+    setRemarkText("");
+    setRemarkError("");
+    setRemarkDialogOpen(true);
+  };
+
+  const handleReworkClick = () => {
+    setCurrentAction("Rework");
+    setRemarkText("");
+    setRemarkError("");
+    setRemarkDialogOpen(true);
+  };
+
+  const handleRejectClick = () => {
+    setCurrentAction("Reject");
+    setRemarkText("");
+    setRemarkError("");
+    setRemarkDialogOpen(true);
+  };
 
   const handleDialogClose = (_, reason) => {
     if (submitting && (reason === "backdropClick" || reason === "escapeKeyDown")) {
@@ -331,6 +478,31 @@ export default function AdminApprovalFormDialog({
     }
 
     setRemarkDialogOpen(false);
+  };
+
+  const renderFieldHint = fieldKey => {
+    const hintText = fieldHints[fieldKey];
+
+    if (!hintText) {
+      return null;
+    }
+
+    return (
+      <Tooltip
+        title={
+          <Box sx={{ p: 1 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+              Notes
+            </Typography>
+            <Typography variant="caption">{hintText}</Typography>
+          </Box>
+        }
+        arrow
+        placement="right"
+      >
+        <InfoOutlined sx={{ mb: 1, color: "#3f51b5", fontSize: 20 }} />
+      </Tooltip>
+    );
   };
 
   return (
@@ -438,15 +610,14 @@ export default function AdminApprovalFormDialog({
                 <Autocomplete
                   fullWidth
                   size="small"
-                  value={
-                    subGroups.find(
-                      sg => sg.id === draftValues.material_sub_group_id
-                    ) || null
+                  value={findSubGroupOptionById(subGroupOptions, draftValues.material_sub_group_id, row)}
+                  options={subGroupOptions}
+                  isOptionEqualToValue={(option, value) =>
+                    String(option?.id ?? "") === String(value?.id ?? "")
                   }
-                  options={subGroups}
-                  getOptionLabel={option => option.name || option.subGroupName || `Sub Group ${option.id}`}
+                  getOptionLabel={option => formatSubGroupOptionLabel(option)}
                   onChange={(_, newValue) =>
-                    setDraftValues(current => ({
+                    updateDraftValues(current => ({
                       ...current,
                       material_sub_group_id: newValue?.id ?? null,
                     }))
@@ -456,6 +627,8 @@ export default function AdminApprovalFormDialog({
                       {...params}
                       size="small"
                       placeholder="Select sub material group"
+                      error={Boolean(displayFieldErrors.material_sub_group_id?.error)}
+                      helperText={displayFieldErrors.material_sub_group_id?.message || ""}
                     />
                   )}
                 />
@@ -465,96 +638,113 @@ export default function AdminApprovalFormDialog({
                   label="Material Description *"
                   sections={detail.fieldHistory?.material_description || []}
                 />
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Material Description *"
-                  value={draftValues.material_description}
-                  onChange={event =>
-                    setDraftValues(current => ({
-                      ...current,
-                      material_description: event.target.value,
-                    }))
-                  }
-                />
+                <Box sx={{ display: "flex", alignItems: "flex-end", gap: 1 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    value={draftValues.material_description}
+                    onChange={event =>
+                      updateDraftValues(current => ({
+                        ...current,
+                        material_description: event.target.value,
+                      }))
+                    }
+                    inputProps={{ maxLength: 40 }}
+                    error={Boolean(displayFieldErrors.material_description?.error)}
+                    helperText={displayFieldErrors.material_description?.message || ""}
+                  />
+                  {renderFieldHint("material_description")}
+                </Box>
               </Grid>
               <Grid item xs={12} md={6}>
                 <FieldHistoryLabel
-                  label="Base UoM *"
+                  label={`Base UoM${requestFieldIndex.base_uom?.isRequired ? " *" : ""}`}
                   sections={detail.fieldHistory?.base_uom || []}
                 />
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Base UoM *"
-                  value={draftValues.base_uom}
-                  onChange={event =>
-                    setDraftValues(current => ({
-                      ...current,
-                      base_uom: event.target.value,
-                    }))
-                  }
-                />
+                <Box sx={{ display: "flex", alignItems: "flex-end", gap: 1 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    value={draftValues.base_uom}
+                    onChange={event =>
+                      updateDraftValues(current => ({
+                        ...current,
+                        base_uom: event.target.value,
+                      }))
+                    }
+                    error={Boolean(displayFieldErrors.base_uom?.error)}
+                    helperText={displayFieldErrors.base_uom?.message || ""}
+                  />
+                  {renderFieldHint("base_uom")}
+                </Box>
               </Grid>
               <Grid item xs={12} md={6}>
                 <FieldHistoryLabel
-                  label="Plant"
+                  label={`Plant${requestFieldIndex.plant_code?.isRequired ? " *" : ""}`}
                   sections={detail.fieldHistory?.plant_code || []}
                 />
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Plant"
-                  value={draftValues.plant_code || ""}
-                  onChange={event =>
-                    setDraftValues(current => ({
-                      ...current,
-                      plant_code: event.target.value,
-                    }))
-                  }
-                />
+                <Box sx={{ display: "flex", alignItems: "flex-end", gap: 1 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    value={draftValues.plant_code || ""}
+                    onChange={event =>
+                      updateDraftValues(current => ({
+                        ...current,
+                        plant_code: event.target.value,
+                      }))
+                    }
+                    error={Boolean(displayFieldErrors.plant_code?.error)}
+                    helperText={displayFieldErrors.plant_code?.message || ""}
+                  />
+                  {renderFieldHint("plant_code")}
+                </Box>
               </Grid>
               <Grid item xs={12} md={6}>
                 <FieldHistoryLabel
-                  label="Storage Location"
+                  label={`Storage Location${requestFieldIndex.sloc_code?.isRequired ? " *" : ""}`}
                   sections={detail.fieldHistory?.sloc_code || []}
                 />
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Storage Location"
-                  value={draftValues.sloc_code || ""}
-                  onChange={event =>
-                    setDraftValues(current => ({
-                      ...current,
-                      sloc_code: event.target.value,
-                    }))
-                  }
-                />
+                <Box sx={{ display: "flex", alignItems: "flex-end", gap: 1 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    value={draftValues.sloc_code || ""}
+                    onChange={event =>
+                      updateDraftValues(current => ({
+                        ...current,
+                        sloc_code: event.target.value,
+                      }))
+                    }
+                    error={Boolean(displayFieldErrors.sloc_code?.error)}
+                    helperText={displayFieldErrors.sloc_code?.message || ""}
+                  />
+                  {renderFieldHint("sloc_code")}
+                </Box>
               </Grid>
               <Grid item xs={12}>
                 <FieldHistoryLabel
                   label="Long Text"
-                  sections={[]}
+                  sections={longTextHistorySections}
+                  renderSectionValue={renderLongTextHistoryValue}
                 />
                 <Stack spacing={1}>
-                  {[
-                    { key: "long_text_1", label: "Long Text 1" },
-                    { key: "long_text_2", label: "Long Text 2" },
-                    { key: "long_text_3", label: "Long Text 3" },
-                  ].map(({ key, label }) => (
+                  {["long_text_1", "long_text_2", "long_text_3"].map(key => (
                     <TextField
                       key={key}
                       fullWidth
                       size="small"
-                      label={label}
                       value={draftValues[key] || ""}
                       onChange={event =>
-                        setDraftValues(current => ({
+                        updateDraftValues(current => ({
                           ...current,
                           [key]: event.target.value,
                         }))
                       }
+                      inputProps={{ maxLength: 40 }}
+                      error={Boolean(displayFieldErrors[key]?.error)}
+                      helperText={displayFieldErrors[key]?.message || ""}
+                      sx={{ "& .MuiOutlinedInput-notchedOutline": { borderStyle: "dashed" } }}
                     />
                   ))}
                 </Stack>
@@ -564,12 +754,13 @@ export default function AdminApprovalFormDialog({
 
           <Box>
             <SectionLabel>Specification</SectionLabel>
-            {detail.specificationFields.length > 0 ? (
+            {specificationFields.length > 0 ? (
               <Grid container spacing={2.5}>
-                {detail.specificationFields.map(field => {
+                {specificationFields.map(field => {
                   const historySections = field.historySections || [];
                   const isEditable = isEditableApprovalField(field.key) || field.historyKey;
                   const fieldValue = draftValues.template_payload?.templateValues?.[field.key] ?? field.value;
+                  const fieldError = displayFieldErrors[field.key];
 
                   return (
                     <Grid item xs={12} md={6} key={field.key}>
@@ -585,30 +776,37 @@ export default function AdminApprovalFormDialog({
                               size="small"
                               value={fieldValue || ""}
                               onChange={event =>
-                                setDraftValues(current => ({
+                                updateDraftValues(current => ({
                                   ...current,
                                   template_payload: {
                                     ...(current.template_payload || {}),
                                     templateValues: {
                                       ...(current.template_payload?.templateValues || {}),
-                                      [field.key]: event.target.value,
+                                      [field.key]: normalizeApprovalInputValue(
+                                        field,
+                                        event.target.value
+                                      ),
                                     },
                                   },
                                 }))
                               }
+                              error={Boolean(fieldError?.error)}
+                              helperText={fieldError?.message || ""}
+                              inputProps={{ maxLength: field.maxLength || undefined }}
                             />
                           ) : (
                             <ReadOnlyField label={field.label} value={fieldValue} />
                           )}
                         </Box>
-                        {!shouldShowFieldHistoryIcon(historySections) && (
-                          <Tooltip
-                            title="Field ini berasal dari specification template saat request dibuat."
-                            arrow
-                          >
-                            <InfoOutlined sx={{ mb: 1, color: "#3f51b5", fontSize: 20 }} />
-                          </Tooltip>
-                        )}
+                        {renderFieldHint(field.key) ||
+                          (!shouldShowFieldHistoryIcon(historySections) && (
+                            <Tooltip
+                              title="Field ini berasal dari specification template saat request dibuat."
+                              arrow
+                            >
+                              <InfoOutlined sx={{ mb: 1, color: "#3f51b5", fontSize: 20 }} />
+                            </Tooltip>
+                          ))}
                       </Box>
                     </Grid>
                   );
@@ -668,42 +866,30 @@ export default function AdminApprovalFormDialog({
           <Button
             variant="contained"
             startIcon={<CheckCircle />}
-            disabled={submitting}
-            onClick={() => {
-              setCurrentAction("Approve");
-              setRemarkText("");
-              setRemarkDialogOpen(true);
-            }}
+            disabled={submitting || !canSubmitApprovalAction}
+            onClick={handleApproveClick}
             sx={{ bgcolor: "#0b35d9", textTransform: "none", fontWeight: 800 }}
           >
             Approve
           </Button>
-          <Tooltip title="Belum masuk scope">
-            <span>
-              <Button
-                variant="contained"
-                startIcon={<Replay />}
-                disabled
-                title="Belum masuk scope"
-                sx={{ bgcolor: "#fb8c00", textTransform: "none", fontWeight: 800 }}
-              >
-                Rework
-              </Button>
-            </span>
-          </Tooltip>
-          <Tooltip title="Belum masuk scope">
-            <span>
-              <Button
-                variant="contained"
-                startIcon={<Cancel />}
-                disabled
-                title="Belum masuk scope"
-                sx={{ bgcolor: "#c62828", textTransform: "none", fontWeight: 800 }}
-              >
-                Reject
-              </Button>
-            </span>
-          </Tooltip>
+          <Button
+            variant="contained"
+            startIcon={<Replay />}
+            disabled={submitting || !canSubmitApprovalAction}
+            onClick={handleReworkClick}
+            sx={{ bgcolor: "#fb8c00", textTransform: "none", fontWeight: 800 }}
+          >
+            Rework
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<Cancel />}
+            disabled={submitting || !canSubmitApprovalAction}
+            onClick={handleRejectClick}
+            sx={{ bgcolor: "#c62828", textTransform: "none", fontWeight: 800 }}
+          >
+            Reject
+          </Button>
         </Stack>
       </DialogActions>
 
@@ -716,12 +902,14 @@ export default function AdminApprovalFormDialog({
         <Box sx={{ p: 2, display: "flex", alignItems: "center", gap: 1 }}>
           <WarningAmber sx={{ color: "#f59e0b" }} />
           <Typography variant="h6" sx={{ fontWeight: 900 }}>
-            Reason
+            {currentAction ? `${currentAction} Reason` : "Reason"}
           </Typography>
         </Box>
         <DialogContent sx={{ pt: 0 }}>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Please enter the reason before proceeding.
+            {currentAction
+              ? `Please enter the reason before proceeding with ${currentAction.toLowerCase()}.`
+              : "Please enter the reason before proceeding."}
           </Typography>
           <TextField
             fullWidth
@@ -729,7 +917,14 @@ export default function AdminApprovalFormDialog({
             rows={4}
             placeholder="Enter your message here..."
             value={remarkText}
-            onChange={e => setRemarkText(e.target.value)}
+            error={Boolean(remarkError)}
+            helperText={remarkError}
+            onChange={e => {
+              setRemarkText(e.target.value);
+              if (remarkError) {
+                setRemarkError("");
+              }
+            }}
             sx={{
               "& .MuiInputBase-root": {
                 bgcolor: "#f5f5f5",
@@ -748,6 +943,11 @@ export default function AdminApprovalFormDialog({
           <Button
             variant="contained"
             onClick={() => {
+              if (currentAction === "Reject" && !String(remarkText || "").trim()) {
+                setRemarkError("Reject reason is required.");
+                return;
+              }
+
               onAction?.(currentAction, detail, {
                 remark: remarkText,
                 editedRequest: {
@@ -766,7 +966,7 @@ export default function AdminApprovalFormDialog({
             disabled={submitting}
             sx={{ textTransform: "none", fontWeight: 800 }}
           >
-            {submitting ? "Saving..." : "Save"}
+            {submitting ? "Saving..." : currentAction || "Save"}
           </Button>
         </DialogActions>
       </Dialog>

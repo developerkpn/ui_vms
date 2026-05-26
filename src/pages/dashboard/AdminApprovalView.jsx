@@ -1,4 +1,5 @@
 import {
+  Close,
   Download,
   FilterAltOutlined,
   KeyboardArrowDown,
@@ -10,6 +11,9 @@ import {
   Box,
   Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
   Divider,
   IconButton,
   InputAdornment,
@@ -30,7 +34,10 @@ import {
 } from "@mui/material";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AdminApprovalFormDialog from "src/components/admin-approval/AdminApprovalFormDialog";
+import { buildApprovalDetail } from "src/helper/adminApprovalDetail.mjs";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
+import { buildApprovalSubGroupsRequestPath } from "src/helper/adminApprovalSubGroup.mjs";
+import { mapApprovalServerErrors } from "src/helper/adminApprovalValidation.mjs";
 import {
   APPROVAL_GROUP_OPTIONS,
   APPROVAL_STATUS_FILTER_OPTIONS,
@@ -59,6 +66,7 @@ const statusStyleMap = {
   Approved: { bgcolor: "#2f62d6", color: "common.white" },
   Rework: { bgcolor: "#f59e0b", color: "common.white" },
   Reject: { bgcolor: "#dc2626", color: "common.white" },
+  Cancel: { bgcolor: "#dc2626", color: "common.white" },
   Waiting: { bgcolor: "#8f96a3", color: "common.white" },
   Done: { bgcolor: "#16a34a", color: "common.white" },
 };
@@ -102,6 +110,100 @@ function TicketTypeBadge({ value }) {
   );
 }
 
+function ReworkStatusDialog({ open, row, onClose }) {
+  const detail = useMemo(() => buildApprovalDetail(row || {}), [row]);
+  const reworkSummary = detail.reworkSummary || {};
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <Box
+        sx={{
+          px: { xs: 2, sm: 3 },
+          py: 2,
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 2,
+        }}
+      >
+        <Box>
+          <Typography variant="overline" sx={{ fontWeight: 800, color: "text.secondary" }}>
+            Rework Status
+          </Typography>
+          <Typography variant="h5" sx={{ fontWeight: 900, color: "#455a64", lineHeight: 1.1 }}>
+            {detail.ticketNumber || "-"}
+          </Typography>
+          <Typography variant="body2" sx={{ mt: 0.75, fontWeight: 600, color: "text.secondary" }}>
+            {detail.basicInfo.materialDescription || "-"}
+          </Typography>
+        </Box>
+
+        <IconButton onClick={onClose} aria-label="Close rework status dialog">
+          <Close />
+        </IconButton>
+      </Box>
+
+      <DialogContent dividers sx={{ px: { xs: 2, sm: 3 }, py: 2.5 }}>
+        <Stack spacing={1.5}>
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2,
+              border: "1px solid",
+              borderColor: "divider",
+              borderRadius: 2,
+              bgcolor: "#fbfcfe",
+            }}
+          >
+            <Stack spacing={1.25}>
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+                  gap: 1.25,
+                }}
+              >
+                <Box>
+                  <Typography variant="caption" sx={{ display: "block", fontWeight: 800, mb: 0.5 }}>
+                    Rework By
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: "text.secondary" }}>
+                    {reworkSummary.approver || "-"}
+                  </Typography>
+                </Box>
+
+                <Box>
+                  <Typography variant="caption" sx={{ display: "block", fontWeight: 800, mb: 0.5 }}>
+                    Rework At
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: "text.secondary" }}>
+                    {reworkSummary.approvedAt || "-"}
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Box>
+                <Typography variant="caption" sx={{ display: "block", fontWeight: 800, mb: 0.5 }}>
+                  Reason
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: "text.secondary" }}>
+                  {reworkSummary.reason || "-"}
+                </Typography>
+              </Box>
+            </Stack>
+          </Paper>
+        </Stack>
+      </DialogContent>
+
+      <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 2 }}>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 export default function AdminApprovalView() {
   const axiosPrivate = useAxiosPrivate();
   const refreshWarningTimeoutRef = useRef(null);
@@ -116,6 +218,10 @@ export default function AdminApprovalView() {
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
   const [activeRow, setActiveRow] = useState(null);
   const [approvalDialogRow, setApprovalDialogRow] = useState(null);
+  const [reworkDialogRow, setReworkDialogRow] = useState(null);
+  const [approvalDialogSubGroups, setApprovalDialogSubGroups] = useState([]);
+  const [approvalDialogSchema, setApprovalDialogSchema] = useState(null);
+  const [approvalDialogServerErrors, setApprovalDialogServerErrors] = useState({});
   const [snackbar, setSnackbar] = useState({
     open: false,
     severity: "info",
@@ -147,6 +253,18 @@ export default function AdminApprovalView() {
     return "Approval berhasil diproses.";
   };
 
+  const getActionSuccessMessage = (action, nextStage) => {
+    if (action === "Rework") {
+      return "Request berhasil dikembalikan untuk dirework.";
+    }
+
+    if (action === "Reject") {
+      return "Request berhasil direject dan status berubah menjadi Cancel.";
+    }
+
+    return getApprovalSuccessMessage(nextStage);
+  };
+
   useEffect(() => {
     const run = async () => {
       try {
@@ -167,6 +285,64 @@ export default function AdminApprovalView() {
       clearRefreshWarningTimeout();
     };
   }, [axiosPrivate]);
+
+  useEffect(() => {
+    if (!approvalDialogRow) {
+      setApprovalDialogSubGroups([]);
+      setApprovalDialogSchema(null);
+      return undefined;
+    }
+
+    const requestPath = buildApprovalSubGroupsRequestPath(approvalDialogRow);
+    const materialGroupCode =
+      approvalDialogRow?.materialGroupCode || approvalDialogRow?.material_group_code || "";
+
+    let active = true;
+
+    const loadDialogData = async () => {
+      const [subGroupResult, schemaResult] = await Promise.allSettled([
+        requestPath ? axiosPrivate.get(requestPath) : Promise.resolve(null),
+        materialGroupCode
+          ? axiosPrivate.get(`/material/groups/${materialGroupCode}/form-schema`)
+          : Promise.resolve(null),
+      ]);
+
+      if (!active) {
+        return;
+      }
+
+      if (subGroupResult.status === "fulfilled") {
+        const response = subGroupResult.value;
+        setApprovalDialogSubGroups(
+          Array.isArray(response?.data?.data) ? response.data.data : []
+        );
+      } else {
+        console.error("Failed to fetch approval dialog sub groups:", subGroupResult.reason);
+        setApprovalDialogSubGroups([]);
+        openSnackbar(
+          "Sub material group belum berhasil dimuat di form approval. Silakan coba buka lagi.",
+          "warning"
+        );
+      }
+
+      if (schemaResult.status === "fulfilled") {
+        setApprovalDialogSchema(schemaResult.value?.data?.data || null);
+      } else {
+        console.error("Failed to fetch approval dialog schema:", schemaResult.reason);
+        setApprovalDialogSchema(null);
+        openSnackbar(
+          "Rule validasi form approval belum berhasil dimuat. Silakan coba buka lagi.",
+          "warning"
+        );
+      }
+    };
+
+    loadDialogData();
+
+    return () => {
+      active = false;
+    };
+  }, [approvalDialogRow, axiosPrivate]);
 
   const visibleRows = useMemo(() => {
     const statusRows = filterApprovalRowsByStatus(approvalRows, statusFilter);
@@ -211,38 +387,44 @@ export default function AdminApprovalView() {
 
   const handleOpenApproval = (row = activeRow) => {
     handleMenuClose();
+    setApprovalDialogServerErrors({});
     setApprovalDialogRow(row);
   };
 
   const handleOpenRework = (row = activeRow) => {
     handleMenuClose();
-    openSnackbar(
-      `View Rework untuk tiket ${row?.ticketNumber || "-"} akan disambungkan ke form rework.`,
-      "info"
-    );
+    setReworkDialogRow(row || null);
   };
 
   const handleApprovalAction = async (action, detail, payload) => {
     clearRefreshWarningTimeout();
 
-    if (action !== "Approve") {
+    if (!["Approve", "Rework", "Reject"].includes(action)) {
       openSnackbar(`${action} belum masuk scope approval saat ini.`, "info");
       return;
     }
 
     try {
       setSubmittingAction(true);
-      const response = await axiosPrivate.post(
-        `/material/requests/single/${detail.id}/approve`,
-        {
-          remark: payload?.remark ?? null,
-          editedRequest: payload?.editedRequest ?? {},
-        }
-      );
+      setApprovalDialogServerErrors({});
+      const endpoint =
+        action === "Rework"
+          ? `/material/requests/single/${detail.id}/rework`
+          : action === "Reject"
+            ? `/material/requests/single/${detail.id}/reject`
+            : `/material/requests/single/${detail.id}/approve`;
+      const requestBody =
+        action === "Rework" || action === "Reject"
+          ? { reason: payload?.remark ?? null }
+          : {
+              remark: payload?.remark ?? null,
+              editedRequest: payload?.editedRequest ?? {},
+            };
+      const response = await axiosPrivate.post(endpoint, requestBody);
 
       const nextStage = response.data?.data?.next_stage;
       setApprovalDialogRow(null);
-      openSnackbar(getApprovalSuccessMessage(nextStage), "success");
+      openSnackbar(getActionSuccessMessage(action, nextStage), "success");
 
       try {
         await fetchApprovalRows();
@@ -257,6 +439,9 @@ export default function AdminApprovalView() {
         }, 1600);
       }
     } catch (error) {
+      setApprovalDialogServerErrors(
+        mapApprovalServerErrors(error?.response?.data?.errors)
+      );
       const message =
         error?.response?.data?.message || "Approval gagal diproses. Silakan coba lagi.";
       openSnackbar(message, "error");
@@ -629,9 +814,22 @@ export default function AdminApprovalView() {
       <AdminApprovalFormDialog
         open={Boolean(approvalDialogRow)}
         row={approvalDialogRow}
-        onClose={() => setApprovalDialogRow(null)}
+        subGroups={approvalDialogSubGroups}
+        formSchema={approvalDialogSchema}
+        serverValidationErrors={approvalDialogServerErrors}
+        onClearServerValidationErrors={() => setApprovalDialogServerErrors({})}
+        onClose={() => {
+          setApprovalDialogRow(null);
+          setApprovalDialogServerErrors({});
+        }}
         onAction={handleApprovalAction}
         submitting={submittingAction}
+      />
+
+      <ReworkStatusDialog
+        open={Boolean(reworkDialogRow)}
+        row={reworkDialogRow}
+        onClose={() => setReworkDialogRow(null)}
       />
 
       <Snackbar

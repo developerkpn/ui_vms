@@ -9,6 +9,7 @@ const COLUMN_FIELD_READERS = {
   long_text_2: row => row?.long_text_2 ?? row?.longText2 ?? null,
   long_text_3: row => row?.long_text_3 ?? row?.longText3 ?? null,
 };
+const LONG_TEXT_FIELD_KEYS = ["long_text_1", "long_text_2", "long_text_3"];
 
 export function buildApprovalFieldHistory({ fieldKey, currentRow } = {}) {
   if (!fieldKey || !currentRow) {
@@ -31,6 +32,63 @@ export function buildApprovalFieldHistory({ fieldKey, currentRow } = {}) {
     }
 
     const changedBy = pickText(
+      snapshot.approved_by_username,
+      snapshot.approvedByUsername,
+      snapshot.approved_by_user_id,
+      snapshot.approvedByUserId,
+      snapshot.changed_by,
+      snapshot.changedBy
+    );
+
+    sections.push({
+      stage: pickText(snapshot.approval_stage, snapshot.approvalStage),
+      beforeValue,
+      afterValue,
+      sourceBy: previousChangedBy,
+      changedBy,
+      approvedAt: pickText(snapshot.approved_at, snapshot.approvedAt),
+    });
+
+    if (changedBy !== "-") {
+      previousChangedBy = changedBy;
+    }
+  });
+
+  return sections.sort(compareApprovedAtDesc);
+}
+
+export function buildCombinedLongTextHistory({ currentRow } = {}) {
+  if (!currentRow) {
+    return [];
+  }
+
+  const historyRows = getSortedHistoryRows(currentRow);
+  const sections = [];
+  let previousChangedBy = pickText(currentRow.created_by, currentRow.createdBy);
+
+  historyRows.forEach((snapshot, index) => {
+    const beforeValue = LONG_TEXT_FIELD_KEYS.map(fieldKey =>
+      toDisplayValue(readFieldValue(snapshot, fieldKey))
+    );
+    const nextSnapshot = historyRows[index + 1];
+    const afterValue = LONG_TEXT_FIELD_KEYS.map(fieldKey =>
+      toDisplayValue(
+        nextSnapshot ? readFieldValue(nextSnapshot, fieldKey) : readFieldValue(currentRow, fieldKey)
+      )
+    );
+
+    if (
+      beforeValue.every(
+        (lineValue, lineIndex) =>
+          toComparableValue(lineValue) === toComparableValue(afterValue[lineIndex])
+      )
+    ) {
+      return;
+    }
+
+    const changedBy = pickText(
+      snapshot.approved_by_username,
+      snapshot.approvedByUsername,
       snapshot.approved_by_user_id,
       snapshot.approvedByUserId,
       snapshot.changed_by,

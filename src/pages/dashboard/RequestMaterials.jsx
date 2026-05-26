@@ -1,4 +1,4 @@
-import { Add, ContentCopy, Download, MoreHoriz } from "@mui/icons-material";
+import { Add, Close, Download, MoreHoriz } from "@mui/icons-material";
 import {
   Alert,
   Box,
@@ -7,7 +7,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   Divider,
   FormControl,
   IconButton,
@@ -31,7 +30,16 @@ import {
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { buildApprovalDetail } from "src/helper/adminApprovalDetail.mjs";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
+
+const APPROVAL_STATUS_BADGES = {
+  APPROVED: { label: "Approve", bgcolor: "#2146d8", color: "#ffffff" },
+  REWORK: { label: "Rework", bgcolor: "#f59e0b", color: "#ffffff" },
+  REJECTED: { label: "Reject", bgcolor: "#d93025", color: "#ffffff" },
+  WAITING: { label: "Waiting", bgcolor: "#8a9099", color: "#ffffff" },
+  "-": { label: "-", bgcolor: "#eceff3", color: "#546e7a" },
+};
 
 const GROUP_OPTIONS = [
   { value: "none", label: "Group By" },
@@ -147,21 +155,197 @@ const INITIAL_REQUESTS = [
 const INITIAL_MASS_REQUESTS = INITIAL_REQUESTS.filter(item => item.mode === "mass");
 
 function StatusPill({ status }) {
-  const colorMap = {
-    Submit: "primary",
-    Approve: "primary",
-    Rework: "warning",
-    Reject: "error",
-    Cancel: "error",
-    Done: "success",
-    Waiting: "default",
+  const normalizedStatus = String(status || "").trim().toUpperCase();
+  const styleMap = {
+    SUBMIT: { bgcolor: "#2f62d6", color: "#ffffff" },
+    APPROVE: { bgcolor: "#2f62d6", color: "#ffffff" },
+    APPROVED: { bgcolor: "#2f62d6", color: "#ffffff" },
+    REWORK: { bgcolor: "#f59e0b", color: "#ffffff" },
+    REJECT: { bgcolor: "#dc2626", color: "#ffffff" },
+    REJECTED: { bgcolor: "#dc2626", color: "#ffffff" },
+    CANCEL: { bgcolor: "#dc2626", color: "#ffffff" },
+    CANCELLED: { bgcolor: "#dc2626", color: "#ffffff" },
+    DONE: { bgcolor: "#16a34a", color: "#ffffff" },
+    WAITING: { bgcolor: "#8f96a3", color: "#ffffff" },
+    default: { bgcolor: "#eceff3", color: "#546e7a" },
   };
 
-  return <Chip label={status} color={colorMap[status] || "default"} size="small" />;
+  return (
+    <Chip
+      label={status}
+      size="small"
+      sx={{
+        fontWeight: 700,
+        ...(styleMap[normalizedStatus] || styleMap.default),
+      }}
+    />
+  );
 }
 
 function TicketTypePill({ value }) {
   return <Chip label={value} variant="outlined" size="small" />;
+}
+
+function ApprovalStatusCard({ item }) {
+  const badge = APPROVAL_STATUS_BADGES[item.status] || APPROVAL_STATUS_BADGES["-"];
+
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        p: 0,
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 2,
+        overflow: "hidden",
+      }}
+    >
+      <Stack direction={{ xs: "column", sm: "row" }} alignItems="stretch">
+        <Box
+          sx={{
+            flex: 1,
+            px: 2,
+            py: 1.75,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            gap: 0.75,
+            minHeight: 92,
+          }}
+        >
+          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "text.primary" }}>
+            {item.label || "-"}
+          </Typography>
+          <Typography variant="body2" sx={{ fontWeight: 700, color: "text.secondary" }}>
+            {item.approver || "-"}
+          </Typography>
+        </Box>
+
+        <Box
+          sx={{
+            width: { xs: "100%", sm: 188 },
+            px: 2,
+            py: 1.75,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            alignItems: { xs: "flex-start", sm: "flex-end" },
+            gap: 1,
+            borderTop: { xs: "1px solid", sm: "none" },
+            borderLeft: { xs: "none", sm: "1px solid" },
+            borderColor: "divider",
+            bgcolor: "#fbfcfe",
+            minHeight: 92,
+          }}
+        >
+          <Box
+            sx={{
+              minWidth: 128,
+              px: 2.25,
+              py: 1,
+              borderRadius: 1.5,
+              textAlign: "center",
+              fontWeight: 900,
+              fontSize: "0.95rem",
+              lineHeight: 1.1,
+              ...badge,
+            }}
+          >
+            {badge.label}
+          </Box>
+          <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary" }}>
+            {item.approvedAt || "-"}
+          </Typography>
+        </Box>
+      </Stack>
+    </Paper>
+  );
+}
+
+function RequestActionDialog({ open, mode, request, onClose, onReviseRequest }) {
+  const detail = useMemo(() => buildApprovalDetail(request || {}), [request]);
+  const isReworkMode = mode === "rework";
+  const rows = isReworkMode ? [detail.reworkSummary] : detail.approvalHistory;
+  const dialogTitle = isReworkMode ? "Rework Status" : "Approval Status";
+  const canReviseRequest =
+    isReworkMode && String(detail.status || "").trim().toUpperCase() === "REWORK" && detail.id;
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <Box
+        sx={{
+          px: { xs: 2, sm: 3 },
+          py: 2,
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 2,
+        }}
+      >
+        <Box>
+          <Typography variant="overline" sx={{ fontWeight: 800, color: "text.secondary" }}>
+            {dialogTitle}
+          </Typography>
+          <Typography variant="h5" sx={{ fontWeight: 900, color: "#455a64", lineHeight: 1.1 }}>
+            {detail.ticketNumber}
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{ mt: 0.75, fontWeight: 600, color: "text.secondary" }}
+          >
+            {detail.basicInfo.materialDescription || "-"}
+          </Typography>
+        </Box>
+
+        <IconButton onClick={onClose} aria-label="Close request status dialog">
+          <Close />
+        </IconButton>
+      </Box>
+
+      <DialogContent dividers sx={{ px: { xs: 2, sm: 3 }, py: 2.5 }}>
+        <Stack spacing={1.5}>
+          {rows.map((item, index) => (
+            <ApprovalStatusCard key={`${item.step || "rework"}-${index}`} item={item} />
+          ))}
+
+          {isReworkMode && (
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2,
+                border: "1px solid",
+                borderColor: "divider",
+                borderRadius: 2,
+                bgcolor: "#fbfcfe",
+              }}
+            >
+              <Typography variant="caption" sx={{ display: "block", mb: 0.75, fontWeight: 800 }}>
+                Reason
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: "text.secondary" }}>
+                {detail.reworkSummary.reason || "-"}
+              </Typography>
+            </Paper>
+          )}
+        </Stack>
+      </DialogContent>
+
+      <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 2 }}>
+        {canReviseRequest ? (
+          <Button
+            variant="contained"
+            onClick={() => onReviseRequest?.(detail)}
+            sx={{ textTransform: "none", fontWeight: 800 }}
+          >
+            Revise Request
+          </Button>
+        ) : null}
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
 }
 
 export default function RequestMaterials() {
@@ -173,8 +357,7 @@ export default function RequestMaterials() {
   const [groupBy, setGroupBy] = useState("none");
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
   const [activeRequestId, setActiveRequestId] = useState(null);
-  const [approvalDialogOpen, setApprovalDialogOpen] = useState(false);
-  const [reworkDialogOpen, setReworkDialogOpen] = useState(false);
+  const [actionDialogMode, setActionDialogMode] = useState(null);
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -203,8 +386,26 @@ export default function RequestMaterials() {
               createdBy: item.created_by,
               createdAt: item.created_at,
               assignedTo: item.assigned_to,
-              reworkReason: "",
-              approvalSteps: [],
+              reworkStage: item.rework_stage,
+              reworkByUserId: item.rework_by_user_id,
+              reworkByUsername: item.rework_by_username,
+              reworkAt: item.rework_at,
+              reworkReason: item.rework_reason || "",
+              approval_1_user_id: item.approval_1_user_id,
+              approval_1_user_name: item.approval_1_user_name,
+              approval_1_status: item.approval_1_status,
+              approval_1_at: item.approval_1_at,
+              approval_1_remark: item.approval_1_remark,
+              approval_2_user_id: item.approval_2_user_id,
+              approval_2_user_name: item.approval_2_user_name,
+              approval_2_status: item.approval_2_status,
+              approval_2_at: item.approval_2_at,
+              approval_2_remark: item.approval_2_remark,
+              approval_3_user_id: item.approval_3_user_id,
+              approval_3_user_name: item.approval_3_user_name,
+              approval_3_status: item.approval_3_status,
+              approval_3_at: item.approval_3_at,
+              approval_3_remark: item.approval_3_remark,
             }))
           : [];
 
@@ -245,16 +446,17 @@ export default function RequestMaterials() {
 
   const filteredRequests = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
+    const normalizeSearchValue = value => String(value || "").toLowerCase();
 
     const nextRows = requests.filter(item => {
       const matchesTab = item.mode === activeTab;
       const matchesSearch =
         query === "" ||
-        item.ticketNumber.toLowerCase().includes(query) ||
-        item.ticketType.toLowerCase().includes(query) ||
-        item.materialDescription.toLowerCase().includes(query) ||
-        item.status.toLowerCase().includes(query) ||
-        item.assignedTo.toLowerCase().includes(query);
+        normalizeSearchValue(item.ticketNumber).includes(query) ||
+        normalizeSearchValue(item.ticketType).includes(query) ||
+        normalizeSearchValue(item.materialDescription).includes(query) ||
+        normalizeSearchValue(item.status).includes(query) ||
+        normalizeSearchValue(item.assignedTo).includes(query);
 
       return matchesTab && matchesSearch;
     });
@@ -302,9 +504,9 @@ export default function RequestMaterials() {
     setMenuAnchorEl(null);
   };
 
-  const handleCopyRequest = () => {
+  const handleOpenActionDialog = mode => {
+    setActionDialogMode(mode);
     handleMenuClose();
-    openSnackbar("Copy Request belum diaktifkan.", "info");
   };
 
   const handleCreateRequest = () => {
@@ -314,6 +516,11 @@ export default function RequestMaterials() {
     };
 
     navigate(routeByTab[activeTab] || routeByTab.single);
+  };
+
+  const handleReviseRequest = detail => {
+    setActionDialogMode(null);
+    navigate(`/dashboard/materials/request/single/${detail.id}/rework`);
   };
 
   return (
@@ -550,8 +757,7 @@ export default function RequestMaterials() {
       >
         <MenuItem
           onClick={() => {
-            setApprovalDialogOpen(true);
-            handleMenuClose();
+            handleOpenActionDialog("approval");
           }}
         >
           View Approval
@@ -559,88 +765,22 @@ export default function RequestMaterials() {
         <Divider />
         <MenuItem
           onClick={() => {
-            setReworkDialogOpen(true);
-            handleMenuClose();
+            handleOpenActionDialog("rework");
           }}
         >
           View Rework
         </MenuItem>
         <Divider />
-        <MenuItem onClick={handleCopyRequest}>Copy Request</MenuItem>
+        <MenuItem onClick={handleMenuClose}>Copy Request</MenuItem>
       </Menu>
 
-      <Dialog
-        open={approvalDialogOpen}
-        onClose={() => setApprovalDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Approval Detail</DialogTitle>
-        <DialogContent dividers>
-          {selectedRequest && (
-            <Stack spacing={1.5}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                {selectedRequest.ticketNumber}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {selectedRequest.materialDescription}
-              </Typography>
-              {selectedRequest.approvalSteps.map(step => (
-                <Paper key={step.title} variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
-                  <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
-                    <Box>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
-                        {step.title}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {step.owner}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ textAlign: "right" }}>
-                      <StatusPill status={step.status} />
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ display: "block", mt: 0.75 }}
-                      >
-                        {step.date}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </Paper>
-              ))}
-            </Stack>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setApprovalDialogOpen(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={reworkDialogOpen}
-        onClose={() => setReworkDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Rework Detail</DialogTitle>
-        <DialogContent dividers>
-          {selectedRequest && (
-            <Stack spacing={1.5}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                {selectedRequest.ticketNumber}
-              </Typography>
-              <StatusPill status={selectedRequest.status} />
-              <Typography variant="body2" color="text.secondary">
-                {selectedRequest.reworkReason || "Request ini belum punya catatan rework."}
-              </Typography>
-            </Stack>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setReworkDialogOpen(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
+      <RequestActionDialog
+        open={Boolean(actionDialogMode) && Boolean(selectedRequest)}
+        mode={actionDialogMode}
+        request={selectedRequest}
+        onClose={() => setActionDialogMode(null)}
+        onReviseRequest={handleReviseRequest}
+      />
 
       <Snackbar
         open={snackbar.open}

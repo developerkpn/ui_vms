@@ -107,6 +107,7 @@ export function normalizeApprovalRows(rows = []) {
 
     addStringProp(normalized, "materialGroupCode", row.material_group_code, row.materialGroupCode);
     addStringProp(normalized, "materialGroupName", row.material_group_name, row.materialGroupName);
+    addRawProp(normalized, "materialGroupId", row.material_group_id, row.materialGroupId);
     addStringProp(
       normalized,
       "subMaterialGroupCode",
@@ -121,6 +122,12 @@ export function normalizeApprovalRows(rows = []) {
       row.sub_material_group_name,
       row.subMaterialGroupName
     );
+    addRawProp(
+      normalized,
+      "materialSubGroupId",
+      row.material_sub_group_id,
+      row.materialSubGroupId
+    );
     addStringProp(normalized, "plantCode", row.plant_code, row.plantCode);
     addStringProp(normalized, "slocCode", row.sloc_code, row.slocCode);
     addStringProp(normalized, "longText1", row.long_text_1, row.longText1);
@@ -129,7 +136,18 @@ export function normalizeApprovalRows(rows = []) {
     addRawProp(normalized, "templatePayload", row.template_payload, row.templatePayload);
     addRawProp(normalized, "requestFields", row.request_fields, row.requestFields);
     addRawProp(normalized, "templateValues", row.template_values, row.templateValues);
+    addRawProp(normalized, "editHistory", row.edit_history, row.editHistory);
     addRawProp(normalized, "attachments", row.attachments);
+    addStringProp(normalized, "reworkStage", row.rework_stage, row.reworkStage);
+    addStringProp(normalized, "reworkByUserId", row.rework_by_user_id, row.reworkByUserId);
+    addStringProp(normalized, "reworkByUsername", row.rework_by_username, row.reworkByUsername);
+    addStringProp(
+      normalized,
+      "reworkAt",
+      row.rework_at ? formatDateTime(row.rework_at) : undefined,
+      row.reworkAt ? formatDateTime(row.reworkAt) : undefined
+    );
+    addStringProp(normalized, "reworkReason", row.rework_reason, row.reworkReason);
 
     [1, 2, 3].forEach(step => {
       addStringProp(
@@ -137,6 +155,14 @@ export function normalizeApprovalRows(rows = []) {
         `approval${step}UserId`,
         row[`approval_${step}_user_id`],
         row[`approval${step}UserId`]
+      );
+      addStringProp(
+        normalized,
+        `approval${step}UserName`,
+        row[`approval_${step}_user_name`],
+        row[`approval_${step}_username`],
+        row[`approval${step}UserName`],
+        row[`approval${step}Username`]
       );
       addStringProp(
         normalized,
@@ -209,9 +235,14 @@ export function sortApprovalRows(rows = [], groupBy = "none") {
 }
 
 function resolveApprovalStage(row = {}) {
+  const normalizedStatus = String(row.status || "").trim().toUpperCase();
   const approval1 = String(row.approval_1_status || "").toUpperCase();
   const approval2 = String(row.approval_2_status || "").toUpperCase();
   const approval3 = String(row.approval_3_status || "").toUpperCase();
+
+  if (["REJECT", "REJECTED", "CANCEL", "CANCELLED"].includes(normalizedStatus)) {
+    return "Cancelled";
+  }
 
   if (!approval1 || approval1 === "WAITING") {
     return "Approval 1";

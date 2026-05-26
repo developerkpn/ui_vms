@@ -4,11 +4,14 @@ import {
   Button,
   Card,
   CardContent,
+  CircularProgress,
   Divider,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
+  FormHelperText,
   Grid,
   IconButton,
   Stack,
@@ -34,17 +37,160 @@ import {
   getAttachmentValidationError,
   normalizeAttachmentSelection,
 } from "./attachmentValidation.mjs";
+import {
+  mapRequesterServerErrors,
+  validateRequesterDraft,
+  validateRequesterField,
+} from "./singleMaterialFormValidation.mjs";
 
-const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCache = {} }) => {
+const parsePayload = payload => {
+  if (!payload) {
+    return {};
+  }
+
+  if (typeof payload === "object") {
+    return payload;
+  }
+
+  try {
+    return JSON.parse(payload);
+  } catch {
+    return {};
+  }
+};
+
+const normalizeExistingAttachment = attachment => ({
+  id: attachment?.id ?? null,
+  name: attachment?.file_name || attachment?.fileName || attachment?.name || "Existing file",
+  type: attachment?.file_type || attachment?.fileType || attachment?.type || "",
+  path: attachment?.file_path || attachment?.filePath || attachment?.path || "",
+  existing: true,
+});
+
+const isExistingAttachment = attachment => Boolean(attachment?.existing);
+
+const getAttachmentName = attachment => attachment?.name || attachment?.file_name || "Attachment";
+
+const getRequestValue = (sources, ...keys) => {
+  for (const key of keys) {
+    for (const source of sources) {
+      const value = source?.[key];
+      if (value !== undefined && value !== null && value !== "") {
+        return value;
+      }
+    }
+  }
+
+  return "";
+};
+
+const getPersistentRequestFields = (requestFieldValues, formData) => {
+  const fields = {};
+  const plant = requestFieldValues?.plant || formData?.plant || "";
+  const storageLocation = requestFieldValues?.storage_location || formData?.storageLocation || "";
+  const materialType = requestFieldValues?.material_type || formData?.materialType || "";
+
+  if (plant) {
+    fields.plant = plant;
+  }
+  if (storageLocation) {
+    fields.storage_location = storageLocation;
+  }
+  if (materialType) {
+    fields.material_type = materialType;
+  }
+
+  return fields;
+};
+
+const mergePersistentRequestFields = (nextRequestFieldValues, previousRequestFieldValues, formData) => ({
+  ...nextRequestFieldValues,
+  ...getPersistentRequestFields(previousRequestFieldValues, formData),
+});
+
+const buildReworkFormState = ({ row, schemaPayload, formData }) => {
+  const payload = parsePayload(row?.template_payload ?? row?.templatePayload);
+  const payloadRequestFields = payload?.requestFields || {};
+  const payloadTemplateValues = payload?.templateValues || {};
+  const rowRequestFields = row?.request_fields || row?.requestFields || {};
+  const rowTemplateValues = row?.template_values || row?.templateValues || {};
+  const formDataRequestFields = {
+    plant: formData?.plant,
+    storage_location: formData?.storageLocation,
+    material_type: formData?.materialType,
+  };
+  const requestSources = [formDataRequestFields, rowRequestFields, payloadRequestFields, row];
+  const materialGroupCode =
+    row?.material_group_code || row?.materialGroupCode || payloadRequestFields.material_group || "";
+  const baseState = applyMaterialGroupSchema(
+    createDynamicFormState({
+      materialGroup: materialGroupCode,
+    }),
+    schemaPayload || {}
+  );
+
+  return {
+    ...baseState,
+    subgroup:
+      row?.material_sub_group_id ??
+      row?.materialSubGroupId ??
+      row?.sub_material_group_id ??
+      row?.subgroup ??
+      "",
+    requestFieldValues: {
+      ...baseState.requestFieldValues,
+      plant: getRequestValue(requestSources, "plant", "plant_code", "plantCode"),
+      storage_location: getRequestValue(
+        requestSources,
+        "storage_location",
+        "storageLocation",
+        "sloc_code",
+        "slocCode"
+      ),
+      material_type: getRequestValue(requestSources, "material_type", "materialType"),
+      material_group: materialGroupCode,
+      material_description:
+        row?.material_description ||
+        row?.materialDescription ||
+        getRequestValue(requestSources, "material_description"),
+      base_unit_of_measure:
+        row?.uom ||
+        row?.base_uom ||
+        row?.baseUom ||
+        getRequestValue(requestSources, "base_unit_of_measure", "base_uom"),
+      long_text_1:
+        row?.long_text_1 || row?.longText1 || getRequestValue(requestSources, "long_text_1"),
+      long_text_2:
+        row?.long_text_2 || row?.longText2 || getRequestValue(requestSources, "long_text_2"),
+      long_text_3:
+        row?.long_text_3 || row?.longText3 || getRequestValue(requestSources, "long_text_3"),
+    },
+    templateFieldValues: {
+      ...baseState.templateFieldValues,
+      ...payloadTemplateValues,
+      ...rowTemplateValues,
+    },
+  };
+};
+
+const SingleMaterialForm = ({
+  onBack,
+  formData,
+  prefetchedGroups = [],
+  schemaCache = {},
+  mode = "create",
+  requestId = "",
+}) => {
   const navigate = useNavigate();
   const axiosPrivate = useAxiosPrivate();
+  const isReworkMode = mode === "rework";
   const [materialGroups, setMaterialGroups] = useState([]);
   const [formState, setFormState] = useState(() => createDynamicFormState());
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [saveSuccessOpen, setSaveSuccessOpen] = useState(false);
+  const [loadingExistingRequest, setLoadingExistingRequest] = useState(false);
 
-  // Track per-field validation errors: { [fieldKey]: { error, message } }
   const [fieldErrors, setFieldErrors] = useState({});
   const fileInputRef = useRef(null);
   const latestSchemaRequestRef = useRef(0);
@@ -72,7 +218,6 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
     },
   };
 
-  // Use pre-fetched groups if available, otherwise fetch on mount
   useEffect(() => {
     if (prefetchedGroups.length > 0) {
       setMaterialGroups(prefetchedGroups);
@@ -92,7 +237,74 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
     fetchGroups();
   }, [axiosPrivate, prefetchedGroups]);
 
-  // Apply schema from cache instantly when material group changes
+  useEffect(() => {
+    if (!isReworkMode || !requestId) {
+      return undefined;
+    }
+
+    let active = true;
+
+    const loadExistingRequest = async () => {
+      try {
+        setLoadingExistingRequest(true);
+        setSubmitError("");
+        const detailResponse = await axiosPrivate.get(`/material/requests/single/${requestId}`);
+        const row = detailResponse.data?.data || {};
+        const payload = parsePayload(row?.template_payload ?? row?.templatePayload);
+        const materialGroupCode =
+          row?.material_group_code || row?.materialGroupCode || payload?.requestFields?.material_group || "";
+
+        const [groupsResponse, schemaResponse] = await Promise.all([
+          prefetchedGroups.length > 0
+            ? Promise.resolve({ data: { success: true, data: prefetchedGroups } })
+            : axiosPrivate.get("/material/groups/dropdown"),
+          materialGroupCode
+            ? axiosPrivate.get(`/material/groups/${materialGroupCode}/form-schema`)
+            : Promise.resolve({ data: { data: null } }),
+        ]);
+
+        if (!active) {
+          return;
+        }
+
+        const groups = groupsResponse.data?.success
+          ? groupsResponse.data.data || []
+          : Array.isArray(groupsResponse.data?.data)
+            ? groupsResponse.data.data
+            : [];
+
+        setMaterialGroups(groups);
+        activeMaterialGroupRef.current = materialGroupCode;
+        setFormState(
+          buildReworkFormState({
+            row,
+            schemaPayload: schemaResponse.data?.data || {},
+            formData,
+          })
+        );
+        setAttachments(
+          Array.isArray(row?.attachments) ? row.attachments.map(normalizeExistingAttachment) : []
+        );
+        setFieldErrors({});
+      } catch (error) {
+        console.error("Failed to load existing single request", error);
+        if (active) {
+          setSubmitError("Failed to load existing request data.");
+        }
+      } finally {
+        if (active) {
+          setLoadingExistingRequest(false);
+        }
+      }
+    };
+
+    loadExistingRequest();
+
+    return () => {
+      active = false;
+    };
+  }, [axiosPrivate, formData, isReworkMode, prefetchedGroups, requestId]);
+
   const applySchemaFromCache = useCallback(
     groupCode => {
       const cachedSchema = schemaCache[groupCode];
@@ -100,47 +312,75 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
         if (activeMaterialGroupRef.current !== groupCode) {
           return false;
         }
-        setFormState(prev => applyMaterialGroupSchema(prev, cachedSchema));
-        // Clear field errors when changing groups
+        setFormState(prev => {
+          const nextState = applyMaterialGroupSchema(prev, cachedSchema);
+          return {
+            ...nextState,
+            requestFieldValues: mergePersistentRequestFields(
+              nextState.requestFieldValues,
+              prev.requestFieldValues,
+              formData
+            ),
+          };
+        });
         setFieldErrors({});
         return true;
       }
       return false;
     },
-    [schemaCache]
+    [formData, schemaCache]
   );
 
   const loadSchemaFromApi = useCallback(
     async groupCode => {
-      const requestId = latestSchemaRequestRef.current + 1;
-      latestSchemaRequestRef.current = requestId;
+      const requestSequence = latestSchemaRequestRef.current + 1;
+      latestSchemaRequestRef.current = requestSequence;
 
       try {
         const response = await axiosPrivate.get(`/material/groups/${groupCode}/form-schema`);
         if (
           response.data?.data &&
-          latestSchemaRequestRef.current === requestId &&
+          latestSchemaRequestRef.current === requestSequence &&
           activeMaterialGroupRef.current === groupCode
         ) {
-          setFormState(prev => applyMaterialGroupSchema(prev, response.data.data));
+          setFormState(prev => {
+            const nextState = applyMaterialGroupSchema(prev, response.data.data);
+            return {
+              ...nextState,
+              requestFieldValues: mergePersistentRequestFields(
+                nextState.requestFieldValues,
+                prev.requestFieldValues,
+                formData
+              ),
+            };
+          });
           setFieldErrors({});
         }
       } catch (err) {
         console.error("Failed to load schema", err);
       }
     },
-    [axiosPrivate]
+    [axiosPrivate, formData]
   );
 
   const handleGroupChange = e => {
     const newGroup = e.target.value;
     activeMaterialGroupRef.current = newGroup;
-    setFormState(prev => resetForMaterialGroupChange(prev));
-    setFormState(prev => ({ ...prev, materialGroup: newGroup }));
+    setFormState(prev => {
+      const nextState = resetForMaterialGroupChange(prev);
+      return {
+        ...nextState,
+        materialGroup: newGroup,
+        requestFieldValues: mergePersistentRequestFields(
+          nextState.requestFieldValues,
+          prev.requestFieldValues,
+          formData
+        ),
+      };
+    });
     setFieldErrors({});
 
     if (newGroup) {
-      // Try cache first (instant), fallback to API
       const fromCache = applySchemaFromCache(newGroup);
       if (!fromCache) {
         loadSchemaFromApi(newGroup);
@@ -151,12 +391,20 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
   const handleSubgroupChange = e => {
     const newSubgroup = e.target.value;
     setFormState(prev => ({ ...prev, subgroup: newSubgroup }));
+    setFieldErrors(prev => ({
+      ...prev,
+      subgroup: validateRequesterField("subgroup", newSubgroup),
+    }));
   };
 
   const handleRequestFieldChange = (fieldKey, value) => {
     setFormState(prev => ({
       ...prev,
       requestFieldValues: { ...prev.requestFieldValues, [fieldKey]: value },
+    }));
+    setFieldErrors(prev => ({
+      ...prev,
+      [fieldKey]: validateRequesterField(fieldKey, value),
     }));
   };
 
@@ -205,9 +453,10 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
       materialGroupCode: formState.materialGroup,
       requestFields: {
         ...formState.requestFieldValues,
-        plant: formData?.plant || "",
-        storage_location: formData?.storageLocation || "",
-        material_type: formData?.materialType || "",
+        plant: formState.requestFieldValues.plant || formData?.plant || "",
+        storage_location:
+          formState.requestFieldValues.storage_location || formData?.storageLocation || "",
+        material_type: formState.requestFieldValues.material_type || formData?.materialType || "",
         material_group: formState.materialGroup || "",
       },
       templateValues: formState.templateFieldValues,
@@ -224,13 +473,20 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
       return;
     }
 
-    if (!formState.materialGroup) {
-      setSubmitError("Material group wajib dipilih.");
-      return;
+    const nextFieldErrors = validateRequesterDraft({ formState });
+    if (isReworkMode) {
+      if (!formState.requestFieldValues.plant) {
+        nextFieldErrors.plant = { error: true, message: "Plant wajib diisi" };
+      }
+      if (!formState.requestFieldValues.storage_location) {
+        nextFieldErrors.storage_location = {
+          error: true,
+          message: "Storage Location wajib diisi",
+        };
+      }
     }
-
-    if (!formState.subgroup) {
-      setSubmitError("Sub material group wajib dipilih.");
+    if (Object.values(nextFieldErrors).some(error => error?.error)) {
+      setFieldErrors(nextFieldErrors);
       return;
     }
 
@@ -238,29 +494,50 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
       setSubmitting(true);
       const payload = buildRequestPayload();
       const formPayload = new FormData();
+      const keepAttachmentIds = attachments
+        .filter(isExistingAttachment)
+        .map(attachment => attachment.id)
+        .filter(id => id !== null && id !== undefined);
+      const newAttachments = attachments.filter(attachment => !isExistingAttachment(attachment));
 
       formPayload.append("materialGroupCode", payload.materialGroupCode);
       formPayload.append("subgroup", String(formState.subgroup));
       formPayload.append("requestFields", JSON.stringify(payload.requestFields));
       formPayload.append("templateValues", JSON.stringify(payload.templateValues));
+      formPayload.append("attachments", JSON.stringify({ keepAttachmentIds }));
 
-      attachments.forEach(file => {
+      newAttachments.forEach(file => {
         formPayload.append("files", file);
       });
 
-      await axiosPrivate.post("/material/requests/single", formPayload, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
+      if (isReworkMode) {
+        await axiosPrivate.put(`/material/requests/single/${requestId}/rework`, formPayload, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+      } else {
+        await axiosPrivate.post("/material/requests/single", formPayload, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+      }
 
       setSaveSuccessOpen(true);
     } catch (error) {
+      const mappedFieldErrors = mapRequesterServerErrors(error?.response?.data?.errors);
       const message =
         error?.response?.data?.errors?.[0]?.message ||
         error?.response?.data?.message ||
-        "Failed to save single material request.";
-      setSubmitError(message);
+        `Failed to ${isReworkMode ? "save revised" : "save"} single material request.`;
+      if (Object.keys(mappedFieldErrors).length > 0) {
+        setFieldErrors(prev => ({
+          ...prev,
+          ...mappedFieldErrors,
+        }));
+      }
+      setSubmitError(Object.keys(mappedFieldErrors).length > 0 ? "" : message);
     } finally {
       setSubmitting(false);
     }
@@ -277,16 +554,12 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
     navigate("/dashboard/materials/request");
   };
 
-  // Extract only the specification fields (template_field kind) from the schema
   const specificationFields = (formState.visibleSections || [])
     .flatMap(section => section.fields || [])
     .filter(field => field.kind === "template_field");
   const hasSelectedMaterialGroup = Boolean(formState.materialGroup);
   const showSpecificationSection = !hasSelectedMaterialGroup || specificationFields.length > 0;
-
-  // Real-time validation handler for specification fields
   const handleSpecFieldChange = (field, rawValue) => {
-    // Auto-uppercase for relevant rules
     const ruleType = (
       field.validationRuleType ||
       field.validation_rule_type ||
@@ -302,7 +575,6 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
 
     handleTemplateFieldChange(field.fieldKey, value);
 
-    // Run validation
     const result = validateSpecField(value, field);
     setFieldErrors(prev => ({
       ...prev,
@@ -320,7 +592,6 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
     };
 
     const handleBlur = () => {
-      // Re-validate on blur (catch empty mandatory, etc.)
       const result = validateSpecField(value, field);
       setFieldErrors(prev => ({
         ...prev,
@@ -373,6 +644,26 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
     );
   };
 
+  if (loadingExistingRequest) {
+    return (
+      <Card
+        elevation={0}
+        sx={{
+          borderRadius: 0,
+          border: "1px solid",
+          borderColor: "divider",
+          maxWidth: 1000,
+          mx: "auto",
+          mb: 4,
+        }}
+      >
+        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+          <CircularProgress size={28} />
+        </Box>
+      </Card>
+    );
+  }
+
   return (
     <Card
       elevation={0}
@@ -402,7 +693,6 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
 
       <CardContent sx={{ p: 4 }}>
         <Grid container spacing={4}>
-          {/* ========== BASIC INFO (Static) ========== */}
           <Grid item xs={12}>
             <Box
               sx={{
@@ -420,7 +710,6 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
             </Box>
 
             <Grid container spacing={3}>
-              {/* Material Group */}
               <Grid item xs={12} md={6}>
                 <Typography variant="caption" sx={{ fontWeight: 700, mb: 1, display: "block" }}>
                   Material Group <span style={{ color: "red" }}>*</span>
@@ -431,6 +720,8 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
                   select
                   value={formState.materialGroup}
                   onChange={handleGroupChange}
+                  error={Boolean(fieldErrors.materialGroup?.error)}
+                  helperText={fieldErrors.materialGroup?.message || ""}
                   SelectProps={{
                     displayEmpty: true,
                     MenuProps: compactDropdownMenuProps,
@@ -447,99 +738,99 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
                 </TextField>
               </Grid>
 
-              {/* Sub Material Group */}
               <Grid item xs={12} md={6}>
                 <Typography variant="caption" sx={{ fontWeight: 700, mb: 1, display: "block" }}>
                   Sub Material Group <span style={{ color: "red" }}>*</span>
                 </Typography>
-                <Select
-                  value={formState.subgroup}
-                  onChange={handleSubgroupChange}
-                  disabled={!formState.materialGroup}
-                  fullWidth
-                  displayEmpty
-                  MenuProps={compactDropdownMenuProps}
-                  size="small"
-                  sx={{
-                    backgroundColor: !formState.materialGroup ? "#f5f5f5" : "white",
-                  }}
-                >
-                  <MenuItem value="" disabled>
-                    Choose
-                  </MenuItem>
-                  {(() => {
-                    try {
-                      const grouped = {};
-                      const is901 =
-                        formState.materialGroup &&
-                        String(formState.materialGroup).startsWith("901");
+                <FormControl fullWidth error={Boolean(fieldErrors.subgroup?.error)}>
+                  <Select
+                    value={formState.subgroup}
+                    onChange={handleSubgroupChange}
+                    disabled={!formState.materialGroup}
+                    displayEmpty
+                    MenuProps={compactDropdownMenuProps}
+                    size="small"
+                    sx={{
+                      backgroundColor: !formState.materialGroup ? "#f5f5f5" : "white",
+                    }}
+                  >
+                    <MenuItem value="" disabled>
+                      Choose
+                    </MenuItem>
+                    {(() => {
+                      try {
+                        const grouped = {};
+                        const is901 =
+                          formState.materialGroup &&
+                          String(formState.materialGroup).startsWith("901");
 
-                      (formState.subgroupOptions || []).forEach(opt => {
-                        let cat = "";
-                        if (is901) {
-                          const code = String(opt.data?.code || opt.value || "");
-                          const name = String(opt.data?.name || opt.label || "");
-                          const nameLower = name.toLowerCase();
-                          if (
-                            ["002", "050"].includes(code) ||
-                            nameLower.includes("gestra") ||
-                            nameLower.includes("actiar")
-                          ) {
-                            cat = "Acuator (Brand)";
-                          } else if (
-                            ["103", "105"].includes(code) ||
-                            nameLower.includes("danfoos") ||
-                            nameLower.includes("smc")
-                          ) {
-                            cat = "Solenoid Valve (Brand)";
-                          } else {
-                            cat = "Other";
+                        (formState.subgroupOptions || []).forEach(opt => {
+                          let cat = "";
+                          if (is901) {
+                            const code = String(opt.data?.code || opt.value || "");
+                            const name = String(opt.data?.name || opt.label || "");
+                            const nameLower = name.toLowerCase();
+                            if (
+                              ["002", "050"].includes(code) ||
+                              nameLower.includes("gestra") ||
+                              nameLower.includes("actiar")
+                            ) {
+                              cat = "Acuator (Brand)";
+                            } else if (
+                              ["103", "105"].includes(code) ||
+                              nameLower.includes("danfoos") ||
+                              nameLower.includes("smc")
+                            ) {
+                              cat = "Solenoid Valve (Brand)";
+                            } else {
+                              cat = "Other";
+                            }
                           }
-                        }
 
-                        if (!grouped[cat]) grouped[cat] = [];
-                        grouped[cat].push(opt);
-                      });
-
-                      const elements = [];
-                      Object.entries(grouped).forEach(([groupName, opts]) => {
-                        if (groupName) {
-                          elements.push(
-                            <ListSubheader
-                              key={`header-${groupName}`}
-                              sx={{ fontWeight: "bold", color: "#1976d2", lineHeight: "36px" }}
-                            >
-                              {groupName}
-                            </ListSubheader>
-                          );
-                        }
-                        opts.forEach(opt => {
-                          elements.push(
-                            <MenuItem
-                              key={String(opt.value)}
-                              value={opt.value}
-                              sx={groupName ? { pl: 4 } : {}}
-                            >
-                              {opt.label}
-                            </MenuItem>
-                          );
+                          if (!grouped[cat]) grouped[cat] = [];
+                          grouped[cat].push(opt);
                         });
-                      });
 
-                      return elements;
-                    } catch (err) {
-                      console.error("Error in subgroup optgroup rendering", err);
-                      return formState.subgroupOptions?.map(opt => (
-                        <MenuItem key={String(opt.value)} value={opt.value}>
-                          {opt.label}
-                        </MenuItem>
-                      ));
-                    }
-                  })()}
-                </Select>
+                        const elements = [];
+                        Object.entries(grouped).forEach(([groupName, opts]) => {
+                          if (groupName) {
+                            elements.push(
+                              <ListSubheader
+                                key={`header-${groupName}`}
+                                sx={{ fontWeight: "bold", color: "#1976d2", lineHeight: "36px" }}
+                              >
+                                {groupName}
+                              </ListSubheader>
+                            );
+                          }
+                          opts.forEach(opt => {
+                            elements.push(
+                              <MenuItem
+                                key={String(opt.value)}
+                                value={opt.value}
+                                sx={groupName ? { pl: 4 } : {}}
+                              >
+                                {opt.label}
+                              </MenuItem>
+                            );
+                          });
+                        });
+
+                        return elements;
+                      } catch (err) {
+                        console.error("Error in subgroup optgroup rendering", err);
+                        return formState.subgroupOptions?.map(opt => (
+                          <MenuItem key={String(opt.value)} value={opt.value}>
+                            {opt.label}
+                          </MenuItem>
+                        ));
+                      }
+                    })()}
+                  </Select>
+                  <FormHelperText>{fieldErrors.subgroup?.message || ""}</FormHelperText>
+                </FormControl>
               </Grid>
 
-              {/* Material Description */}
               <Grid item xs={12} md={6}>
                 <Typography variant="caption" sx={{ fontWeight: 700, mb: 1, display: "block" }}>
                   Material Description <span style={{ color: "red" }}>*</span>
@@ -551,6 +842,8 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
                     value={formState.requestFieldValues.material_description || ""}
                     onChange={e => handleRequestFieldChange("material_description", e.target.value)}
                     inputProps={{ maxLength: 40 }}
+                    error={Boolean(fieldErrors.material_description?.error)}
+                    helperText={fieldErrors.material_description?.message || ""}
                     sx={{ "& .MuiOutlinedInput-notchedOutline": { borderStyle: "dashed" } }}
                   />
                   <Tooltip
@@ -575,7 +868,6 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
                 </Box>
               </Grid>
 
-              {/* Base UoM */}
               <Grid item xs={12} md={6}>
                 <Typography variant="caption" sx={{ fontWeight: 700, mb: 1, display: "block" }}>
                   Base UoM <span style={{ color: "red" }}>*</span>
@@ -585,10 +877,11 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
                   size="small"
                   value={formState.requestFieldValues.base_unit_of_measure || ""}
                   onChange={e => handleRequestFieldChange("base_unit_of_measure", e.target.value)}
+                  error={Boolean(fieldErrors.base_unit_of_measure?.error)}
+                  helperText={fieldErrors.base_unit_of_measure?.message || ""}
                 />
               </Grid>
 
-              {/* Long Text (3 fields, 40 char each) */}
               <Grid item xs={12}>
                 <Typography variant="caption" sx={{ fontWeight: 700, mb: 1, display: "block" }}>
                   Long Text
@@ -599,6 +892,8 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
                   value={formState.requestFieldValues.long_text_1 || ""}
                   onChange={e => handleRequestFieldChange("long_text_1", e.target.value)}
                   inputProps={{ maxLength: 40 }}
+                  error={Boolean(fieldErrors.long_text_1?.error)}
+                  helperText={fieldErrors.long_text_1?.message || ""}
                   sx={{ mb: 1, "& .MuiOutlinedInput-notchedOutline": { borderStyle: "dashed" } }}
                 />
                 <TextField
@@ -607,6 +902,8 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
                   value={formState.requestFieldValues.long_text_2 || ""}
                   onChange={e => handleRequestFieldChange("long_text_2", e.target.value)}
                   inputProps={{ maxLength: 40 }}
+                  error={Boolean(fieldErrors.long_text_2?.error)}
+                  helperText={fieldErrors.long_text_2?.message || ""}
                   sx={{ mb: 1, "& .MuiOutlinedInput-notchedOutline": { borderStyle: "dashed" } }}
                 />
                 <TextField
@@ -615,13 +912,14 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
                   value={formState.requestFieldValues.long_text_3 || ""}
                   onChange={e => handleRequestFieldChange("long_text_3", e.target.value)}
                   inputProps={{ maxLength: 40 }}
+                  error={Boolean(fieldErrors.long_text_3?.error)}
+                  helperText={fieldErrors.long_text_3?.message || ""}
                   sx={{ "& .MuiOutlinedInput-notchedOutline": { borderStyle: "dashed" } }}
                 />
               </Grid>
             </Grid>
           </Grid>
 
-          {/* ========== SPECIFICATION (Dynamic — from pre-fetched template rules) ========== */}
           {showSpecificationSection && (
             <Grid item xs={12}>
               <Divider sx={{ mb: 4 }} />
@@ -651,7 +949,6 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
             </Grid>
           )}
 
-          {/* ========== ATTACHMENT ========== */}
           <Grid item xs={12}>
             <Divider sx={{ mb: 4 }} />
             <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 0.5 }}>
@@ -712,7 +1009,7 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
             <Stack spacing={1}>
               {attachments.map((file, i) => (
                 <Box
-                  key={i}
+                  key={file.id || `${getAttachmentName(file)}-${i}`}
                   sx={{
                     display: "flex",
                     alignItems: "center",
@@ -737,15 +1034,17 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
                       }}
                     >
                       <Typography variant="caption" sx={{ fontWeight: 700, color: "#757575" }}>
-                        {getAttachmentExtension(file.name).toUpperCase() || "FILE"}
+                        {getAttachmentExtension(getAttachmentName(file)).toUpperCase() || "FILE"}
                       </Typography>
                     </Box>
                     <Box>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {file.name}
+                        {getAttachmentName(file)}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {formatAttachmentSize(file.size)}
+                        {isExistingAttachment(file)
+                          ? "Existing file"
+                          : formatAttachmentSize(file.size)}
                       </Typography>
                     </Box>
                   </Box>
@@ -759,7 +1058,6 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
         </Grid>
       </CardContent>
 
-      {/* Footer */}
       <Box
         sx={{
           p: 2.5,
@@ -786,10 +1084,10 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
           variant="contained"
           disableElevation
           onClick={handleSave}
-          disabled={submitting}
+          disabled={submitting || (isReworkMode && !requestId)}
           sx={{ bgcolor: "#1976d2", textTransform: "none", minWidth: 100 }}
         >
-          {submitting ? "Saving..." : "Save"}
+          {submitting ? "Saving..." : isReworkMode ? "Save Revision" : "Save"}
         </Button>
       </Box>
 
@@ -802,7 +1100,9 @@ const SingleMaterialForm = ({ onBack, formData, prefetchedGroups = [], schemaCac
       >
         <DialogTitle>Success</DialogTitle>
         <DialogContent>
-          <Typography>Saved successfully</Typography>
+          <Typography>
+            {isReworkMode ? "Revised request saved successfully" : "Saved successfully"}
+          </Typography>
         </DialogContent>
         <DialogActions>
           <Button variant="contained" onClick={handleSuccessConfirm}>

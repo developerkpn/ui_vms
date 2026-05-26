@@ -241,10 +241,12 @@ function buildApprovalHistory(row) {
     step,
     label: APPROVAL_STEP_LABELS[step] || `Approval ${step}`,
     approver: pickText(
-      row[`approval${step}UserId`],
-      row[`approval_${step}_user_id`],
       row[`approval${step}UserName`],
-      row[`approval_${step}_user_name`]
+      row[`approval${step}Username`],
+      row[`approval_${step}_user_name`],
+      row[`approval_${step}_username`],
+      row[`approval${step}UserId`],
+      row[`approval_${step}_user_id`]
     ),
     status: normalizeApprovalStatus(
       pickText(row[`approval${step}Status`], row[`approval_${step}_status`], "WAITING")
@@ -255,6 +257,28 @@ function buildApprovalHistory(row) {
 }
 
 function buildReworkSummary(approvalHistory, row) {
+  const reworkLabel = pickText(row.reworkStage, row.rework_stage);
+  const reworkApprover = pickText(
+    row.reworkByUsername,
+    row.rework_by_username,
+    row.reworkByUserId,
+    row.rework_by_user_id
+  );
+  const reworkAt = pickText(row.reworkAt, row.rework_at);
+  const reworkReason = pickText(row.reworkReason, row.rework_reason);
+
+  if (reworkLabel !== "-" || reworkApprover !== "-" || reworkAt !== "-" || reworkReason !== "-") {
+    return {
+      step: null,
+      label: reworkLabel,
+      approver: reworkApprover,
+      status: "REWORK",
+      approvedAt: reworkAt,
+      remark: reworkReason,
+      reason: reworkReason,
+    };
+  }
+
   const matchedStep = approvalHistory.find(item => item.status === "REWORK");
 
   if (matchedStep) {
@@ -270,8 +294,8 @@ function buildReworkSummary(approvalHistory, row) {
     approver: "-",
     status: "-",
     approvedAt: "-",
-    remark: pickText(row.reworkReason, row.rework_reason),
-    reason: pickText(row.reworkReason, row.rework_reason),
+    remark: reworkReason,
+    reason: reworkReason,
   };
 }
 

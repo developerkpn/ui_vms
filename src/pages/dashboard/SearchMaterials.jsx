@@ -1,5 +1,4 @@
 import {
-  Close,
   Download,
   Edit,
   Visibility,
@@ -12,6 +11,7 @@ import {
   Box,
   Button,
   CircularProgress,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -28,6 +28,7 @@ import {
   Pagination,
   Select,
   Snackbar,
+  Stack,
   TextField,
   Tooltip,
   Typography,
@@ -43,6 +44,195 @@ import usePermissionStore from "src/store/userPermissionStore";
 
 const columnHelper = createColumnHelper();
 const MAX_ATTACHMENT_PREVIEW = 3;
+const DEFAULT_PLANT_LABEL = "EU73 - EUP GENERAL KIJING";
+const DEFAULT_STORAGE_LOCATION = "ST01 - Main Store";
+const DEFAULT_BASE_UOM = "PC - Pieces";
+
+const MATERIAL_ACTION_DIALOG_CONFIG = {
+  extend: {
+    title: "Extend Material",
+    subtitle: "Extend existing materials to additional plants, storage locations, or views.",
+    primaryLabel: "Plant",
+    secondaryLabel: "Storage Location",
+    secondaryDisabled: true,
+    reasonPlaceholder: "Reason for Material Extension?",
+    successMessage: "Extend material UI ready. Logic coming later.",
+  },
+  change: {
+    title: "Change Material",
+    subtitle: "Update or modify existing material master data.",
+    primaryLabel: "Name",
+    secondaryLabel: "Base UoM",
+    secondaryDisabled: true,
+    reasonPlaceholder: "Reason for Material Change?",
+    successMessage: "Change material UI ready. Logic coming later.",
+  },
+};
+
+const buildPlantLabel = material => {
+  const plantCandidates = [
+    material?.plantLabel,
+    material?.plant_name,
+    material?.plantName,
+    material?.plant,
+  ].filter(Boolean);
+
+  if (plantCandidates.length > 0) {
+    const plantCode = material?.plant_code || material?.plantCode;
+    const firstValue = plantCandidates[0];
+    return plantCode && !String(firstValue).includes(plantCode)
+      ? `${plantCode} - ${firstValue}`
+      : firstValue;
+  }
+
+  if (material?.groupCode || material?.groupName) {
+    return [material.groupCode, material.groupName].filter(Boolean).join(" - ");
+  }
+
+  return DEFAULT_PLANT_LABEL;
+};
+
+const buildStorageLocationLabel = material => {
+  const storageCandidates = [
+    material?.storageLocationLabel,
+    material?.storage_location,
+    material?.storageLocation,
+    material?.sloc_code,
+    material?.slocCode,
+  ].filter(Boolean);
+
+  return storageCandidates[0] || DEFAULT_STORAGE_LOCATION;
+};
+
+const buildBaseUomLabel = material =>
+  material?.unit_of_measurement || material?.base_uom || material?.baseUom || DEFAULT_BASE_UOM;
+
+const createMaterialActionDraft = (mode, material = {}) => {
+  const code = material?.code || "-";
+  const description = material?.name || material?.material_description || "-";
+  const plantLabel = buildPlantLabel(material);
+  const storageLocationLabel = buildStorageLocationLabel(material);
+  const baseUomLabel = buildBaseUomLabel(material);
+
+  if (mode === "extend") {
+    return {
+      primaryValue: plantLabel,
+      secondaryValue: storageLocationLabel,
+      reason: `Requesting material extension for ${code} to additional plant or storage location.`,
+      materialCode: code,
+      materialDescription: description,
+    };
+  }
+
+  return {
+    primaryValue: description,
+    secondaryValue: baseUomLabel,
+    reason: `Requesting material master data adjustment for ${code}.`,
+    materialCode: code,
+    materialDescription: description,
+  };
+};
+
+function MaterialActionDialog({ open, mode, draft, onClose, onFieldChange, onSubmit }) {
+  const config = MATERIAL_ACTION_DIALOG_CONFIG[mode];
+
+  if (!config) {
+    return null;
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="sm"
+      PaperProps={{
+        sx: {
+          borderRadius: 0,
+          overflow: "hidden",
+        },
+      }}
+    >
+      <DialogTitle sx={{ px: 3, pt: 3, pb: 1.5 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 800, color: "#1f2a44", mb: 1 }}>
+              {config.title}
+            </Typography>
+            <Typography variant="body2" sx={{ color: "text.secondary", maxWidth: 360 }}>
+              {config.subtitle}
+            </Typography>
+          </Box>
+          <Chip
+            label="PRD"
+            size="small"
+            sx={{
+              height: 28,
+              fontWeight: 800,
+              bgcolor: "#e6f0ff",
+              color: "#7aa2f7",
+              borderRadius: 1,
+            }}
+          />
+        </Stack>
+      </DialogTitle>
+      <DialogContent sx={{ px: 3, pb: 2 }}>
+        <Typography variant="h5" sx={{ fontWeight: 800, color: "#1f2a44", mb: 0.5 }}>
+          {draft.materialCode || "-"}
+        </Typography>
+        <Typography variant="subtitle1" sx={{ color: "#4f5b6b", mb: 3.5 }}>
+          {draft.materialDescription || "-"}
+        </Typography>
+
+        <Stack spacing={2.5}>
+          <TextField
+            label={config.primaryLabel}
+            fullWidth
+            value={draft.primaryValue}
+            onChange={event => onFieldChange("primaryValue", event.target.value)}
+            InputLabelProps={{ shrink: true }}
+          />
+          <TextField
+            label={config.secondaryLabel}
+            fullWidth
+            value={draft.secondaryValue}
+            onChange={event => onFieldChange("secondaryValue", event.target.value)}
+            disabled={config.secondaryDisabled}
+            InputLabelProps={{ shrink: true }}
+          />
+          <TextField
+            label="Reason"
+            fullWidth
+            multiline
+            minRows={5}
+            value={draft.reason}
+            onChange={event => onFieldChange("reason", event.target.value)}
+            placeholder={config.reasonPlaceholder}
+            InputLabelProps={{ shrink: true }}
+          />
+        </Stack>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 3, pt: 0, justifyContent: "flex-start", gap: 1 }}>
+        <Button
+          variant="contained"
+          onClick={onSubmit}
+          sx={{
+            minWidth: 76,
+            textTransform: "none",
+            fontWeight: 700,
+            borderRadius: "8px",
+            boxShadow: "none",
+          }}
+        >
+          Add
+        </Button>
+        <Button onClick={onClose} sx={{ textTransform: "none", color: "text.secondary" }}>
+          Cancel
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
 
 const AuthenticatedImage = ({ src, sx, onClick }) => {
   const axiosPrivate = useAxiosPrivate();
@@ -114,13 +304,11 @@ export default function SearchMaterials() {
   const [sorting, setSorting] = useState([]);
   const [attachmentsDialogOpen, setAttachmentsDialogOpen] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState(null);
-  const [aliasDialogOpen, setAliasDialogOpen] = useState(false);
-  const [aliases, setAliases] = useState({
-    alias1: "",
-    alias2: "",
-    alias3: "",
+  const [materialActionDialog, setMaterialActionDialog] = useState({
+    open: false,
+    mode: "change",
+    draft: createMaterialActionDraft("change"),
   });
-  const [aliasLoading, setAliasLoading] = useState(false);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
@@ -280,19 +468,35 @@ export default function SearchMaterials() {
     setSelectedMaterial(null);
   };
 
-  const handleOpenAliasDialog = material => {
-    setSelectedMaterial(material);
-    setAliases({
-      alias1: material.alias1 || "",
-      alias2: material.alias2 || "",
-      alias3: material.alias3 || "",
+  const handleOpenMaterialActionDialog = (mode, material) => {
+    setMaterialActionDialog({
+      open: true,
+      mode,
+      draft: createMaterialActionDraft(mode, material),
     });
-    setAliasDialogOpen(true);
   };
 
-  const handleCloseAliasDialog = () => {
-    setAliasDialogOpen(false);
-    setSelectedMaterial(null);
+  const handleCloseMaterialActionDialog = () => {
+    setMaterialActionDialog(currentState => ({
+      ...currentState,
+      open: false,
+    }));
+  };
+
+  const handleMaterialActionFieldChange = (field, value) => {
+    setMaterialActionDialog(currentState => ({
+      ...currentState,
+      draft: {
+        ...currentState.draft,
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleMaterialActionSubmit = () => {
+    const config = MATERIAL_ACTION_DIALOG_CONFIG[materialActionDialog.mode];
+    showSnackbar(config?.successMessage || "Material action UI ready.", "info");
+    handleCloseMaterialActionDialog();
   };
 
   const handleViewAttachment = attachment => {
@@ -703,29 +907,14 @@ export default function SearchMaterials() {
         </DialogActions>
       </Dialog>
 
-      {/* Alias Dialog */}
-      <Dialog open={aliasDialogOpen} onClose={handleCloseAliasDialog}>
-        <DialogTitle>Material Aliases</DialogTitle>
-        <DialogContent dividers>
-          <Box
-            sx={{
-              pt: 1,
-              display: "flex",
-              flexDirection: "column",
-              gap: 2,
-              width: "100%",
-              maxWidth: 400,
-            }}
-          >
-            <TextField label="Alias 1" fullWidth value={aliases.alias1} disabled />
-            <TextField label="Alias 2" fullWidth value={aliases.alias2} disabled />
-            <TextField label="Alias 3" fullWidth value={aliases.alias3} disabled />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseAliasDialog}>Close</Button>
-        </DialogActions>
-      </Dialog>
+      <MaterialActionDialog
+        open={materialActionDialog.open}
+        mode={materialActionDialog.mode}
+        draft={materialActionDialog.draft}
+        onClose={handleCloseMaterialActionDialog}
+        onFieldChange={handleMaterialActionFieldChange}
+        onSubmit={handleMaterialActionSubmit}
+      />
 
       <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleSnackbarClose}>
         <Alert onClose={handleSnackbarClose} severity={snackbar.severity}>
@@ -753,7 +942,7 @@ export default function SearchMaterials() {
         <Divider />
         <MenuItem
           onClick={() => {
-            handleOpenAliasDialog(menuMaterial);
+            handleOpenMaterialActionDialog("change", menuMaterial);
             handleActionMenuClose();
           }}
         >
@@ -764,7 +953,7 @@ export default function SearchMaterials() {
         </MenuItem>
         <MenuItem
           onClick={() => {
-            showSnackbar("Extend feature coming soon", "info");
+            handleOpenMaterialActionDialog("extend", menuMaterial);
             handleActionMenuClose();
           }}
         >
