@@ -37,6 +37,14 @@ import { createColumnHelper } from "@tanstack/react-table";
 import moment from "moment";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import SearchSuggestionField from "src/components/common/SearchSuggestionField";
+import {
+  buildChangeRequestPayload,
+  buildChangeTemplateFields,
+  buildExtendRequestPayload,
+  buildPlantOptions,
+  buildStorageOptionsForPlant,
+  extractChangeTemplateValues,
+} from "src/helper/materialChangeExtendRequest.mjs";
 import TableSorting from "src/components/table/TableSorting";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import attachmentPlaceholder from "src/images/material-attachment-placeholder.svg";
@@ -47,25 +55,22 @@ const MAX_ATTACHMENT_PREVIEW = 3;
 const DEFAULT_PLANT_LABEL = "EU73 - EUP GENERAL KIJING";
 const DEFAULT_STORAGE_LOCATION = "ST01 - Main Store";
 const DEFAULT_BASE_UOM = "PC - Pieces";
-
 const MATERIAL_ACTION_DIALOG_CONFIG = {
   extend: {
     title: "Extend Material",
     subtitle: "Extend existing materials to additional plants, storage locations, or views.",
     primaryLabel: "Plant",
     secondaryLabel: "Storage Location",
-    secondaryDisabled: true,
+    secondaryDisabled: false,
     reasonPlaceholder: "Reason for Material Extension?",
-    successMessage: "Extend material UI ready. Logic coming later.",
   },
   change: {
     title: "Change Material",
     subtitle: "Update or modify existing material master data.",
-    primaryLabel: "Name",
+    primaryLabel: "Material Name",
     secondaryLabel: "Base UoM",
-    secondaryDisabled: true,
+    secondaryDisabled: false,
     reasonPlaceholder: "Reason for Material Change?",
-    successMessage: "Change material UI ready. Logic coming later.",
   },
 };
 
@@ -113,28 +118,44 @@ const createMaterialActionDraft = (mode, material = {}) => {
   const plantLabel = buildPlantLabel(material);
   const storageLocationLabel = buildStorageLocationLabel(material);
   const baseUomLabel = buildBaseUomLabel(material);
+  const plantCode = material?.plant_code || material?.plantCode || plantLabel.split(" - ")[0] || "";
+  const storageLocation = material?.sloc_code || material?.slocCode || storageLocationLabel;
 
   if (mode === "extend") {
     return {
-      primaryValue: plantLabel,
-      secondaryValue: storageLocationLabel,
-      reason: `Requesting material extension for ${code} to additional plant or storage location.`,
+      plantCode,
+      storageLocation,
+      reason: "",
       materialCode: code,
       materialDescription: description,
     };
   }
 
   return {
-    primaryValue: description,
-    secondaryValue: baseUomLabel,
-    reason: `Requesting material master data adjustment for ${code}.`,
+    materialName: description,
+    baseUom: baseUomLabel,
+    reason: "",
     materialCode: code,
     materialDescription: description,
+    changeTemplateFields: buildChangeTemplateFields(material),
+    templateValues: extractChangeTemplateValues(material),
   };
 };
 
-function MaterialActionDialog({ open, mode, draft, onClose, onFieldChange, onSubmit }) {
+function MaterialActionDialog({
+  open,
+  mode,
+  draft,
+  plantOptions,
+  storageOptions,
+  submitting,
+  onClose,
+  onFieldChange,
+  onSubmit,
+}) {
   const config = MATERIAL_ACTION_DIALOG_CONFIG[mode];
+  const isExtend = mode === "extend";
+  const changeTemplateFields = isExtend ? [] : draft.changeTemplateFields || [];
 
   if (!config) {
     return null;
@@ -185,21 +206,67 @@ function MaterialActionDialog({ open, mode, draft, onClose, onFieldChange, onSub
         </Typography>
 
         <Stack spacing={2.5}>
-          <TextField
-            label={config.primaryLabel}
-            fullWidth
-            value={draft.primaryValue}
-            onChange={event => onFieldChange("primaryValue", event.target.value)}
-            InputLabelProps={{ shrink: true }}
-          />
-          <TextField
-            label={config.secondaryLabel}
-            fullWidth
-            value={draft.secondaryValue}
-            onChange={event => onFieldChange("secondaryValue", event.target.value)}
-            disabled={config.secondaryDisabled}
-            InputLabelProps={{ shrink: true }}
-          />
+          {isExtend ? (
+            <>
+              <TextField
+                select
+                label={config.primaryLabel}
+                fullWidth
+                value={draft.plantCode || ""}
+                onChange={event => onFieldChange("plantCode", event.target.value)}
+                InputLabelProps={{ shrink: true }}
+              >
+                {plantOptions.map(option => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                label={config.secondaryLabel}
+                fullWidth
+                value={draft.storageLocation || ""}
+                onChange={event => onFieldChange("storageLocation", event.target.value)}
+                disabled={config.secondaryDisabled || storageOptions.length === 0}
+                InputLabelProps={{ shrink: true }}
+              >
+                {storageOptions.map(option => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </>
+          ) : (
+            <>
+              <TextField
+                label={config.primaryLabel}
+                fullWidth
+                value={draft.materialName || ""}
+                onChange={event => onFieldChange("materialName", event.target.value)}
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                label={config.secondaryLabel}
+                fullWidth
+                value={draft.baseUom || ""}
+                onChange={event => onFieldChange("baseUom", event.target.value)}
+                disabled={config.secondaryDisabled}
+                InputLabelProps={{ shrink: true }}
+              />
+            </>
+          )}
+          {changeTemplateFields.map(field => (
+            <TextField
+              key={field.key}
+              label={field.label}
+              fullWidth
+              value={draft.templateValues?.[field.key] || field.value || ""}
+              onChange={event => onFieldChange(`templateValues.${field.key}`, event.target.value)}
+              InputLabelProps={{ shrink: true }}
+            />
+          ))}
           <TextField
             label="Reason"
             fullWidth
@@ -216,6 +283,7 @@ function MaterialActionDialog({ open, mode, draft, onClose, onFieldChange, onSub
         <Button
           variant="contained"
           onClick={onSubmit}
+          disabled={submitting}
           sx={{
             minWidth: 76,
             textTransform: "none",
@@ -224,9 +292,13 @@ function MaterialActionDialog({ open, mode, draft, onClose, onFieldChange, onSub
             boxShadow: "none",
           }}
         >
-          Add
+          {submitting ? "Saving..." : "Add"}
         </Button>
-        <Button onClick={onClose} sx={{ textTransform: "none", color: "text.secondary" }}>
+        <Button
+          onClick={onClose}
+          disabled={submitting}
+          sx={{ textTransform: "none", color: "text.secondary" }}
+        >
           Cancel
         </Button>
       </DialogActions>
@@ -307,8 +379,12 @@ export default function SearchMaterials() {
   const [materialActionDialog, setMaterialActionDialog] = useState({
     open: false,
     mode: "change",
+    material: null,
     draft: createMaterialActionDraft("change"),
   });
+  const [initialLocations, setInitialLocations] = useState([]);
+  const [materialActionSubmitting, setMaterialActionSubmitting] = useState(false);
+  const [activeRequestCheck, setActiveRequestCheck] = useState({ change: false, extend: false, loading: false });
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
@@ -448,9 +524,29 @@ export default function SearchMaterials() {
     // fetchMaterials will be called by useEffect
   };
 
-  const handleActionMenuOpen = (event, material) => {
+  const handleActionMenuOpen = async (event, material) => {
     setAnchorEl(event.currentTarget);
     setMenuMaterial(material);
+    setActiveRequestCheck({ change: false, extend: false, loading: true });
+
+    try {
+      const materialCode = material?.code || "";
+      if (materialCode) {
+        const [changeRes, extendRes] = await Promise.all([
+          axiosPrivate.get("/material/requests/single/active-check", { params: { materialCode, ticketType: "Change" } }),
+          axiosPrivate.get("/material/requests/single/active-check", { params: { materialCode, ticketType: "Extend" } }),
+        ]);
+        setActiveRequestCheck({
+          change: changeRes.data?.data?.hasActive || false,
+          extend: extendRes.data?.data?.hasActive || false,
+          loading: false,
+        });
+      } else {
+        setActiveRequestCheck({ change: false, extend: false, loading: false });
+      }
+    } catch {
+      setActiveRequestCheck({ change: false, extend: false, loading: false });
+    }
   };
 
   const handleActionMenuClose = () => {
@@ -469,9 +565,18 @@ export default function SearchMaterials() {
   };
 
   const handleOpenMaterialActionDialog = (mode, material) => {
+    const hasActive = mode === "change" ? activeRequestCheck.change : activeRequestCheck.extend;
+    if (hasActive) {
+      showSnackbar(
+        `An active ${mode} request already exists for this material. Please wait for it to complete.`,
+        "warning"
+      );
+      return;
+    }
     setMaterialActionDialog({
       open: true,
       mode,
+      material,
       draft: createMaterialActionDraft(mode, material),
     });
   };
@@ -488,15 +593,63 @@ export default function SearchMaterials() {
       ...currentState,
       draft: {
         ...currentState.draft,
-        [field]: value,
+        ...(field.startsWith("templateValues.")
+          ? {
+              templateValues: {
+                ...(currentState.draft.templateValues || {}),
+                [field.replace("templateValues.", "")]: value,
+              },
+            }
+          : {
+              [field]: value,
+              ...(field === "plantCode" ? { storageLocation: "" } : {}),
+            }),
       },
     }));
   };
 
-  const handleMaterialActionSubmit = () => {
-    const config = MATERIAL_ACTION_DIALOG_CONFIG[materialActionDialog.mode];
-    showSnackbar(config?.successMessage || "Material action UI ready.", "info");
-    handleCloseMaterialActionDialog();
+  const loadInitialLocations = useCallback(async () => {
+    const response = await axiosPrivate.get("/material/initial-screen-data");
+    setInitialLocations(response.data?.data?.locations || []);
+  }, [axiosPrivate]);
+
+  const handleMaterialActionSubmit = async () => {
+    const trimmedReason = (materialActionDialog.draft.reason || "").trim();
+
+    if (!trimmedReason) {
+      showSnackbar("Reason is required for Change or Extend request.", "error");
+      return;
+    }
+
+    try {
+      setMaterialActionSubmitting(true);
+      const payload =
+        materialActionDialog.mode === "change"
+          ? buildChangeRequestPayload({
+              material: materialActionDialog.material,
+              draft: materialActionDialog.draft,
+            })
+          : buildExtendRequestPayload({
+              material: materialActionDialog.material,
+              draft: materialActionDialog.draft,
+            });
+
+      await axiosPrivate.post("/material/requests/single", payload);
+      showSnackbar(`${payload.ticketType} material request submitted.`, "success");
+      handleCloseMaterialActionDialog();
+} catch (error) {
+      const serverMessage = error?.response?.data?.message || "Material request failed. Please try again.";
+      const serverErrors = error?.response?.data?.errors;
+      const detailMessage = Array.isArray(serverErrors) && serverErrors.length > 0
+        ? serverErrors.map(e => e.fieldLabel ? `${e.fieldLabel}: ${e.message}` : e.message).join("; ")
+        : "";
+      showSnackbar(
+        detailMessage ? `${serverMessage} — ${detailMessage}` : serverMessage,
+        "error"
+      );
+    } finally {
+      setMaterialActionSubmitting(false);
+    }
   };
 
   const handleViewAttachment = attachment => {
@@ -723,6 +876,35 @@ export default function SearchMaterials() {
     []
   );
 
+  const plantOptions = useMemo(() => buildPlantOptions(initialLocations), [initialLocations]);
+  const storageOptions = useMemo(
+    () => buildStorageOptionsForPlant(initialLocations, materialActionDialog.draft.plantCode),
+    [initialLocations, materialActionDialog.draft.plantCode]
+  );
+
+  useEffect(() => {
+    if (
+      materialActionDialog.open &&
+      materialActionDialog.mode === "extend" &&
+      plantOptions.length > 0
+    ) {
+      const currentPlant = materialActionDialog.draft.plantCode;
+      const validPlant = currentPlant && plantOptions.includes(currentPlant) ? currentPlant : plantOptions[0];
+      const currentStorage = materialActionDialog.draft.storageLocation;
+      const storageOpts = buildStorageOptionsForPlant(initialLocations, validPlant);
+      const validStorage = currentStorage && storageOpts.some(o => o.value === currentStorage)
+        ? currentStorage
+        : (storageOpts[0]?.value || "");
+
+      if (validPlant !== currentPlant || validStorage !== currentStorage) {
+        setMaterialActionDialog(prev => ({
+          ...prev,
+          draft: { ...prev.draft, plantCode: validPlant, storageLocation: validStorage },
+        }));
+      }
+    }
+  }, [materialActionDialog.open, materialActionDialog.mode, plantOptions, initialLocations]);
+
   const isSearchActive = searchMode === "selected" || searchMode === "no-match";
   const emptyMessage = !isSearchActive
     ? "Silakan pilih material dari suggestion untuk menampilkan data"
@@ -911,6 +1093,9 @@ export default function SearchMaterials() {
         open={materialActionDialog.open}
         mode={materialActionDialog.mode}
         draft={materialActionDialog.draft}
+        plantOptions={plantOptions}
+        storageOptions={storageOptions}
+        submitting={materialActionSubmitting}
         onClose={handleCloseMaterialActionDialog}
         onFieldChange={handleMaterialActionFieldChange}
         onSubmit={handleMaterialActionSubmit}
@@ -940,28 +1125,43 @@ export default function SearchMaterials() {
           <ListItemText>Attachment</ListItemText>
         </MenuItem>
         <Divider />
-        <MenuItem
-          onClick={() => {
-            handleOpenMaterialActionDialog("change", menuMaterial);
-            handleActionMenuClose();
-          }}
-        >
-          <ListItemIcon>
-            <Edit fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Change</ListItemText>
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            handleOpenMaterialActionDialog("extend", menuMaterial);
-            handleActionMenuClose();
-          }}
-        >
-          <ListItemIcon>
-            <InsertDriveFile fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Extend</ListItemText>
-        </MenuItem>
+        <Tooltip title={activeRequestCheck.change ? "An active Change request already exists for this material" : ""} placement="left">
+          <span>
+            <MenuItem
+              disabled={activeRequestCheck.change || activeRequestCheck.loading}
+              onClick={() => {
+                handleOpenMaterialActionDialog("change", menuMaterial);
+                handleActionMenuClose();
+              }}
+            >
+              <ListItemIcon>
+                <Edit fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Change</ListItemText>
+            </MenuItem>
+          </span>
+        </Tooltip>
+        <Tooltip title={activeRequestCheck.extend ? "An active Extend request already exists for this material" : ""} placement="left">
+          <span>
+            <MenuItem
+              disabled={activeRequestCheck.extend || activeRequestCheck.loading}
+              onClick={async () => {
+                try {
+                  await loadInitialLocations();
+                  handleOpenMaterialActionDialog("extend", menuMaterial);
+                } catch (error) {
+                  showSnackbar("Failed to load plant and storage options.", "error");
+                }
+                handleActionMenuClose();
+              }}
+            >
+              <ListItemIcon>
+                <InsertDriveFile fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Extend</ListItemText>
+            </MenuItem>
+          </span>
+        </Tooltip>
       </Menu>
     </>
   );

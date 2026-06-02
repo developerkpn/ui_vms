@@ -204,6 +204,9 @@ function ReworkStatusDialog({ open, row, onClose }) {
   );
 }
 
+const isChangeExtendRequest = row =>
+  ["CHANGE", "EXTEND"].includes(String(row?.ticketType || row?.ticket_type || "").toUpperCase());
+
 export default function AdminApprovalView() {
   const axiosPrivate = useAxiosPrivate();
   const refreshWarningTimeoutRef = useRef(null);
@@ -413,13 +416,16 @@ export default function AdminApprovalView() {
           : action === "Reject"
             ? `/material/requests/single/${detail.id}/reject`
             : `/material/requests/single/${detail.id}/approve`;
+      const isScopedChangeExtend = isChangeExtendRequest(detail.rawRow || detail);
       const requestBody =
         action === "Rework" || action === "Reject"
           ? { reason: payload?.remark ?? null }
-          : {
-              remark: payload?.remark ?? null,
-              editedRequest: payload?.editedRequest ?? {},
-            };
+          : isScopedChangeExtend
+            ? { remark: payload?.remark ?? null }
+            : {
+                remark: payload?.remark ?? null,
+                editedRequest: payload?.editedRequest ?? {},
+              };
       const response = await axiosPrivate.post(endpoint, requestBody);
 
       const nextStage = response.data?.data?.next_stage;

@@ -51,7 +51,7 @@ export default function SearchSuggestionField({
 
   const getOptionLabel = useCallback(option => {
     if (typeof option === "string") return option;
-    return option?.combined_description || option?.name || "";
+    return option?.combined_description || option?.description || "";
   }, []);
 
   const commitSelectedOption = useCallback(
@@ -60,7 +60,7 @@ export default function SearchSuggestionField({
       setSelectedOption(option);
       setInputValue(getOptionLabel(option));
       setOpen(false);
-      const keyword = option.code || option.name || "";
+      const keyword = option.code || option.description || "";
       onSearch?.({ type, option, keyword });
       return true;
     },
@@ -228,7 +228,7 @@ export default function SearchSuggestionField({
             {option.code}
           </Typography>
           <Typography variant="body2" sx={{ minWidth: 0, flex: 1, px: 2, color: "text.primary" }}>
-            {highlightMatch(option.combined_description || option.name || "", inputValue)}
+            {highlightMatch(option.combined_description || option.description || "", inputValue)}
           </Typography>
           <Typography
             variant="caption"

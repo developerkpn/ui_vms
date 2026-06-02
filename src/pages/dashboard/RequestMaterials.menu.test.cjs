@@ -85,3 +85,28 @@ test("admin approval view wires rework actions and keeps view rework display-onl
   assert.match(source, /reworkSummary/);
   assert.doesNotMatch(source, /\/dashboard\/materials\/request\/single\/\$\{row\.id\}\/rework/);
 });
+
+test("change extend approval view is read only and skips editable approval history", () => {
+  const source = fs.readFileSync(
+    path.resolve(__dirname, "../../components/admin-approval/AdminApprovalFormDialog.jsx"),
+    "utf8"
+  );
+
+  assert.match(source, /isChangeExtendRequest/);
+  assert.match(source, /ChangeExtendApprovalSummary/);
+  assert.match(source, /Approve/);
+  assert.match(source, /Rework/);
+  assert.match(source, /Reject/);
+});
+
+test("request materials uses scoped rework forms for change and extend", () => {
+  const source = fs.readFileSync(requestMaterialsPath, "utf8");
+
+  assert.match(source, /ChangeExtendReworkForm/);
+  assert.match(source, /material_description:\s*draft\.materialName/);
+  assert.match(source, /base_uom:\s*draft\.baseUom/);
+  assert.match(source, /plant_code:\s*draft\.plantCode/);
+  assert.match(source, /sloc_code:\s*draft\.storageLocation/);
+  assert.match(source, /change_extend_reason:\s*originalReason/);
+  assert.match(source, /originalReason = row\?\.changeExtendReason \|\| row\?\.reworkReason/);
+});

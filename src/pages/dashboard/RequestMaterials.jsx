@@ -28,9 +28,13 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.mjs";
+import {
+  buildPlantOptions,
+  buildStorageOptionsForPlant,
+} from "src/helper/materialChangeExtendRequest.mjs";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 
 const APPROVAL_STATUS_BADGES = {
@@ -38,6 +42,7 @@ const APPROVAL_STATUS_BADGES = {
   REWORK: { label: "Rework", bgcolor: "#f59e0b", color: "#ffffff" },
   REJECTED: { label: "Reject", bgcolor: "#d93025", color: "#ffffff" },
   WAITING: { label: "Waiting", bgcolor: "#8a9099", color: "#ffffff" },
+  SKIPPED: { label: "Skipped", bgcolor: "#e5e7eb", color: "#6b7280" },
   "-": { label: "-", bgcolor: "#eceff3", color: "#546e7a" },
 };
 
@@ -52,6 +57,9 @@ const withRequestKey = item => ({
   ...item,
   requestKey: `${item.mode}:${item.id}`,
 });
+
+const isChangeExtendRequest = row =>
+  ["CHANGE", "EXTEND"].includes(String(row?.ticketType || row?.ticket_type || "").toUpperCase());
 
 const INITIAL_REQUESTS = [
   {
@@ -82,13 +90,16 @@ const INITIAL_REQUESTS = [
     mode: "single",
     ticketNumber: "1000000002",
     ticketType: "Change",
+    materialCode: "901.221.010",
     materialDescription: "VALVE, GATE, 2 INCH STAINLESS STEEL",
     uom: "EA",
+    baseUom: "EA",
     status: "Rework",
     createdBy: "rizki.user",
     createdAt: "2026-01-12 09:20",
     assignedTo: "superior.superior",
     reworkReason: "Lengkapi spesifikasi tekanan kerja dan lampiran drawing terbaru.",
+    changeExtendReason: "Correct base UoM",
     approvalSteps: [
       {
         title: "Approval 1",
@@ -105,8 +116,12 @@ const INITIAL_REQUESTS = [
     mode: "mass",
     ticketNumber: "1000000003",
     ticketType: "Extend",
+    materialCode: "901.330.100",
     materialDescription: "CABLE GLAND SET FOR CONTROL PANEL REVAMP",
     uom: "SET",
+    plantCode: "EU73",
+    slocCode: "ST01",
+    changeExtendReason: "Extend to Kijing store",
     status: "Waiting",
     createdBy: "salsa.proc",
     createdAt: "2026-01-13 11:05",
@@ -188,6 +203,7 @@ function TicketTypePill({ value }) {
 
 function ApprovalStatusCard({ item }) {
   const badge = APPROVAL_STATUS_BADGES[item.status] || APPROVAL_STATUS_BADGES["-"];
+  const isSkipped = item.status === "SKIPPED";
 
   return (
     <Paper
@@ -195,9 +211,10 @@ function ApprovalStatusCard({ item }) {
       sx={{
         p: 0,
         border: "1px solid",
-        borderColor: "divider",
+        borderColor: isSkipped ? "#e5e7eb" : "divider",
         borderRadius: 2,
         overflow: "hidden",
+        opacity: isSkipped ? 0.65 : 1,
       }}
     >
       <Stack direction={{ xs: "column", sm: "row" }} alignItems="stretch">
@@ -253,9 +270,15 @@ function ApprovalStatusCard({ item }) {
           >
             {badge.label}
           </Box>
-          <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary" }}>
-            {item.approvedAt || "-"}
-          </Typography>
+          {isSkipped ? (
+            <Typography variant="caption" sx={{ fontStyle: "italic", color: "#9ca3af" }}>
+              {item.remark || "Not required"}
+            </Typography>
+          ) : (
+            <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary" }}>
+              {item.approvedAt || "-"}
+            </Typography>
+          )}
         </Box>
       </Stack>
     </Paper>
@@ -348,6 +371,120 @@ function RequestActionDialog({ open, mode, request, onClose, onReviseRequest }) 
   );
 }
 
+function ChangeExtendReworkForm({
+  row,
+  locations = [],
+  onSubmit,
+  onCancel,
+  submitting = false,
+}) {
+  const isExtend = String(row?.ticketType || "").toUpperCase() === "EXTEND";
+  const [draft, setDraft] = useState({
+    materialName: row?.materialDescription || "",
+    baseUom: row?.baseUom || row?.uom || "",
+    plantCode: row?.plantCode || "",
+    storageLocation: row?.slocCode || "",
+  });
+
+  useEffect(() => {
+    setDraft({
+      materialName: row?.materialDescription || "",
+      baseUom: row?.baseUom || row?.uom || "",
+      plantCode: row?.plantCode || "",
+      storageLocation: row?.slocCode || "",
+    });
+  }, [row]);
+
+  const plantOptions = useMemo(() => buildPlantOptions(locations), [locations]);
+  const storageOptions = useMemo(
+    () => buildStorageOptionsForPlant(locations, draft.plantCode),
+    [draft.plantCode, locations]
+  );
+
+  const originalReason = row?.changeExtendReason || row?.reworkReason || "";
+
+  const submit = () => {
+    onSubmit({
+      editedRequest: isExtend
+        ? {
+            plant_code: draft.plantCode,
+            sloc_code: draft.storageLocation,
+            change_extend_reason: originalReason,
+          }
+        : {
+            material_description: draft.materialName,
+            base_uom: draft.baseUom,
+            change_extend_reason: originalReason,
+          },
+    });
+  };
+
+  return (
+    <Stack spacing={2}>
+      {isExtend ? (
+        <>
+          <TextField
+            select
+            label="Plant"
+            value={draft.plantCode}
+            onChange={event =>
+              setDraft(current => ({
+                ...current,
+                plantCode: event.target.value,
+                storageLocation: "",
+              }))
+            }
+          >
+            {plantOptions.map(option => (
+              <MenuItem key={option} value={option}>
+                {option}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            label="Storage Location"
+            value={draft.storageLocation}
+            disabled={storageOptions.length === 0}
+            onChange={event =>
+              setDraft(current => ({ ...current, storageLocation: event.target.value }))
+            }
+          >
+            {storageOptions.map(option => (
+              <MenuItem key={option.value} value={option.value}>
+                {option.label}
+              </MenuItem>
+            ))}
+          </TextField>
+        </>
+      ) : (
+        <>
+          <TextField
+            label="Material Name"
+            value={draft.materialName}
+            onChange={event =>
+              setDraft(current => ({ ...current, materialName: event.target.value }))
+            }
+          />
+          <TextField
+            label="Base UoM"
+            value={draft.baseUom}
+            onChange={event => setDraft(current => ({ ...current, baseUom: event.target.value }))}
+          />
+        </>
+      )}
+      <Stack direction="row" spacing={1}>
+        <Button variant="contained" onClick={submit} disabled={submitting}>
+          {submitting ? "Saving..." : "Submit"}
+        </Button>
+        <Button onClick={onCancel} disabled={submitting}>
+          Cancel
+        </Button>
+      </Stack>
+    </Stack>
+  );
+}
+
 export default function RequestMaterials() {
   const navigate = useNavigate();
   const axiosPrivate = useAxiosPrivate();
@@ -358,6 +495,9 @@ export default function RequestMaterials() {
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
   const [activeRequestId, setActiveRequestId] = useState(null);
   const [actionDialogMode, setActionDialogMode] = useState(null);
+  const [scopedReworkSubmitting, setScopedReworkSubmitting] = useState(false);
+  const [reviseChangeExtendOpen, setReviseChangeExtendOpen] = useState(false);
+  const [initialLocations, setInitialLocations] = useState([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -368,58 +508,63 @@ export default function RequestMaterials() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  useEffect(() => {
-    const fetchSingleRequests = async () => {
-      try {
-        setRequestsLoading(true);
-        const response = await axiosPrivate.get("/material/requests/single");
-        const singleRequests = Array.isArray(response.data?.data)
-          ? response.data.data.map(item => ({
-              id: item.id,
-              mode: "single",
-              requestKey: `single:${item.id}`,
-              ticketNumber: item.ticket_number,
-              ticketType: item.ticket_type,
-              materialDescription: item.material_description,
-              uom: item.uom,
-              status: item.status,
-              createdBy: item.created_by,
-              createdAt: item.created_at,
-              assignedTo: item.assigned_to,
-              reworkStage: item.rework_stage,
-              reworkByUserId: item.rework_by_user_id,
-              reworkByUsername: item.rework_by_username,
-              reworkAt: item.rework_at,
-              reworkReason: item.rework_reason || "",
-              approval_1_user_id: item.approval_1_user_id,
-              approval_1_user_name: item.approval_1_user_name,
-              approval_1_status: item.approval_1_status,
-              approval_1_at: item.approval_1_at,
-              approval_1_remark: item.approval_1_remark,
-              approval_2_user_id: item.approval_2_user_id,
-              approval_2_user_name: item.approval_2_user_name,
-              approval_2_status: item.approval_2_status,
-              approval_2_at: item.approval_2_at,
-              approval_2_remark: item.approval_2_remark,
-              approval_3_user_id: item.approval_3_user_id,
-              approval_3_user_name: item.approval_3_user_name,
-              approval_3_status: item.approval_3_status,
-              approval_3_at: item.approval_3_at,
-              approval_3_remark: item.approval_3_remark,
-            }))
-          : [];
+  const fetchSingleRequests = useCallback(async () => {
+    try {
+      setRequestsLoading(true);
+      const response = await axiosPrivate.get("/material/requests/single");
+      const singleRequests = Array.isArray(response.data?.data)
+        ? response.data.data.map(item => ({
+            id: item.id,
+            mode: "single",
+            requestKey: `single:${item.id}`,
+            ticketNumber: item.ticket_number,
+            ticketType: item.ticket_type,
+            materialCode: item.material_code,
+            materialDescription: item.material_description,
+            uom: item.uom,
+            baseUom: item.base_uom || item.uom,
+            plantCode: item.plant_code,
+            slocCode: item.sloc_code,
+            changeExtendReason: item.change_extend_reason || "",
+            status: item.status,
+            createdBy: item.created_by,
+            createdAt: item.created_at,
+            assignedTo: item.assigned_to,
+            reworkStage: item.rework_stage,
+            reworkByUserId: item.rework_by_user_id,
+            reworkByUsername: item.rework_by_username,
+            reworkAt: item.rework_at,
+            reworkReason: item.rework_reason || "",
+            approval_1_user_id: item.approval_1_user_id,
+            approval_1_user_name: item.approval_1_user_name,
+            approval_1_status: item.approval_1_status,
+            approval_1_at: item.approval_1_at,
+            approval_1_remark: item.approval_1_remark,
+            approval_2_user_id: item.approval_2_user_id,
+            approval_2_user_name: item.approval_2_user_name,
+            approval_2_status: item.approval_2_status,
+            approval_2_at: item.approval_2_at,
+            approval_2_remark: item.approval_2_remark,
+            approval_3_user_id: item.approval_3_user_id,
+            approval_3_user_name: item.approval_3_user_name,
+            approval_3_status: item.approval_3_status,
+            approval_3_at: item.approval_3_at,
+            approval_3_remark: item.approval_3_remark,
+          }))
+        : [];
 
-        setRequests(prev => [...singleRequests, ...prev.filter(item => item.mode === "mass")]);
-      } catch (error) {
-        console.error("Failed to fetch single requests:", error);
-        openSnackbar("Failed to load single requests. Showing fallback data.", "warning");
-      } finally {
-        setRequestsLoading(false);
-      }
-    };
-
-    fetchSingleRequests();
+      setRequests(prev => [...singleRequests, ...prev.filter(item => item.mode === "mass")]);
+    } catch (error) {
+      console.error("Failed to fetch single requests:", error);
+      openSnackbar("Failed to load single requests. Showing fallback data.", "warning");
+    } finally {
+      setRequestsLoading(false);
+    }
   }, [axiosPrivate]);
+
+  useEffect(() => {
+    fetchSingleRequests();
+  }, [fetchSingleRequests]);
 
   useEffect(() => {
     const firstRowForActiveTab = requests.find(item => item.mode === activeTab);
@@ -443,6 +588,37 @@ export default function RequestMaterials() {
     () => requests.find(item => item.requestKey === activeRequestId) || null,
     [activeRequestId, requests]
   );
+
+  useEffect(() => {
+    if (!isChangeExtendRequest(selectedRequest)) {
+      return;
+    }
+
+    if (actionDialogMode !== "rework" && !reviseChangeExtendOpen) {
+      return;
+    }
+
+    let active = true;
+
+    const loadInitialLocations = async () => {
+      try {
+        const response = await axiosPrivate.get("/material/initial-screen-data");
+        if (active) {
+          setInitialLocations(response.data?.data?.locations || []);
+        }
+      } catch (error) {
+        if (active) {
+          setInitialLocations([]);
+        }
+      }
+    };
+
+    loadInitialLocations();
+
+    return () => {
+      active = false;
+    };
+  }, [actionDialogMode, reviseChangeExtendOpen, axiosPrivate, selectedRequest]);
 
   const filteredRequests = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -520,7 +696,35 @@ export default function RequestMaterials() {
 
   const handleReviseRequest = detail => {
     setActionDialogMode(null);
+
+    if (isChangeExtendRequest(selectedRequest)) {
+      setReviseChangeExtendOpen(true);
+      return;
+    }
+
     navigate(`/dashboard/materials/request/single/${detail.id}/rework`);
+  };
+
+  const handleScopedReworkSubmit = async payload => {
+    if (!selectedRequest?.id) {
+      return;
+    }
+
+    try {
+      setScopedReworkSubmitting(true);
+      await axiosPrivate.put(`/material/requests/single/${selectedRequest.id}/rework`, payload);
+      setActionDialogMode(null);
+      setReviseChangeExtendOpen(false);
+      await fetchSingleRequests();
+      openSnackbar("Revised request saved successfully", "success");
+    } catch (error) {
+      openSnackbar(
+        error?.response?.data?.message || "Failed to save revised request.",
+        "error"
+      );
+    } finally {
+      setScopedReworkSubmitting(false);
+    }
   };
 
   return (
@@ -781,6 +985,31 @@ export default function RequestMaterials() {
         onClose={() => setActionDialogMode(null)}
         onReviseRequest={handleReviseRequest}
       />
+
+      <Dialog
+        open={reviseChangeExtendOpen && Boolean(selectedRequest)}
+        onClose={() => setReviseChangeExtendOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <Box sx={{ px: 3, py: 2, borderBottom: "1px solid", borderColor: "divider" }}>
+          <Typography variant="overline" sx={{ fontWeight: 800, color: "text.secondary" }}>
+            Revise Request
+          </Typography>
+          <Typography variant="h5" sx={{ fontWeight: 900, color: "#455a64" }}>
+            {selectedRequest?.ticketNumber}
+          </Typography>
+        </Box>
+        <DialogContent sx={{ py: 3 }}>
+          <ChangeExtendReworkForm
+            row={selectedRequest}
+            locations={initialLocations}
+            onSubmit={handleScopedReworkSubmit}
+            onCancel={() => setReviseChangeExtendOpen(false)}
+            submitting={scopedReworkSubmitting}
+          />
+        </DialogContent>
+      </Dialog>
 
       <Snackbar
         open={snackbar.open}

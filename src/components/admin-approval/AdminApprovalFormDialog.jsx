@@ -10,6 +10,7 @@ import {
   WarningAmber,
 } from "@mui/icons-material";
 import {
+  Alert,
   Autocomplete,
   Box,
   Button,
@@ -21,12 +22,13 @@ import {
   IconButton,
   Paper,
   Popover,
+  Snackbar,
   Stack,
   TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.mjs";
 import { createApprovalDraft } from "src/helper/adminApprovalDraft.mjs";
 import { buildCombinedLongTextHistory } from "src/helper/adminApprovalFieldHistory.mjs";
@@ -48,6 +50,7 @@ const approvalStatusColors = {
   REWORK: { bgcolor: "#fff7ed", color: "#c2410c" },
   REJECT: { bgcolor: "#fee2e2", color: "#b91c1c" },
   REJECTED: { bgcolor: "#fee2e2", color: "#b91c1c" },
+  SKIPPED: { bgcolor: "#f3f4f6", color: "#9ca3af" },
 };
 
 const EDITABLE_FIELD_KEYS = [
@@ -63,6 +66,8 @@ const EDITABLE_FIELD_KEYS = [
 ];
 
 const isEditableApprovalField = fieldKey => EDITABLE_FIELD_KEYS.includes(fieldKey);
+const isChangeExtendRequest = row =>
+  ["CHANGE", "EXTEND"].includes(String(row?.ticketType || row?.ticket_type || "").toUpperCase());
 
 const shouldShowFieldHistoryIcon = sections =>
   Array.isArray(sections) && sections.length > 0;
@@ -234,8 +239,53 @@ function ReadOnlyLongTextFields({ label, values = [] }) {
   );
 }
 
+function ChangeExtendApprovalSummary({ detail }) {
+  const rawRow = detail?.rawRow || {};
+  const ticketType = String(detail?.ticketType || rawRow?.ticket_type || "").toUpperCase();
+  const isExtend = ticketType === "EXTEND";
+
+  return (
+    <Stack spacing={2}>
+      <ReadOnlyField label="Material Code" value={rawRow?.materialCode || rawRow?.material_code} />
+      <ReadOnlyField
+        label="Material Name"
+        value={detail?.basicInfo?.materialDescription || rawRow?.material_description}
+      />
+      {isExtend ? (
+        <>
+          <ReadOnlyField
+            label="Plant"
+            value={rawRow?.plantCode || rawRow?.plant_code || detail?.basicInfo?.plant}
+          />
+          <ReadOnlyField
+            label="Storage Location"
+            value={
+              rawRow?.slocCode || rawRow?.sloc_code || detail?.basicInfo?.storageLocation
+            }
+          />
+        </>
+      ) : (
+        <ReadOnlyField
+          label="Base UoM"
+          value={detail?.basicInfo?.baseUom || rawRow?.uom || rawRow?.base_uom}
+        />
+      )}
+      <ReadOnlyField
+        label="Reason"
+        value={rawRow?.changeExtendReason || rawRow?.change_extend_reason}
+        multiline
+        rows={3}
+      />
+    </Stack>
+  );
+}
+
 function ApprovalHistoryItem({ item }) {
   const color = approvalStatusColors[item.status] || approvalStatusColors.WAITING;
+  const isSkipped = item.status === "SKIPPED";
+  const isUnassignedWaiting =
+    item.status === "WAITING" &&
+    (item.approver === "-" || !item.approver || item.approver.trim() === "");
 
   return (
     <Paper
@@ -245,25 +295,39 @@ function ApprovalHistoryItem({ item }) {
         minWidth: 170,
         p: 1.5,
         border: "1px solid",
-        borderColor: "divider",
+        borderColor: isSkipped ? "#e5e7eb" : "divider",
         borderRadius: 2,
+        opacity: isSkipped ? 0.65 : 1,
       }}
     >
       <Stack spacing={0.75}>
         <Typography variant="caption" sx={{ fontWeight: 900, color: "text.secondary" }}>
           {item.label}
         </Typography>
-        <Chip
-          label={item.status}
-          size="small"
-          sx={{ alignSelf: "flex-start", fontWeight: 800, ...color }}
-        />
+        <Stack direction="row" spacing={0.5} alignItems="center">
+          <Chip
+            label={item.status}
+            size="small"
+            sx={{ alignSelf: "flex-start", fontWeight: 800, ...color }}
+          />
+          {isUnassignedWaiting && (
+            <Tooltip title="Approver belum di-assign" arrow placement="top">
+              <WarningAmber sx={{ fontSize: 16, color: "#f59e0b" }} />
+            </Tooltip>
+          )}
+        </Stack>
         <Typography variant="body2" sx={{ fontWeight: 700 }}>
           {item.approver}
         </Typography>
-        <Typography variant="caption" color="text.secondary">
-          {item.approvedAt}
-        </Typography>
+        {isSkipped ? (
+          <Typography variant="caption" sx={{ fontStyle: "italic", color: "#9ca3af" }}>
+            {item.remark || "Not required"}
+          </Typography>
+        ) : (
+          <Typography variant="caption" color="text.secondary">
+            {item.approvedAt}
+          </Typography>
+        )}
       </Stack>
     </Paper>
   );
@@ -367,6 +431,7 @@ export default function AdminApprovalFormDialog({
     () => buildCombinedLongTextHistory({ currentRow: detail.rawRow }),
     [detail.rawRow]
   );
+  const isScopedChangeExtendRequest = isChangeExtendRequest(row);
 
   const [draftValues, setDraftValues] = useState(() => createApprovalDraft(detail));
   const [remarkDialogOpen, setRemarkDialogOpen] = useState(false);
@@ -375,6 +440,9 @@ export default function AdminApprovalFormDialog({
   const [remarkError, setRemarkError] = useState("");
   const [clientFieldErrors, setClientFieldErrors] = useState({});
   const [hasInteracted, setHasInteracted] = useState(false);
+  const [validationSnackbarOpen, setValidationSnackbarOpen] = useState(false);
+  const [validationErrorCount, setValidationErrorCount] = useState(0);
+  const contentRef = useRef(null);
 
   useEffect(() => {
     if (!open) {
@@ -383,6 +451,8 @@ export default function AdminApprovalFormDialog({
       setRemarkText("");
       setClientFieldErrors({});
       setHasInteracted(false);
+      setValidationSnackbarOpen(false);
+      setValidationErrorCount(0);
     }
   }, [open, row]);
 
@@ -408,6 +478,13 @@ export default function AdminApprovalFormDialog({
   const normalizedDetailStatus = String(detail.status || "").trim().toUpperCase();
   const canSubmitApprovalAction = normalizedDetailStatus === "SUBMIT";
 
+  const unassignedStages = useMemo(() => {
+    const stages = detail.approvalHistory || [];
+    return stages
+      .filter(item => item.status !== "SKIPPED" && item.approver === "-")
+      .map(item => ({ label: item.label, step: item.step }));
+  }, [detail.approvalHistory]);
+
   const displayFieldErrors = useMemo(
     () => ({
       ...clientFieldErrors,
@@ -423,6 +500,14 @@ export default function AdminApprovalFormDialog({
   };
 
   const handleApproveClick = () => {
+    if (isScopedChangeExtendRequest) {
+      setCurrentAction("Approve");
+      setRemarkText("");
+      setRemarkError("");
+      setRemarkDialogOpen(true);
+      return;
+    }
+
     const nextErrors = validateApprovalDraft({
       draftValues,
       formSchema,
@@ -433,6 +518,17 @@ export default function AdminApprovalFormDialog({
     onClearServerValidationErrors?.();
 
     if (Object.keys(nextErrors).length > 0) {
+      setValidationErrorCount(Object.keys(nextErrors).length);
+      setValidationSnackbarOpen(true);
+
+      const firstErrorInput = contentRef.current?.querySelector(
+        "input[aria-invalid='true'], *[aria-invalid='true']"
+      );
+      if (firstErrorInput) {
+        setTimeout(() => {
+          firstErrorInput.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 250);
+      }
       return;
     }
 
@@ -547,8 +643,19 @@ export default function AdminApprovalFormDialog({
         </IconButton>
       </Box>
 
-      <DialogContent sx={{ px: { xs: 2, md: 3 }, py: 3 }}>
+      <DialogContent ref={contentRef} sx={{ px: { xs: 2, md: 3 }, py: 3 }}>
         <Stack spacing={3}>
+          {unassignedStages.length > 0 && canSubmitApprovalAction && (
+            <Alert severity="info" variant="outlined" sx={{ mb: 0 }}>
+              <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                Approver belum assigned: {unassignedStages.map(s => s.label).join(", ")}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Saat approve, admin akan otomatis ter-assign ke stage yang belum ada assignee.
+                {unassignedStages.some(s => s.step === 3) && " Approval 3 akan otomatis ter-assign ke random user MDM_MATERIAL."}
+              </Typography>
+            </Alert>
+          )}
           <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
             <Paper
               elevation={0}
@@ -596,9 +703,16 @@ export default function AdminApprovalFormDialog({
             </Paper>
           </Stack>
 
-          <Box>
-            <SectionLabel>Basic Info</SectionLabel>
-            <Grid container spacing={2.5}>
+          {isScopedChangeExtendRequest ? (
+            <Box>
+              <SectionLabel>Request Summary</SectionLabel>
+              <ChangeExtendApprovalSummary detail={detail} />
+            </Box>
+          ) : (
+            <>
+              <Box>
+                <SectionLabel>Basic Info</SectionLabel>
+                <Grid container spacing={2.5}>
               <Grid item xs={12} md={6}>
                 <ReadOnlyField label="Material Group *" value={detail.basicInfo.materialGroup} />
               </Grid>
@@ -749,13 +863,13 @@ export default function AdminApprovalFormDialog({
                   ))}
                 </Stack>
               </Grid>
-            </Grid>
-          </Box>
+                </Grid>
+              </Box>
 
-          <Box>
-            <SectionLabel>Specification</SectionLabel>
-            {specificationFields.length > 0 ? (
-              <Grid container spacing={2.5}>
+              <Box>
+                <SectionLabel>Specification</SectionLabel>
+                {specificationFields.length > 0 ? (
+                  <Grid container spacing={2.5}>
                 {specificationFields.map(field => {
                   const historySections = field.historySections || [];
                   const isEditable = isEditableApprovalField(field.key) || field.historyKey;
@@ -809,37 +923,43 @@ export default function AdminApprovalFormDialog({
                           ))}
                       </Box>
                     </Grid>
-                  );
-                })}
-              </Grid>
-            ) : (
-              <Typography variant="body2" color="text.secondary">
-                Specification belum tersimpan untuk request ini.
-              </Typography>
-            )}
-          </Box>
+                    );
+                  })}
+                  </Grid>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    Specification belum tersimpan untuk request ini.
+                  </Typography>
+                )}
+              </Box>
 
-          <Box>
-            <Typography variant="subtitle2" sx={{ fontWeight: 900, mb: 0.5 }}>
-              Attachment *
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
-              Supported formats: PDF, DOC, DOCX, PNG, JPG, JPEG
-            </Typography>
-            {detail.attachments.length > 0 ? (
-              <Stack direction="row" spacing={1.5} useFlexGap flexWrap="wrap">
-                {detail.attachments.map((attachment, index) => (
-                  <AttachmentItem
-                    key={attachment.id || `${attachment.name}-${index}`}
-                    attachment={attachment}
-                    index={index}
-                  />
-                ))}
-              </Stack>
-            ) : (
-              <Chip icon={<AttachFile />} label="No attachment found" variant="outlined" />
-            )}
-          </Box>
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 900, mb: 0.5 }}>
+                  Attachment *
+                </Typography>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mb: 2 }}
+                >
+                  Supported formats: PDF, DOC, DOCX, PNG, JPG, JPEG
+                </Typography>
+                {detail.attachments.length > 0 ? (
+                  <Stack direction="row" spacing={1.5} useFlexGap flexWrap="wrap">
+                    {detail.attachments.map((attachment, index) => (
+                      <AttachmentItem
+                        key={attachment.id || `${attachment.name}-${index}`}
+                        attachment={attachment}
+                        index={index}
+                      />
+                    ))}
+                  </Stack>
+                ) : (
+                  <Chip icon={<AttachFile />} label="No attachment found" variant="outlined" />
+                )}
+              </Box>
+            </>
+          )}
         </Stack>
       </DialogContent>
 
@@ -948,20 +1068,26 @@ export default function AdminApprovalFormDialog({
                 return;
               }
 
-              onAction?.(currentAction, detail, {
-                remark: remarkText,
-                editedRequest: {
-                  material_sub_group_id: draftValues.material_sub_group_id,
-                  plant_code: draftValues.plant_code,
-                  sloc_code: draftValues.sloc_code,
-                  material_description: draftValues.material_description,
-                  base_uom: draftValues.base_uom,
-                  long_text_1: draftValues.long_text_1,
-                  long_text_2: draftValues.long_text_2,
-                  long_text_3: draftValues.long_text_3,
-                  template_payload: draftValues.template_payload,
-                },
-              });
+              onAction?.(
+                currentAction,
+                detail,
+                isScopedChangeExtendRequest
+                  ? { remark: remarkText }
+                  : {
+                      remark: remarkText,
+                      editedRequest: {
+                        material_sub_group_id: draftValues.material_sub_group_id,
+                        plant_code: draftValues.plant_code,
+                        sloc_code: draftValues.sloc_code,
+                        material_description: draftValues.material_description,
+                        base_uom: draftValues.base_uom,
+                        long_text_1: draftValues.long_text_1,
+                        long_text_2: draftValues.long_text_2,
+                        long_text_3: draftValues.long_text_3,
+                        template_payload: draftValues.template_payload,
+                      },
+                    }
+              );
             }}
             disabled={submitting}
             sx={{ textTransform: "none", fontWeight: 800 }}
@@ -970,6 +1096,22 @@ export default function AdminApprovalFormDialog({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={validationSnackbarOpen}
+        autoHideDuration={8000}
+        onClose={() => setValidationSnackbarOpen(false)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setValidationSnackbarOpen(false)}
+          severity="warning"
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
+          {validationErrorCount} field{validationErrorCount !== 1 ? "s" : ""} belum valid. Harap perbaiki field yang ditandai sebelum approve.
+        </Alert>
+      </Snackbar>
     </Dialog>
   );
 }

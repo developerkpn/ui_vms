@@ -31,6 +31,11 @@ const APPROVAL_STEP_LABELS = {
   3: "Master Data",
 };
 
+const TICKET_TYPE_APPROVAL_SKIPPED_STEPS = {
+  CHANGE: [2],
+  EXTEND: [1, 2],
+};
+
 export function buildApprovalDetail(row = {}) {
   const payload = parsePayload(row.templatePayload ?? row.template_payload);
   const requestFields = {
@@ -219,8 +224,23 @@ function normalizeAttachments(attachments = []) {
 }
 
 function buildApprovalHistory(row) {
+  const ticketType = String(row.ticketType || row.ticket_type || "").trim().toUpperCase();
+  const skippedSteps = TICKET_TYPE_APPROVAL_SKIPPED_STEPS[ticketType] || [];
+  const allSteps = [1, 2, 3];
+
   if (Array.isArray(row.approvalSteps) && row.approvalSteps.length > 0) {
-    return [1, 2, 3].map(step => {
+    return allSteps.map(step => {
+      if (skippedSteps.includes(step)) {
+        return {
+          step,
+          label: APPROVAL_STEP_LABELS[step] || `Approval ${step}`,
+          approver: "-",
+          status: "SKIPPED",
+          approvedAt: "-",
+          remark: "Not required for this request type",
+        };
+      }
+
       const source =
         row.approvalSteps.find(item => resolveApprovalStepNumber(item) === step) ||
         row.approvalSteps[step - 1] ||
@@ -237,23 +257,36 @@ function buildApprovalHistory(row) {
     });
   }
 
-  return [1, 2, 3].map(step => ({
-    step,
-    label: APPROVAL_STEP_LABELS[step] || `Approval ${step}`,
-    approver: pickText(
-      row[`approval${step}UserName`],
-      row[`approval${step}Username`],
-      row[`approval_${step}_user_name`],
-      row[`approval_${step}_username`],
-      row[`approval${step}UserId`],
-      row[`approval_${step}_user_id`]
-    ),
-    status: normalizeApprovalStatus(
-      pickText(row[`approval${step}Status`], row[`approval_${step}_status`], "WAITING")
-    ),
-    approvedAt: pickText(row[`approval${step}At`], row[`approval_${step}_at`]),
-    remark: pickText(row[`approval${step}Remark`], row[`approval_${step}_remark`]),
-  }));
+  return allSteps.map(step => {
+    if (skippedSteps.includes(step)) {
+      return {
+        step,
+        label: APPROVAL_STEP_LABELS[step] || `Approval ${step}`,
+        approver: "-",
+        status: "SKIPPED",
+        approvedAt: "-",
+        remark: "Not required for this request type",
+      };
+    }
+
+    return {
+      step,
+      label: APPROVAL_STEP_LABELS[step] || `Approval ${step}`,
+      approver: pickText(
+        row[`approval${step}UserName`],
+        row[`approval${step}Username`],
+        row[`approval_${step}_user_name`],
+        row[`approval_${step}_username`],
+        row[`approval${step}UserId`],
+        row[`approval_${step}_user_id`]
+      ),
+      status: normalizeApprovalStatus(
+        pickText(row[`approval${step}Status`], row[`approval_${step}_status`], "WAITING")
+      ),
+      approvedAt: pickText(row[`approval${step}At`], row[`approval_${step}_at`]),
+      remark: pickText(row[`approval${step}Remark`], row[`approval_${step}_remark`]),
+    };
+  });
 }
 
 function buildReworkSummary(approvalHistory, row) {
@@ -324,6 +357,10 @@ function normalizeApprovalStatus(value) {
   const normalizedValue = String(value || "")
     .trim()
     .toUpperCase();
+
+  if (normalizedValue === "SKIPPED") {
+    return "SKIPPED";
+  }
 
   if (
     normalizedValue === "APPROVE" ||

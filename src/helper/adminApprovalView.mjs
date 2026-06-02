@@ -105,6 +105,8 @@ export function normalizeApprovalRows(rows = []) {
       approvalStage: resolveApprovalStage(row),
     };
 
+    addStringProp(normalized, "materialCode", row.material_code, row.materialCode);
+    addStringProp(normalized, "changeExtendReason", row.change_extend_reason, row.changeExtendReason);
     addStringProp(normalized, "materialGroupCode", row.material_group_code, row.materialGroupCode);
     addStringProp(normalized, "materialGroupName", row.material_group_name, row.materialGroupName);
     addRawProp(normalized, "materialGroupId", row.material_group_id, row.materialGroupId);
@@ -236,12 +238,32 @@ export function sortApprovalRows(rows = [], groupBy = "none") {
 
 function resolveApprovalStage(row = {}) {
   const normalizedStatus = String(row.status || "").trim().toUpperCase();
+  const ticketType = String(row.ticketType || row.ticket_type || "").trim().toUpperCase();
+  const isChange = ticketType === "CHANGE";
+  const isExtend = ticketType === "EXTEND";
   const approval1 = String(row.approval_1_status || "").toUpperCase();
   const approval2 = String(row.approval_2_status || "").toUpperCase();
   const approval3 = String(row.approval_3_status || "").toUpperCase();
 
   if (["REJECT", "REJECTED", "CANCEL", "CANCELLED"].includes(normalizedStatus)) {
     return "Cancelled";
+  }
+
+  if (isExtend) {
+    if (approval3 !== "APPROVED") {
+      return "Approval 3";
+    }
+    return "Completed";
+  }
+
+  if (isChange) {
+    if (!approval1 || approval1 === "WAITING") {
+      return "Approval 1";
+    }
+    if (approval1 === "APPROVED" && approval3 !== "APPROVED") {
+      return "Approval 3";
+    }
+    return "Completed";
   }
 
   if (!approval1 || approval1 === "WAITING") {
