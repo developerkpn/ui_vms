@@ -350,7 +350,7 @@ export default function SingleRequestPage({ mode = "single" }) {
             <Typography color="text.primary">Mass Request Form</Typography>
           </Breadcrumbs>
         </Box>
-        <MassMaterialForm onBack={handleBack} formData={formData} />
+        <MassMaterialForm onBack={handleBack} />
       </Box>
     );
   }

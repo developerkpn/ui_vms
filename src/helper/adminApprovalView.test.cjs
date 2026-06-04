@@ -289,3 +289,184 @@ test("paginateApprovalRows slices rows for the requested page", async () => {
     [6, 7, 8, 9, 10]
   );
 });
+
+// ---------------------------------------------------------------------------
+// Mass request approval helpers
+// ---------------------------------------------------------------------------
+
+test("normalizeMassApprovalRows maps API rows", async () => {
+  const { normalizeMassApprovalRows } = await loadHelper();
+
+  const rows = normalizeMassApprovalRows([
+    {
+      id: 42,
+      mass_request_no: "MR-2024-0001",
+      item_count: 3,
+      mass_request_reason: "Project Gamma materials",
+      first_item_status: "Submit",
+      first_item_assigned_to: "Approval 1",
+      created_by: "USER-BUDI",
+      created_by_username: "budi",
+      created_at: "2024-10-01 08:30",
+      first_item_approval_1_user_id: "APP-01",
+      first_item_approval_1_status: "WAITING",
+      first_item_approval_2_user_id: "APP-02",
+      first_item_approval_2_status: null,
+      first_item_approval_3_user_id: null,
+      first_item_approval_3_status: null,
+    },
+  ]);
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].id, 42);
+  assert.equal(rows[0].massRequestNo, "MR-2024-0001");
+  assert.equal(rows[0].itemCount, 3);
+  assert.equal(rows[0].massRequestReason, "Project Gamma materials");
+  assert.equal(rows[0].status, "Submit");
+  assert.equal(rows[0].assignedTo, "Approval 1");
+  assert.equal(rows[0].createdBy, "USER-BUDI");
+  assert.equal(rows[0].approvalStage, "Approval 1");
+  assert.equal(rows[0].firstItemApproval1Status, "WAITING");
+  assert.equal(rows[0].firstItemApproval2Status, null);
+});
+
+test("normalizeMassApprovalRows handles empty array", async () => {
+  const { normalizeMassApprovalRows } = await loadHelper();
+  assert.deepEqual(normalizeMassApprovalRows(), []);
+  assert.deepEqual(normalizeMassApprovalRows(null), []);
+  assert.deepEqual(normalizeMassApprovalRows([]), []);
+});
+
+test("resolveMassApprovalStage returns Approval 1 for waiting first stage", async () => {
+  const { resolveMassApprovalStage } = await loadHelper();
+
+  const result = resolveMassApprovalStage({
+    first_item_approval_1_status: "WAITING",
+    first_item_approval_2_status: null,
+    first_item_approval_3_status: null,
+    first_item_status: "Submit",
+  });
+  assert.equal(result, "Approval 1");
+});
+
+test("resolveMassApprovalStage returns Approval 2 after first approved", async () => {
+  const { resolveMassApprovalStage } = await loadHelper();
+
+  const result = resolveMassApprovalStage({
+    first_item_approval_1_status: "APPROVED",
+    first_item_approval_2_status: null,
+    first_item_approval_3_status: null,
+    first_item_status: "Submit",
+  });
+  assert.equal(result, "Approval 2");
+});
+
+test("resolveMassApprovalStage returns Completed when all stages approved", async () => {
+  const { resolveMassApprovalStage } = await loadHelper();
+
+  const result = resolveMassApprovalStage({
+    first_item_approval_1_status: "APPROVED",
+    first_item_approval_2_status: "APPROVED",
+    first_item_approval_3_status: "APPROVED",
+    first_item_status: "DONE",
+  });
+  assert.equal(result, "Completed");
+});
+
+test("resolveMassApprovalStage returns Cancelled for rejected/cancelled status", async () => {
+  const { resolveMassApprovalStage } = await loadHelper();
+
+  const result = resolveMassApprovalStage({
+    first_item_approval_1_status: "REJECTED",
+    first_item_approval_2_status: null,
+    first_item_approval_3_status: null,
+    first_item_status: "CANCEL",
+  });
+  assert.equal(result, "Cancelled");
+});
+
+test("filterMassApprovalRowsByStatus filters by status value", async () => {
+  const { filterMassApprovalRowsByStatus, normalizeMassApprovalRows } = await loadHelper();
+
+  const rows = normalizeMassApprovalRows([
+    { id: 1, first_item_status: "Submit" },
+    { id: 2, first_item_status: "Done" },
+    { id: 3, first_item_status: "Submit" },
+  ]);
+
+  const submitRows = filterMassApprovalRowsByStatus(rows, "Submit");
+  assert.equal(submitRows.length, 2);
+  assert.equal(submitRows[0].id, 1);
+  assert.equal(submitRows[1].id, 3);
+
+  const doneRows = filterMassApprovalRowsByStatus(rows, "Done");
+  assert.equal(doneRows.length, 1);
+  assert.equal(doneRows[0].id, 2);
+});
+
+test("filterMassApprovalRows searches by text", async () => {
+  const { filterMassApprovalRows, normalizeMassApprovalRows } = await loadHelper();
+
+  const rows = normalizeMassApprovalRows([
+    {
+      id: 1,
+      mass_request_no: "MR-001",
+      mass_request_reason: "Urgent materials",
+      created_by_username: "budi",
+    },
+    {
+      id: 2,
+      mass_request_no: "MR-002",
+      mass_request_reason: "Routine supply",
+      created_by_username: "siti",
+    },
+  ]);
+
+  assert.equal(filterMassApprovalRows(rows, "urgent").length, 1);
+  assert.equal(filterMassApprovalRows(rows, "siti").length, 1);
+  assert.equal(filterMassApprovalRows(rows, "nonexistent").length, 0);
+  assert.equal(filterMassApprovalRows(rows, "").length, 2);
+});
+
+test("paginateMassApprovalRows slices correctly", async () => {
+  const { paginateMassApprovalRows } = await loadHelper();
+  const rows = Array.from({ length: 12 }, (_, i) => ({ id: i + 1 }));
+
+  const page1 = paginateMassApprovalRows(rows, 0, 5);
+  assert.equal(page1.length, 5);
+  assert.equal(page1[0].id, 1);
+
+  const page2 = paginateMassApprovalRows(rows, 1, 5);
+  assert.equal(page2.length, 5);
+  assert.equal(page2[0].id, 6);
+
+  const page3 = paginateMassApprovalRows(rows, 2, 5);
+  assert.equal(page3.length, 2);
+  assert.equal(page3[0].id, 11);
+});
+
+test("summarizeMassApprovalGroups groups by status", async () => {
+  const { summarizeMassApprovalGroups, normalizeMassApprovalRows } = await loadHelper();
+
+  const rows = normalizeMassApprovalRows([
+    { id: 1, first_item_status: "Submit" },
+    { id: 2, first_item_status: "Done" },
+    { id: 3, first_item_status: "Submit" },
+  ]);
+
+  const groups = summarizeMassApprovalGroups(rows, "status");
+  assert.equal(groups["Submit"].length, 2);
+  assert.equal(groups["Done"].length, 1);
+});
+
+test("summarizeMassApprovalGroups returns single group when groupBy=none", async () => {
+  const { summarizeMassApprovalGroups, normalizeMassApprovalRows } = await loadHelper();
+
+  const rows = normalizeMassApprovalRows([
+    { id: 1, first_item_status: "Submit" },
+    { id: 2, first_item_status: "Done" },
+  ]);
+
+  const groups = summarizeMassApprovalGroups(rows, "none");
+  assert.deepEqual(groups[""], rows);
+});

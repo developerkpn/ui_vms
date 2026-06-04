@@ -1,7 +1,6 @@
 import {
   Close,
   Download,
-  FilterAltOutlined,
   KeyboardArrowDown,
   MoreHoriz,
   Search,
@@ -19,7 +18,6 @@ import {
   InputAdornment,
   Menu,
   MenuItem,
-  Pagination,
   Paper,
   Snackbar,
   Stack,
@@ -31,9 +29,13 @@ import {
   TableRow,
   TextField,
   Typography,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AdminApprovalFormDialog from "src/components/admin-approval/AdminApprovalFormDialog";
+import MassApprovalFormDialog from "src/components/admin-approval/MassApprovalFormDialog";
+import MassReworkStatusDialog from "src/components/admin-approval/MassReworkStatusDialog";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.mjs";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import { buildApprovalSubGroupsRequestPath } from "src/helper/adminApprovalSubGroup.mjs";
@@ -44,9 +46,15 @@ import {
   filterApprovalRows,
   filterApprovalRowsByStatus,
   normalizeApprovalRows,
+  normalizeMassApprovalRows,
   paginateApprovalRows,
   sortApprovalRows,
   summarizeApprovalGroups,
+  filterMassApprovalRows,
+  filterMassApprovalRowsByStatus,
+  paginateMassApprovalRows,
+  sortMassApprovalRows,
+  summarizeMassApprovalGroups,
 } from "src/helper/adminApprovalView.mjs";
 
 const tableHeaderSx = {
@@ -215,7 +223,7 @@ export default function AdminApprovalView() {
   const [groupBy, setGroupBy] = useState("none");
   const [statusFilter, setStatusFilter] = useState("Submit");
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage] = useState(10);
   const [loading, setLoading] = useState(false);
   const [submittingAction, setSubmittingAction] = useState(false);
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
@@ -230,6 +238,17 @@ export default function AdminApprovalView() {
     severity: "info",
     message: "",
   });
+  const [activeTab, setActiveTab] = useState("single");
+  const [massApprovalRows, setMassApprovalRows] = useState([]);
+  const [massApprovalDialogRow, setMassApprovalDialogRow] = useState(null);
+  const [massReworkDialogRow, setMassReworkDialogRow] = useState(null);
+  const [massApprovalItems, setMassApprovalItems] = useState([]);
+
+  const fetchMassApprovalRows = async () => {
+    const response = await axiosPrivate.get("/material/requests/mass/approval-inbox");
+    const rows = normalizeMassApprovalRows(response.data?.data);
+    setMassApprovalRows(rows);
+  };
 
   const fetchApprovalRows = async () => {
     const response = await axiosPrivate.get("/material/requests/single/approval-inbox");
@@ -272,9 +291,12 @@ export default function AdminApprovalView() {
     const run = async () => {
       try {
         setLoading(true);
-        await fetchApprovalRows();
+        await Promise.all([
+          fetchApprovalRows(),
+          fetchMassApprovalRows(),
+        ]);
       } catch (error) {
-        console.error("Failed to fetch approval rows:", error);
+        console.error("Failed to fetch approval data:", error);
         setApprovalRows([]);
         openSnackbar("Data approval belum bisa dimuat. Silakan refresh halaman lagi.", "warning");
       } finally {
@@ -358,27 +380,31 @@ export default function AdminApprovalView() {
     [page, rowsPerPage, visibleRows]
   );
 
-  const totalPages = Math.max(1, Math.ceil(visibleRows.length / rowsPerPage));
-
-  const handleChangePage = (event, nextPage) => {
-    setPage(nextPage - 1);
-  };
-
   const handleStatusFilterChange = event => {
     setStatusFilter(event.target.value);
     setPage(0);
   };
-
-  const handleRowsPerPageChange = event => {
-    setRowsPerPage(Number(event.target.value) || 10);
-    setPage(0);
-  };
-
   const groupedSummary = useMemo(
     () => summarizeApprovalGroups(visibleRows, groupBy),
     [groupBy, visibleRows]
   );
 
+  // Mass tab derived rows
+  const massVisibleRows = useMemo(() => {
+    const statusRows = filterMassApprovalRowsByStatus(massApprovalRows, statusFilter);
+    const searchRows = filterMassApprovalRows(statusRows, searchQuery);
+    return sortMassApprovalRows(searchRows, groupBy);
+  }, [massApprovalRows, statusFilter, searchQuery, groupBy]);
+
+  const massPagedRows = useMemo(
+    () => paginateMassApprovalRows(massVisibleRows, page, rowsPerPage),
+    [page, rowsPerPage, massVisibleRows]
+  );
+
+  const massGroupedSummary = useMemo(
+    () => summarizeMassApprovalGroups(massVisibleRows, groupBy),
+    [groupBy, massVisibleRows]
+  );
   const handleMenuOpen = (event, row) => {
     setActiveRow(row);
     setMenuAnchorEl(event.currentTarget);
@@ -391,12 +417,30 @@ export default function AdminApprovalView() {
   const handleOpenApproval = (row = activeRow) => {
     handleMenuClose();
     setApprovalDialogServerErrors({});
-    setApprovalDialogRow(row);
+
+    if (row?.massRequestNo) {
+      // Mass request - fetch items and open mass dialog
+      setMassApprovalDialogRow(row);
+      axiosPrivate
+        .get(`/material/requests/mass/${row.id}/items`)
+        .then(response => {
+          setMassApprovalItems(response.data?.data || []);
+        })
+        .catch(() => {
+          setMassApprovalItems([]);
+        });
+    } else {
+      setApprovalDialogRow(row);
+    }
   };
 
   const handleOpenRework = (row = activeRow) => {
     handleMenuClose();
-    setReworkDialogRow(row || null);
+    if (row?.massRequestNo) {
+      setMassReworkDialogRow(row);
+    } else {
+      setReworkDialogRow(row || null);
+    }
   };
 
   const handleApprovalAction = async (action, detail, payload) => {
@@ -456,6 +500,76 @@ export default function AdminApprovalView() {
     }
   };
 
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
+    setPage(0);
+  };
+
+  const handleMassApprovalAction = async (action, reason, editedItems) => {
+    const row = massApprovalDialogRow;
+    if (!row) return;
+
+    clearRefreshWarningTimeout();
+
+    try {
+      setSubmittingAction(true);
+
+      const actionPath = action === "approve"
+        ? "approve"
+        : action === "rework"
+          ? "rework"
+          : action === "reject"
+            ? "reject"
+            : null;
+
+      if (!actionPath) {
+        openSnackbar(`${action} belum masuk scope approval saat ini.`, "info");
+        return;
+      }
+
+      const endpoint = `/material/requests/mass/${row.id}/${actionPath}`;
+      const requestBody =
+        action === "approve"
+          ? { remark: reason ?? null, items: editedItems ?? null }
+          : { reason: reason ?? null };
+
+      await axiosPrivate.post(endpoint, requestBody);
+
+      setMassApprovalDialogRow(null);
+      setMassApprovalItems([]);
+      openSnackbar(
+        action === "approve"
+          ? "Mass request berhasil di-approve."
+          : action === "rework"
+            ? "Mass request berhasil dikembalikan untuk dirework."
+            : "Mass request berhasil di-reject.",
+        "success"
+      );
+
+      try {
+        await Promise.all([
+          fetchApprovalRows(),
+          fetchMassApprovalRows(),
+        ]);
+      } catch (refreshError) {
+        console.error("Failed to refresh after mass action:", refreshError);
+        refreshWarningTimeoutRef.current = setTimeout(() => {
+          openSnackbar(
+            "Aksi berhasil diproses, tetapi inbox belum berhasil diperbarui. Silakan refresh halaman.",
+            "warning"
+          );
+          refreshWarningTimeoutRef.current = null;
+        }, 1600);
+      }
+    } catch (error) {
+      const message =
+        error?.response?.data?.message || "Aksi gagal diproses. Silakan coba lagi.";
+      openSnackbar(message, "error");
+    } finally {
+      setSubmittingAction(false);
+    }
+  };
+
   function openSnackbar(message, severity = "info") {
     clearRefreshWarningTimeout();
     setSnackbar({ open: true, message, severity });
@@ -507,21 +621,40 @@ export default function AdminApprovalView() {
         </Button>
       </Box>
 
-      <Box
-        sx={{
-          mb: 4,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "flex-start",
-          gap: 2.5,
-          width: "100%",
-          maxWidth: { md: "800px" },
-        }}
+      <Box sx={{ mb: 3, borderBottom: 1, borderColor: "divider" }}>
+        <Tabs
+          value={activeTab}
+          onChange={handleTabChange}
+          aria-label="Approval type tabs"
+          sx={{
+            "& .MuiTab-root": {
+              textTransform: "none",
+              fontWeight: 700,
+              fontSize: "0.95rem",
+              minWidth: 120,
+            },
+          }}
+        >
+          <Tab value="single" label="Single Requests" />
+          <Tab value="mass" label="Mass Requests" />
+        </Tabs>
+      </Box>
+
+      <Stack
+        direction={{ xs: "column", md: "row" }}
+        spacing={2}
+        alignItems="center"
+        flexWrap="wrap"
+        useFlexGap
+        sx={{ mb: 4, width: "100%" }}
       >
         <TextField
-          fullWidth
-          size="medium"
-          placeholder="Search approval by ticket, description, status, requester..."
+          size="small"
+          placeholder={
+            activeTab === "single"
+              ? "Search approval by ticket, description, status, requester..."
+              : "Search mass request by number, reason, requester..."
+          }
           value={searchQuery}
           onChange={event => setSearchQuery(event.target.value)}
           InputProps={{
@@ -533,11 +666,13 @@ export default function AdminApprovalView() {
             ),
           }}
           sx={{
+            flex: { xs: "1 1 100%", md: "1 1 auto" },
+            minWidth: { md: 280 },
             bgcolor: "background.paper",
             "& .MuiOutlinedInput-root": {
-              minHeight: 70,
-              borderRadius: "10px",
-              fontSize: "1rem",
+              minHeight: 50,
+              borderRadius: "7px",
+              fontSize: "0.95rem",
               color: "text.primary",
             },
             "& .MuiOutlinedInput-notchedOutline": {
@@ -553,26 +688,16 @@ export default function AdminApprovalView() {
         <TextField
           select
           size="small"
+          label="Group by"
           value={groupBy}
           onChange={event => setGroupBy(event.target.value)}
           SelectProps={{ native: true }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <FilterAltOutlined fontSize="small" sx={{ color: "text.secondary" }} />
-              </InputAdornment>
-            ),
-          }}
           sx={{
-            width: { xs: "100%", md: 400 },
+            width: { xs: "100%", md: 220 },
             bgcolor: "background.paper",
             "& .MuiOutlinedInput-root": {
               borderRadius: "7px",
               minHeight: 50,
-            },
-            "& select": {
-              color: "text.secondary",
-              fontSize: "0.95rem",
             },
           }}
         >
@@ -583,221 +708,326 @@ export default function AdminApprovalView() {
           ))}
         </TextField>
 
-        <Stack
-          direction={{ xs: "column", md: "row" }}
-          spacing={2}
-          useFlexGap
-          flexWrap="wrap"
-        >
-          <TextField
-            select
-            size="small"
-            value={statusFilter}
-            onChange={handleStatusFilterChange}
-            SelectProps={{ native: true }}
-            sx={{
-              width: { xs: "100%", md: 240 },
-              bgcolor: "background.paper",
-              "& .MuiOutlinedInput-root": {
-                borderRadius: "7px",
-                minHeight: 50,
-              },
-            }}
-          >
-            {APPROVAL_STATUS_FILTER_OPTIONS.map(option => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </TextField>
-
-          <TextField
-            select
-            size="small"
-            value={rowsPerPage}
-            onChange={handleRowsPerPageChange}
-            SelectProps={{ native: true }}
-            sx={{
-              width: { xs: "100%", md: 160 },
-              bgcolor: "background.paper",
-              "& .MuiOutlinedInput-root": {
-                borderRadius: "7px",
-                minHeight: 50,
-              },
-            }}
-          >
-            {[10, 25, 50].map(option => (
-              <option key={option} value={option}>
-                {option} / page
-              </option>
-            ))}
-          </TextField>
-        </Stack>
-
-        {groupedSummary.length > 0 && (
-          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-            {groupedSummary.map(item => (
-              <Chip
-                key={item.key}
-                label={`${item.key}: ${item.count}`}
-                size="small"
-                sx={{ bgcolor: "background.paper", fontWeight: 700 }}
-              />
-            ))}
-          </Stack>
-        )}
-      </Box>
-
-      <Box sx={{ width: "100%", overflowX: "auto" }}>
-        <Paper
-          elevation={0}
+        <TextField
+          select
+          size="small"
+          label="Status"
+          value={statusFilter}
+          onChange={handleStatusFilterChange}
+          SelectProps={{ native: true }}
           sx={{
-            minWidth: 1060,
-            border: "1px solid",
-            borderColor: "divider",
-            borderRadius: "12px",
-            overflow: "hidden",
+            width: { xs: "100%", md: 220 },
             bgcolor: "background.paper",
+            "& .MuiOutlinedInput-root": {
+              borderRadius: "7px",
+              minHeight: 50,
+            },
           }}
         >
-          <TableContainer>
-            <Table size="small" sx={{ minWidth: 1060 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell align="center" sx={tableHeaderSx}>
-                    Action
-                  </TableCell>
-                  <TableCell sx={tableHeaderSx}>Ticket Number</TableCell>
-                  <TableCell sx={tableHeaderSx}>Ticket Type</TableCell>
-                  <TableCell sx={{ ...tableHeaderSx, minWidth: 280 }}>
-                    Material Description
-                  </TableCell>
-                  <TableCell align="center" sx={tableHeaderSx}>
-                    UOM
-                  </TableCell>
-                  <TableCell align="center" sx={tableHeaderSx}>
-                    Status
-                  </TableCell>
-                  <TableCell sx={tableHeaderSx}>Created by</TableCell>
-                  <TableCell sx={tableHeaderSx}>Created at</TableCell>
-                  <TableCell sx={tableHeaderSx}>Assigned to</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {loading && (
-                  <TableRow>
-                    <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
-                      Loading approval items...
-                    </TableCell>
-                  </TableRow>
-                )}
+          {APPROVAL_STATUS_FILTER_OPTIONS.map(option => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </TextField>
+      </Stack>
 
-                {!loading &&
-                  pagedRows.map(row => (
-                    <TableRow
-                      key={row.id || row.ticketNumber}
-                      hover
-                      sx={{
-                        "& .MuiTableCell-root": {
-                          borderBottom: "1px solid",
-                          borderColor: "divider",
-                          color: "text.secondary",
-                          verticalAlign: "middle",
-                          py: 1.75,
-                        },
-                        "&:last-child .MuiTableCell-root": {
-                          borderBottom: "none",
-                        },
-                      }}
-                    >
-                      <TableCell align="center">
-                        <IconButton
-                          size="small"
-                          aria-label={`Open action menu for ${row.ticketNumber}`}
-                          onClick={event => handleMenuOpen(event, row)}
-                          sx={{ color: "text.secondary" }}
-                        >
-                          <MoreHoriz />
-                        </IconButton>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="text"
-                          size="small"
-                          onClick={() => handleOpenApproval(row)}
-                          sx={{
-                            p: 0,
-                            minWidth: 0,
-                            color: "#0f5ad7",
-                            fontWeight: 800,
-                            textTransform: "none",
-                          }}
-                        >
-                          {row.ticketNumber}
-                        </Button>
-                      </TableCell>
-                      <TableCell>
-                        <TicketTypeBadge value={row.ticketType} />
-                      </TableCell>
-                      <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>
-                        {row.materialDescription}
-                      </TableCell>
-                      <TableCell align="center" sx={{ color: "text.secondary", fontWeight: 700 }}>
-                        {row.uom}
-                      </TableCell>
-                      <TableCell align="center">
-                        <StatusBadge value={row.status} />
-                      </TableCell>
-                      <TableCell sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
-                        {row.createdBy}
-                      </TableCell>
-                      <TableCell sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
-                        {row.createdAt}
-                      </TableCell>
-                      <TableCell sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
-                        {row.assignedTo}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-
-                {!loading && visibleRows.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={9} align="center" sx={{ py: 5 }}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                        No {statusFilter} item found
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Coba ubah filter status, keyword pencarian, atau cek assignment approval.
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Paper>
-      </Box>
-
-      {!loading && visibleRows.length > 0 && (
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "center",
-            py: 2,
-            mt: 1,
-          }}
-        >
-          <Pagination
-            count={totalPages}
-            page={page + 1}
-            onChange={handleChangePage}
-            color="primary"
-            disabled={totalPages <= 1}
-            size="medium"
-          />
-        </Box>
+      {groupedSummary.length > 0 && activeTab === "single" && (
+        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
+          {groupedSummary.map(item => (
+            <Chip
+              key={item.key}
+              label={`${item.key}: ${item.count}`}
+              size="small"
+              sx={{ bgcolor: "background.paper", fontWeight: 700 }}
+            />
+          ))}
+        </Stack>
       )}
 
+      {massGroupedSummary.length > 0 && activeTab === "mass" && (
+        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
+          {massGroupedSummary.map(item => (
+            <Chip
+              key={item.key}
+              label={`${item.key}: ${item.count}`}
+              size="small"
+              sx={{ bgcolor: "background.paper", fontWeight: 700 }}
+            />
+          ))}
+        </Stack>
+      )}
+
+      {/* Single tab table */}
+      {activeTab === "single" && (
+        <Box sx={{ width: "100%", overflowX: "auto" }}>
+          <Paper
+            elevation={0}
+            sx={{
+              minWidth: 1060,
+              border: "1px solid",
+              borderColor: "divider",
+              borderRadius: "12px",
+              overflow: "hidden",
+              bgcolor: "background.paper",
+            }}
+          >
+            <TableContainer>
+              <Table size="small" sx={{ minWidth: 1060 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell align="center" sx={tableHeaderSx}>
+                      Action
+                    </TableCell>
+                    <TableCell sx={tableHeaderSx}>Ticket Number</TableCell>
+                    <TableCell sx={tableHeaderSx}>Ticket Type</TableCell>
+                    <TableCell sx={{ ...tableHeaderSx, minWidth: 280 }}>
+                      Material Description
+                    </TableCell>
+                    <TableCell align="center" sx={tableHeaderSx}>
+                      UOM
+                    </TableCell>
+                    <TableCell align="center" sx={tableHeaderSx}>
+                      Status
+                    </TableCell>
+                    <TableCell sx={tableHeaderSx}>Created by</TableCell>
+                    <TableCell sx={tableHeaderSx}>Created at</TableCell>
+                    <TableCell sx={tableHeaderSx}>Assigned to</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {loading && (
+                    <TableRow>
+                      <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
+                        Loading approval items...
+                      </TableCell>
+                    </TableRow>
+                  )}
+
+                  {!loading &&
+                    pagedRows.map(row => (
+                      <TableRow
+                        key={row.id || row.ticketNumber}
+                        hover
+                        sx={{
+                          "& .MuiTableCell-root": {
+                            borderBottom: "1px solid",
+                            borderColor: "divider",
+                            color: "text.secondary",
+                            verticalAlign: "middle",
+                            py: 1.75,
+                          },
+                          "&:last-child .MuiTableCell-root": {
+                            borderBottom: "none",
+                          },
+                        }}
+                      >
+                        <TableCell align="center">
+                          <IconButton
+                            size="small"
+                            aria-label={`Open action menu for ${row.ticketNumber}`}
+                            onClick={event => handleMenuOpen(event, row)}
+                            sx={{ color: "text.secondary" }}
+                          >
+                            <MoreHoriz />
+                          </IconButton>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="text"
+                            size="small"
+                            onClick={() => handleOpenApproval(row)}
+                            sx={{
+                              p: 0,
+                              minWidth: 0,
+                              color: "#0f5ad7",
+                              fontWeight: 800,
+                              textTransform: "none",
+                            }}
+                          >
+                            {row.ticketNumber}
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          <TicketTypeBadge value={row.ticketType} />
+                        </TableCell>
+                        <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>
+                          {row.materialDescription}
+                        </TableCell>
+                        <TableCell align="center" sx={{ color: "text.secondary", fontWeight: 700 }}>
+                          {row.uom}
+                        </TableCell>
+                        <TableCell align="center">
+                          <StatusBadge value={row.status} />
+                        </TableCell>
+                        <TableCell sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
+                          {row.createdBy}
+                        </TableCell>
+                        <TableCell sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
+                          {row.createdAt}
+                        </TableCell>
+                        <TableCell sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
+                          {row.assignedTo}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+
+                  {!loading && visibleRows.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={9} align="center" sx={{ py: 5 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+                          No {statusFilter} item found
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Coba ubah filter status, keyword pencarian, atau cek assignment approval.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+        </Box>
+      )}
+      {/* Mass tab table */}
+
+      {activeTab === "mass" && (
+        <Box sx={{ width: "100%", overflowX: "auto" }}>
+          <Paper
+            elevation={0}
+            sx={{
+              minWidth: 1060,
+              border: "1px solid",
+              borderColor: "divider",
+              borderRadius: "12px",
+              overflow: "hidden",
+              bgcolor: "background.paper",
+            }}
+          >
+            <TableContainer>
+              <Table size="small" sx={{ minWidth: 1060 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell align="center" sx={tableHeaderSx}>
+                      Action
+                    </TableCell>
+                    <TableCell sx={tableHeaderSx}>Ticket Number</TableCell>
+                    <TableCell sx={tableHeaderSx}>Ticket Type</TableCell>
+                    <TableCell sx={{ ...tableHeaderSx, minWidth: 280 }}>
+                      Mass Request Reason
+                    </TableCell>
+                    <TableCell align="center" sx={tableHeaderSx}>
+                      Status
+                    </TableCell>
+                    <TableCell sx={tableHeaderSx}>Created by</TableCell>
+                    <TableCell sx={tableHeaderSx}>Created at</TableCell>
+                    <TableCell sx={tableHeaderSx}>Assigned to</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {loading && (
+                    <TableRow>
+                      <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                        Loading mass requests...
+                      </TableCell>
+                    </TableRow>
+                  )}
+
+                  {!loading &&
+                    massPagedRows.map(row => (
+                      <TableRow
+                        key={row.id || row.massRequestNo}
+                        hover
+                        sx={{
+                          "& .MuiTableCell-root": {
+                            borderBottom: "1px solid",
+                            borderColor: "divider",
+                            color: "text.secondary",
+                            verticalAlign: "middle",
+                            py: 1.75,
+                          },
+                          "&:last-child .MuiTableCell-root": {
+                            borderBottom: "none",
+                          },
+                        }}
+                      >
+                        <TableCell align="center">
+                          <IconButton
+                            size="small"
+                            aria-label={`Open action menu for ${row.massRequestNo}`}
+                            onClick={event => handleMenuOpen(event, row)}
+                            sx={{ color: "text.secondary" }}
+                          >
+                            <MoreHoriz />
+                          </IconButton>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="text"
+                            size="small"
+                            onClick={() => handleOpenApproval(row)}
+                            sx={{
+                              p: 0,
+                              minWidth: 0,
+                              color: "#0f5ad7",
+                              fontWeight: 800,
+                              textTransform: "none",
+                            }}
+                          >
+                            {row.massRequestNo}
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          <TicketTypeBadge value={row.ticketType || "Create"} />
+                        </TableCell>
+                        <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              maxWidth: 240,
+                            }}
+                            title={row.massRequestReason}
+                          >
+                            {row.massRequestReason}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="center">
+                          <StatusBadge value={row.status} />
+                        </TableCell>
+                        <TableCell sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
+                          {row.createdBy}
+                        </TableCell>
+                        <TableCell sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
+                          {row.createdAt}
+                        </TableCell>
+                        <TableCell sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
+                          {row.assignedTo}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+
+                  {!loading && massVisibleRows.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={8} align="center" sx={{ py: 5 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+                          No {statusFilter} mass request found
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Coba ubah filter status, keyword pencarian, atau cek assignment approval.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+        </Box>
+      )}
       <Menu
         anchorEl={menuAnchorEl}
         open={Boolean(menuAnchorEl)}
@@ -836,6 +1066,24 @@ export default function AdminApprovalView() {
         open={Boolean(reworkDialogRow)}
         row={reworkDialogRow}
         onClose={() => setReworkDialogRow(null)}
+      />
+
+      <MassApprovalFormDialog
+        open={Boolean(massApprovalDialogRow)}
+        row={massApprovalDialogRow}
+        items={massApprovalItems}
+        onClose={() => {
+          setMassApprovalDialogRow(null);
+          setMassApprovalItems([]);
+        }}
+        onAction={handleMassApprovalAction}
+        submitting={submittingAction}
+      />
+
+      <MassReworkStatusDialog
+        open={Boolean(massReworkDialogRow)}
+        row={massReworkDialogRow}
+        onClose={() => setMassReworkDialogRow(null)}
       />
 
       <Snackbar

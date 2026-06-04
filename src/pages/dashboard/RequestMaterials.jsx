@@ -35,6 +35,7 @@ import {
   buildPlantOptions,
   buildStorageOptionsForPlant,
 } from "src/helper/materialChangeExtendRequest.mjs";
+import MassReworkForm from "src/components/request-material/MassReworkForm";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 
 const APPROVAL_STATUS_BADGES = {
@@ -53,121 +54,8 @@ const GROUP_OPTIONS = [
   { value: "assignedTo", label: "Assigned To" },
 ];
 
-const withRequestKey = item => ({
-  ...item,
-  requestKey: `${item.mode}:${item.id}`,
-});
-
 const isChangeExtendRequest = row =>
   ["CHANGE", "EXTEND"].includes(String(row?.ticketType || row?.ticket_type || "").toUpperCase());
-
-const INITIAL_REQUESTS = [
-  {
-    id: 1,
-    mode: "single",
-    ticketNumber: "1000000001",
-    ticketType: "Create",
-    materialDescription: "PUMP, CENTRIFUGAL INVESTA STR 1X1.5-8",
-    uom: "PC",
-    status: "Submit",
-    createdBy: "admin.admin",
-    createdAt: "2026-01-10 16:30",
-    assignedTo: "master.data",
-    reworkReason: "",
-    approvalSteps: [
-      {
-        title: "Approval 1",
-        owner: "superior.superior",
-        status: "Approve",
-        date: "2026-01-11 17:00",
-      },
-      { title: "Approval 2", owner: "manager.manager", status: "Waiting", date: "-" },
-      { title: "Master Data", owner: "master.data", status: "Waiting", date: "-" },
-    ],
-  },
-  {
-    id: 2,
-    mode: "single",
-    ticketNumber: "1000000002",
-    ticketType: "Change",
-    materialCode: "901.221.010",
-    materialDescription: "VALVE, GATE, 2 INCH STAINLESS STEEL",
-    uom: "EA",
-    baseUom: "EA",
-    status: "Rework",
-    createdBy: "rizki.user",
-    createdAt: "2026-01-12 09:20",
-    assignedTo: "superior.superior",
-    reworkReason: "Lengkapi spesifikasi tekanan kerja dan lampiran drawing terbaru.",
-    changeExtendReason: "Correct base UoM",
-    approvalSteps: [
-      {
-        title: "Approval 1",
-        owner: "superior.superior",
-        status: "Rework",
-        date: "2026-01-12 13:10",
-      },
-      { title: "Approval 2", owner: "manager.manager", status: "Waiting", date: "-" },
-      { title: "Master Data", owner: "master.data", status: "Waiting", date: "-" },
-    ],
-  },
-  {
-    id: 3,
-    mode: "mass",
-    ticketNumber: "1000000003",
-    ticketType: "Extend",
-    materialCode: "901.330.100",
-    materialDescription: "CABLE GLAND SET FOR CONTROL PANEL REVAMP",
-    uom: "SET",
-    plantCode: "EU73",
-    slocCode: "ST01",
-    changeExtendReason: "Extend to Kijing store",
-    status: "Waiting",
-    createdBy: "salsa.proc",
-    createdAt: "2026-01-13 11:05",
-    assignedTo: "manager.manager",
-    reworkReason: "",
-    approvalSteps: [
-      {
-        title: "Approval 1",
-        owner: "superior.superior",
-        status: "Approve",
-        date: "2026-01-13 12:40",
-      },
-      { title: "Approval 2", owner: "manager.manager", status: "Waiting", date: "-" },
-      { title: "Master Data", owner: "master.data", status: "Waiting", date: "-" },
-    ],
-  },
-  {
-    id: 4,
-    mode: "mass",
-    ticketNumber: "1000000004",
-    ticketType: "Create",
-    materialDescription: "BEARING KIT FOR MILLING MACHINE",
-    uom: "KIT",
-    status: "Done",
-    createdBy: "admin.admin",
-    createdAt: "2026-01-14 08:45",
-    assignedTo: "master.data",
-    reworkReason: "",
-    approvalSteps: [
-      {
-        title: "Approval 1",
-        owner: "superior.superior",
-        status: "Approve",
-        date: "2026-01-14 09:10",
-      },
-      {
-        title: "Approval 2",
-        owner: "manager.manager",
-        status: "Approve",
-        date: "2026-01-14 10:25",
-      },
-      { title: "Master Data", owner: "master.data", status: "Done", date: "2026-01-14 14:00" },
-    ],
-  },
-].map(withRequestKey);
-const INITIAL_MASS_REQUESTS = INITIAL_REQUESTS.filter(item => item.mode === "mass");
 
 function StatusPill({ status }) {
   const normalizedStatus = String(status || "").trim().toUpperCase();
@@ -488,7 +376,7 @@ function ChangeExtendReworkForm({
 export default function RequestMaterials() {
   const navigate = useNavigate();
   const axiosPrivate = useAxiosPrivate();
-  const [requests, setRequests] = useState(INITIAL_MASS_REQUESTS);
+  const [requests, setRequests] = useState([]);
   const [activeTab, setActiveTab] = useState("single");
   const [searchQuery, setSearchQuery] = useState("");
   const [groupBy, setGroupBy] = useState("none");
@@ -498,6 +386,9 @@ export default function RequestMaterials() {
   const [scopedReworkSubmitting, setScopedReworkSubmitting] = useState(false);
   const [reviseChangeExtendOpen, setReviseChangeExtendOpen] = useState(false);
   const [initialLocations, setInitialLocations] = useState([]);
+  const [reviseMassOpen, setReviseMassOpen] = useState(false);
+  const [massReworkItems, setMassReworkItems] = useState([]);
+  const [massReworkSubmitting, setMassReworkSubmitting] = useState(false);
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -562,10 +453,95 @@ export default function RequestMaterials() {
     }
   }, [axiosPrivate]);
 
+  const fetchMassRequests = useCallback(async () => {
+    try {
+      setRequestsLoading(true);
+      const response = await axiosPrivate.get("/material/requests/mass");
+      const massRequests = Array.isArray(response.data?.data)
+        ? response.data.data.map(item => {
+            // Detect reworks from preserved remarks (not status, which is reset on revision)
+            const reworkApproval1 = String(item.first_item_approval_1_remark || "").trim() !== "";
+            const reworkApproval2 = String(item.first_item_approval_2_remark || "").trim() !== "";
+            const reworkApproval3 = String(item.first_item_approval_3_remark || "").trim() !== "";
+            // Build rework entry per approval stage that has a remark
+            const reworks = [];
+            if (reworkApproval1) {
+              reworks.push({
+                stage: "Approval 1",
+                by_username: item.first_item_approval_1_user_name,
+                at: item.first_item_approval_1_at,
+                reason: item.first_item_approval_1_remark,
+              });
+            }
+            if (reworkApproval2) {
+              reworks.push({
+                stage: "Approval 2",
+                by_username: item.first_item_approval_2_user_name,
+                at: item.first_item_approval_2_at,
+                reason: item.first_item_approval_2_remark,
+              });
+            }
+            if (reworkApproval3) {
+              reworks.push({
+                stage: "Approval 3",
+                by_username: item.first_item_approval_3_user_name,
+                at: item.first_item_approval_3_at,
+                reason: item.first_item_approval_3_remark,
+              });
+            }
+            // Build legacy rework metadata for buildReworkSummary (latest rework)
+            const latestRework = reworks.length > 0 ? reworks[reworks.length - 1] : null;
+            return {
+              id: item.id,
+              mode: "mass",
+              requestKey: `mass:${item.id}`,
+              ticketNumber: item.mass_request_no,
+              ticketType: "Create",
+              materialDescription: item.first_item_material_description,
+              uom: item.first_item_uom,
+              status: item.first_item_status,
+              createdBy: item.created_by_username || item.created_by,
+              createdAt: item.created_at,
+              assignedTo: item.first_item_assigned_to,
+              massRequestReason: item.mass_request_reason,
+              itemCount: item.item_count,
+              // Approval chain fields for buildApprovalDetail
+              approval_1_status: item.first_item_approval_1_status,
+              approval_1_user_name: item.first_item_approval_1_user_name,
+              approval_1_at: item.first_item_approval_1_at,
+              approval_1_remark: item.first_item_approval_1_remark,
+              approval_2_status: item.first_item_approval_2_status,
+              approval_2_user_name: item.first_item_approval_2_user_name,
+              approval_2_at: item.first_item_approval_2_at,
+              approval_2_remark: item.first_item_approval_2_remark,
+              approval_3_status: item.first_item_approval_3_status,
+              approval_3_user_name: item.first_item_approval_3_user_name,
+              approval_3_at: item.first_item_approval_3_at,
+              approval_3_remark: item.first_item_approval_3_remark,
+              // Rework metadata for buildReworkSummary (latest rework)
+              rework_stage: latestRework?.stage ?? null,
+              rework_by_username: latestRework?.by_username ?? null,
+              rework_at: latestRework?.at ?? null,
+              rework_reason: latestRework?.reason ?? null,
+              // All reworks for multi-rework display
+              reworks,
+            };
+          })
+        : [];
+
+      setRequests(prev => [...prev.filter(item => item.mode === "single"), ...massRequests]);
+    } catch (error) {
+      console.error("Failed to fetch mass requests:", error);
+      openSnackbar("Failed to load mass requests.", "warning");
+    } finally {
+      setRequestsLoading(false);
+    }
+  }, [axiosPrivate]);
+
   useEffect(() => {
     fetchSingleRequests();
-  }, [fetchSingleRequests]);
-
+    fetchMassRequests();
+  }, [fetchSingleRequests, fetchMassRequests]);
   useEffect(() => {
     const firstRowForActiveTab = requests.find(item => item.mode === activeTab);
 
@@ -694,8 +670,24 @@ export default function RequestMaterials() {
     navigate(routeByTab[activeTab] || routeByTab.single);
   };
 
-  const handleReviseRequest = detail => {
+  const handleReviseRequest = async detail => {
     setActionDialogMode(null);
+
+    if (selectedRequest?.mode === "mass") {
+      try {
+        const response = await axiosPrivate.get(
+          `/material/requests/mass/${selectedRequest.id}/items`
+        );
+        setMassReworkItems(response.data?.data ?? []);
+        setReviseMassOpen(true);
+      } catch (error) {
+        openSnackbar(
+          error?.response?.data?.message || "Failed to load mass request items.",
+          "error"
+        );
+      }
+      return;
+    }
 
     if (isChangeExtendRequest(selectedRequest)) {
       setReviseChangeExtendOpen(true);
@@ -724,6 +716,29 @@ export default function RequestMaterials() {
       );
     } finally {
       setScopedReworkSubmitting(false);
+    }
+  };
+
+  const handleMassReworkSubmit = async payload => {
+    if (!selectedRequest?.id) return;
+
+    try {
+      setMassReworkSubmitting(true);
+      await axiosPrivate.put(
+        `/material/requests/mass/${selectedRequest.id}/rework`,
+        { items: payload }
+      );
+      setReviseMassOpen(false);
+      setMassReworkItems([]);
+      await Promise.all([fetchSingleRequests(), fetchMassRequests()]);
+      openSnackbar("Mass request revised successfully", "success");
+    } catch (error) {
+      openSnackbar(
+        error?.response?.data?.message || "Failed to save revised mass request.",
+        "error"
+      );
+    } finally {
+      setMassReworkSubmitting(false);
     }
   };
 
@@ -901,7 +916,9 @@ export default function RequestMaterials() {
                       <TableCell>
                         <TicketTypePill value={row.ticketType} />
                       </TableCell>
-                      <TableCell sx={{ fontWeight: 500 }}>{row.materialDescription}</TableCell>
+                      <TableCell sx={{ fontWeight: 500 }}>
+                        {activeTab === "mass" ? row.massRequestReason : row.materialDescription}
+                      </TableCell>
                       <TableCell sx={{ whiteSpace: "nowrap" }}>{row.uom}</TableCell>
                       <TableCell>
                         <StatusPill status={row.status} />
@@ -1010,6 +1027,19 @@ export default function RequestMaterials() {
           />
         </DialogContent>
       </Dialog>
+
+      <MassReworkForm
+        open={reviseMassOpen}
+        ticketNumber={selectedRequest?.ticketNumber}
+        massRequestReason={selectedRequest?.massRequestReason}
+        items={massReworkItems}
+        onClose={() => {
+          setReviseMassOpen(false);
+          setMassReworkItems([]);
+        }}
+        onSubmit={handleMassReworkSubmit}
+        submitting={massReworkSubmitting}
+      />
 
       <Snackbar
         open={snackbar.open}

@@ -17,14 +17,12 @@ const useRefreshToken = () => {
       setAccessToken(response.data.accessToken);
       return response.data.accessToken;
     } catch (error) {
-      console.log(error);
+      console.error("Token refresh failed:", error);
       resetSessionStore();
-      // Object.keys(Cookies.get()).map((item) => {
-      //   Cookies.remove(item);
-      // });
       setTimeout(() => {
         window.location.replace(`/login`);
       }, 100);
+      throw error;
     }
   };
 
