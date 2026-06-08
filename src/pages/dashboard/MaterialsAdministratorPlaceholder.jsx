@@ -173,7 +173,11 @@ export default function MaterialsAdministratorPlaceholder() {
                     />
                   </TableCell>
                   <TableCell>
-                    <Chip label="By system" size="small" />
+                    {row.approval3UserName ? (
+                      <Chip label={row.approval3UserName} size="small" color="default" />
+                    ) : (
+                      <Chip label="By system" size="small" variant="outlined" />
+                    )}
                   </TableCell>
                 </TableRow>
               );

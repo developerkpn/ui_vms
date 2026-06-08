@@ -22,6 +22,7 @@ import {
   Divider,
   Grid,
   IconButton,
+  InputAdornment,
   Paper,
   Popover,
   Snackbar,
@@ -399,7 +400,10 @@ function AttachmentItem({ attachment, index, onView }) {
           <Box
             component="img"
             src={fileUrl}
-            onError={e => { e.target.style.display = "none"; }}
+            onError={e => {
+              e.target.style.opacity = "0.15";
+              e.target.style.filter = "grayscale(100%)";
+            }}
             sx={{
               width: 52,
               height: 52,
@@ -481,11 +485,15 @@ export default function AdminApprovalFormDialog({
   const [remarkDialogOpen, setRemarkDialogOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
+  const [previewImageError, setPreviewImageError] = useState(false);
   const [currentAction, setCurrentAction] = useState("");
   const [remarkText, setRemarkText] = useState("");
+  const [finalCodeSuffix, setFinalCodeSuffix] = useState("");
+  const [finalCodeSuffixError, setFinalCodeSuffixError] = useState("");
 
   const handleViewAttachment = file => {
     setPreviewFile(file);
+    setPreviewImageError(false);
     setPreviewOpen(true);
   };
   const [remarkError, setRemarkError] = useState("");
@@ -500,6 +508,8 @@ export default function AdminApprovalFormDialog({
       setRemarkDialogOpen(false);
       setCurrentAction("");
       setRemarkText("");
+      setFinalCodeSuffix("");
+      setFinalCodeSuffixError("");
       setClientFieldErrors({});
       setHasInteracted(false);
       setValidationSnackbarOpen(false);
@@ -586,6 +596,8 @@ export default function AdminApprovalFormDialog({
     setCurrentAction("Approve");
     setRemarkText("");
     setRemarkError("");
+    setFinalCodeSuffix("");
+    setFinalCodeSuffixError("");
     setRemarkDialogOpen(true);
   };
 
@@ -593,6 +605,8 @@ export default function AdminApprovalFormDialog({
     setCurrentAction("Rework");
     setRemarkText("");
     setRemarkError("");
+    setFinalCodeSuffix("");
+    setFinalCodeSuffixError("");
     setRemarkDialogOpen(true);
   };
 
@@ -600,6 +614,8 @@ export default function AdminApprovalFormDialog({
     setCurrentAction("Reject");
     setRemarkText("");
     setRemarkError("");
+    setFinalCodeSuffix("");
+    setFinalCodeSuffixError("");
     setRemarkDialogOpen(true);
   };
 
@@ -626,6 +642,34 @@ export default function AdminApprovalFormDialog({
 
     setRemarkDialogOpen(false);
   };
+
+  const finalCodePrefix = useMemo(() => {
+    const rawRow = detail?.rawRow || row || {};
+    const groupCode = String(rawRow.materialGroupCode || rawRow.material_group_code || "").trim();
+    const subGroupCode = String(
+      rawRow.subMaterialGroupCode ||
+        rawRow.material_sub_group_code ||
+        rawRow.sub_material_group_code ||
+        ""
+    ).trim();
+
+    if (!groupCode || !subGroupCode) {
+      return "";
+    }
+
+    return `${groupCode}.${subGroupCode}.`;
+  }, [detail, row]);
+
+  const isApproval3Active = String(
+    row?.approvalStage ||
+      detail?.rawRow?.approvalStage ||
+      detail?.assignedTo ||
+      row?.assignedTo ||
+      ""
+  )
+    .trim()
+    .toUpperCase() === "APPROVAL 3";
+  const isApproval3Approve = currentAction === "Approve" && isApproval3Active;
 
   const renderFieldHint = fieldKey => {
     const hintText = fieldHints[fieldKey];
@@ -1042,11 +1086,26 @@ export default function AdminApprovalFormDialog({
         >
           {previewFile &&
             (previewFile.type?.includes("image") ? (
-              <img
-                src={previewFile.url}
-                alt={previewFile.name}
-                style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
-              />
+              previewImageError ? (
+                <Box sx={{ textAlign: "center", p: 3 }}>
+                  <Typography variant="body1" gutterBottom color="error">
+                    Unable to load image preview.
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    The file may have been moved or deleted.
+                  </Typography>
+                  <Button variant="contained" href={previewFile.url} target="_blank" sx={{ mt: 1 }}>
+                    Open File
+                  </Button>
+                </Box>
+              ) : (
+                <img
+                  src={previewFile.url}
+                  alt={previewFile.name}
+                  onError={() => setPreviewImageError(true)}
+                  style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
+                />
+              )
             ) : previewFile.type?.includes("pdf") ? (
               <iframe
                 src={previewFile.url}
@@ -1166,6 +1225,33 @@ export default function AdminApprovalFormDialog({
               },
             }}
           />
+          {isApproval3Approve && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="caption" sx={{ display: "block", mb: 0.75, fontWeight: 800 }}>
+                Final Code
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                value={finalCodeSuffix}
+                placeholder="123"
+                inputProps={{ maxLength: 3, inputMode: "numeric", pattern: "[0-9]*" }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">{finalCodePrefix || "-.-."}</InputAdornment>
+                  ),
+                }}
+                error={Boolean(finalCodeSuffixError)}
+                helperText={finalCodeSuffixError || "Masukkan 3 digit terakhir final code."}
+                onChange={event => {
+                  setFinalCodeSuffix(event.target.value.replace(/\D/g, "").slice(0, 3));
+                  if (finalCodeSuffixError) {
+                    setFinalCodeSuffixError("");
+                  }
+                }}
+              />
+            </Box>
+          )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button
@@ -1183,13 +1269,22 @@ export default function AdminApprovalFormDialog({
                 return;
               }
 
+              if (isApproval3Approve && !/^\d{3}$/.test(String(finalCodeSuffix || "").trim())) {
+                setFinalCodeSuffixError("Final code suffix must be 3 digits.");
+                return;
+              }
+
               onAction?.(
                 currentAction,
                 detail,
                 isScopedChangeExtendRequest
-                  ? { remark: remarkText }
+                  ? {
+                      remark: remarkText,
+                      ...(isApproval3Approve ? { finalCodeSuffix } : {}),
+                    }
                   : {
                       remark: remarkText,
+                      ...(isApproval3Approve ? { finalCodeSuffix } : {}),
                       editedRequest: {
                         material_sub_group_id: draftValues.material_sub_group_id,
                         plant_code: draftValues.plant_code,

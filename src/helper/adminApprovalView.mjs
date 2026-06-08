@@ -56,6 +56,7 @@ export const APPROVAL_FALLBACK_ROWS = [
     createdAt: "2026-01-10 16:30",
     assignedTo: "Completed",
     approvalStage: "Completed",
+    finalCode: "901.002.123",
     materialGroupCode: "901",
     materialGroupName: "Actuator & Solenoid Valve",
     subMaterialGroupCode: "002",
@@ -108,6 +109,7 @@ export function normalizeApprovalRows(rows = []) {
     };
 
     addStringProp(normalized, "materialCode", row.material_code, row.materialCode);
+    addStringProp(normalized, "finalCode", row.final_code, row.finalCode);
     addStringProp(
       normalized,
       "changeExtendReason",

@@ -1051,7 +1051,10 @@ const SingleMaterialForm = ({
                       <Box
                         component="img"
                         src={getAttachmentPreviewSrc(file)}
-                        onError={e => { e.target.style.display = "none"; }}
+                        onError={e => {
+                          e.target.style.opacity = "0.15";
+                          e.target.style.filter = "grayscale(100%)";
+                        }}
                         sx={{
                           width: 44,
                           height: 44,

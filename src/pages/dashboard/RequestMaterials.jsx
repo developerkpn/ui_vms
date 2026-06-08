@@ -413,6 +413,7 @@ export default function RequestMaterials() {
             ticketNumber: item.ticket_number,
             ticketType: item.ticket_type,
             materialCode: item.material_code,
+            finalCode: item.final_code,
             materialDescription: item.material_description,
             uom: item.uom,
             baseUom: item.base_uom || item.uom,

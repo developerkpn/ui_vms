@@ -147,6 +147,7 @@ test("normalizeApprovalRows keeps filled form detail fields for View Approval", 
       material_group_name: "Actuator & Solenoid Valve",
       material_sub_group_code: "002",
       material_sub_group_name: "Actiar",
+      final_code: "901.002.123",
       plant_code: "KPN1",
       sloc_code: "A001",
       long_text_1: "LINE 1",
@@ -171,6 +172,7 @@ test("normalizeApprovalRows keeps filled form detail fields for View Approval", 
   assert.equal(row.materialGroupId, 12);
   assert.equal(row.materialGroupCode, "901");
   assert.equal(row.materialGroupName, "Actuator & Solenoid Valve");
+  assert.equal(row.finalCode, "901.002.123");
   assert.equal(row.materialSubGroupId, 44);
   assert.equal(row.subMaterialGroupCode, "002");
   assert.equal(row.subMaterialGroupName, "Actiar");

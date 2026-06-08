@@ -455,9 +455,13 @@ export default function AdminApprovalView() {
         action === "Rework" || action === "Reject"
           ? { reason: payload?.remark ?? null }
           : isScopedChangeExtend
-            ? { remark: payload?.remark ?? null }
+            ? {
+                remark: payload?.remark ?? null,
+                finalCodeSuffix: payload?.finalCodeSuffix ?? null,
+              }
             : {
                 remark: payload?.remark ?? null,
+                finalCodeSuffix: payload?.finalCodeSuffix ?? null,
                 editedRequest: payload?.editedRequest ?? {},
               };
       const response = await axiosPrivate.post(endpoint, requestBody);

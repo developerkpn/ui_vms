@@ -99,6 +99,25 @@ test("change extend approval view is read only and skips editable approval histo
   assert.match(source, /Reject/);
 });
 
+test("admin approval dialog requires Approval 3 final code suffix before approve", () => {
+  const source = fs.readFileSync(
+    path.resolve(__dirname, "../../components/admin-approval/AdminApprovalFormDialog.jsx"),
+    "utf8"
+  );
+
+  assert.match(source, /finalCodeSuffix/);
+  assert.match(source, /isApproval3Approve/);
+  assert.match(source, /\^\\d\{3\}\$/);
+  assert.match(source, /Final code suffix must be 3 digits\./);
+  assert.match(source, /Final Code/);
+});
+
+test("admin approval view forwards finalCodeSuffix on approve requests", () => {
+  const source = fs.readFileSync(adminApprovalViewPath, "utf8");
+
+  assert.match(source, /finalCodeSuffix:\s*payload\?\.finalCodeSuffix/);
+});
+
 test("request materials uses scoped rework forms for change and extend", () => {
   const source = fs.readFileSync(requestMaterialsPath, "utf8");
 

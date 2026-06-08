@@ -73,6 +73,18 @@ export function mergeAdministratorMasterRow(previousRow = {}, responseData = {})
       previousRow.approval2UserId,
       ""
     ),
+    approval_3_user_id: pickDefinedValue(
+      responseData.approval_3_user_id,
+      responseData.approval3UserId,
+      previousRow.approval3UserId,
+      ""
+    ),
+    approval_3_user_name: pickDefinedValue(
+      responseData.approval_3_user_name,
+      responseData.approval3UserName,
+      previousRow.approval3UserName,
+      ""
+    ),
     approval_3_type: pickDefinedValue(
       responseData.approval_3_type,
       responseData.approval3Type,
@@ -144,6 +156,8 @@ function normalizeAdministratorMasterRow(row = {}) {
     requesterUsername: String(pickDefinedValue(row.requester_username, row.requesterUsername, "-")),
     approval1UserId: String(pickDefinedValue(row.approval_1_user_id, row.approval1UserId, "")),
     approval2UserId: String(pickDefinedValue(row.approval_2_user_id, row.approval2UserId, "")),
+    approval3UserId: String(pickDefinedValue(row.approval_3_user_id, row.approval3UserId, "")),
+    approval3UserName: String(pickDefinedValue(row.approval_3_user_name, row.approval3UserName, "")),
     approval3Type: String(pickDefinedValue(row.approval_3_type, row.approval3Type, "SYSTEM")),
     approval3Group: String(
       pickDefinedValue(row.approval_3_group, row.approval3Group, MDM_MATERIAL_GROUP_NAME)
