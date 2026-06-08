@@ -1,5 +1,6 @@
 import React, { useRef, useState } from "react";
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -22,7 +23,13 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { AttachFile, Delete } from "@mui/icons-material";
+import {
+  AttachFile,
+  Delete,
+  FileDownloadOutlined,
+  FileUploadOutlined,
+} from "@mui/icons-material";
+import * as XLSX from "xlsx";
 import { useNavigate } from "react-router-dom";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 import {
@@ -33,9 +40,28 @@ import {
   validateMassRequestBatch,
 } from "./massMaterialFormValidation.mjs";
 import {
+  buildMassExcelAoa,
+  parseMassExcelToRows,
+} from "./massMaterialExcel.mjs";
+import {
   ALLOWED_ATTACHMENT_EXTENSIONS,
   normalizeAttachmentSelection,
 } from "./attachmentValidation.mjs";
+
+// Column widths (in characters) for the exported worksheet, aligned to
+// MASS_EXCEL_HEADER_ROW: [No, Plant, Sloc, Material Group, Sub Mat Group,
+// Description, PO Text, UoM, Spesifikasi Tambahan].
+const MASS_EXCEL_COLUMN_WIDTHS = [
+  { wch: 5 },
+  { wch: 12 },
+  { wch: 12 },
+  { wch: 18 },
+  { wch: 18 },
+  { wch: 42 },
+  { wch: 30 },
+  { wch: 10 },
+  { wch: 42 },
+];
 
 const MASS_ROW_FIELD_LABELS = {
   plant: "Plant",
@@ -78,7 +104,11 @@ const MassMaterialForm = ({ onBack }) => {
   const [reasonDialogOpen, setReasonDialogOpen] = useState(false);
   const [reasonDraft, setReasonDraft] = useState("");
   const [reasonError, setReasonError] = useState("");
+  const [importFeedback, setImportFeedback] = useState(null);
+  const [overwriteConfirmOpen, setOverwriteConfirmOpen] = useState(false);
   const pendingSubmitRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const pendingImportRef = useRef(null);
 
   const updateRow = (rowIndex, updater) => {
     setRows(prev =>
@@ -136,6 +166,182 @@ const MassMaterialForm = ({ onBack }) => {
     }));
   };
 
+  const handleExportExcel = () => {
+    const filledRows = rows.filter(isMassRowFilled);
+    // Always emit MASS_MAX_ROWS data rows so the sheet doubles as a ready-to-fill
+    // template and the text formatting below applies to every editable cell.
+    const exportRows = Array.from(
+      { length: MASS_MAX_ROWS },
+      (_, idx) => filledRows[idx] || createEmptyRow()
+    );
+    const aoa = buildMassExcelAoa(exportRows);
+    const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+    worksheet["!cols"] = MASS_EXCEL_COLUMN_WIDTHS;
+
+    // Force the 8 data field columns to Excel "Text" format (z:"@") so codes
+    // typed into the template keep leading zeros (e.g. SAP sloc "0010" would
+    // otherwise be numericized to 10 before the file is ever re-imported).
+    // Column 0 is the "No" column, left numeric.
+    const lastFieldCol = MASS_TEXT_FIELDS.length; // cols 1..N are the fields
+    for (let r = 1; r <= MASS_MAX_ROWS; r += 1) {
+      for (let c = 1; c <= lastFieldCol; c += 1) {
+        const ref = XLSX.utils.encode_cell({ r, c });
+        const cell = worksheet[ref] || { t: "s", v: "" };
+        cell.t = "s";
+        cell.z = "@";
+        worksheet[ref] = cell;
+      }
+    }
+    worksheet["!ref"] = XLSX.utils.encode_range({
+      s: { r: 0, c: 0 },
+      e: { r: MASS_MAX_ROWS, c: lastFieldCol },
+    });
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Mass Request");
+    const filename =
+      filledRows.length > 0
+        ? "mass-material-request.xlsx"
+        : "mass-material-request-template.xlsx";
+    XLSX.writeFile(workbook, filename);
+    setImportFeedback({
+      severity: "info",
+      message:
+        filledRows.length > 0
+          ? `Berhasil mengekspor ${filledRows.length} baris ke Excel.`
+          : "Template Excel berhasil diunduh. Isi datanya lalu import kembali ke form.",
+    });
+  };
+
+  const handleImportClick = () => {
+    setImportFeedback(null);
+    if (fileInputRef.current) {
+      // Reset so picking the same file again still fires onChange.
+      fileInputRef.current.value = "";
+      fileInputRef.current.click();
+    }
+  };
+
+  const applyImportedRows = parsed => {
+    const imported = parsed.rows.slice(0, MASS_MAX_ROWS);
+    const nextRows = Array.from({ length: MASS_MAX_ROWS }, (_, idx) => {
+      const base = createEmptyRow();
+      const source = imported[idx];
+      if (!source) {
+        return base;
+      }
+      return {
+        ...base,
+        plant: source.plant ?? "",
+        sloc: source.sloc ?? "",
+        materialGroup: source.materialGroup ?? "",
+        materialSubGroup: source.materialSubGroup ?? "",
+        description: source.description ?? "",
+        poText: source.poText ?? "",
+        uom: source.uom ?? "",
+        spesifikasiTambahan: source.spesifikasiTambahan ?? "",
+      };
+    });
+
+    setRows(nextRows);
+    setSelectedFilesByRow(Array.from({ length: MASS_MAX_ROWS }, () => []));
+    setSubmitError("");
+    pendingImportRef.current = null;
+
+    const parts = [
+      `${parsed.importedCount} baris berhasil diimport dan masih bisa diedit.`,
+    ];
+    if (parsed.skippedBlank > 0) {
+      parts.push(`${parsed.skippedBlank} baris kosong dilewati.`);
+    }
+    if (parsed.droppedOverflow > 0) {
+      parts.push(
+        `${parsed.droppedOverflow} baris melebihi batas ${MASS_MAX_ROWS} diabaikan.`
+      );
+    }
+    parts.push(
+      "Tambahkan attachment di setiap baris sebelum submit (tidak ikut terimport dari Excel)."
+    );
+
+    setImportFeedback({
+      severity: parsed.droppedOverflow > 0 ? "warning" : "success",
+      message: parts.join(" "),
+    });
+  };
+
+  const handleImportFileChange = async event => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const firstSheetName = workbook.SheetNames[0];
+      if (!firstSheetName) {
+        setImportFeedback({
+          severity: "error",
+          message: "File Excel tidak memiliki sheet.",
+        });
+        return;
+      }
+      const worksheet = workbook.Sheets[firstSheetName];
+      // raw:false returns each cell's displayed text, so dates come back as the
+      // shown string (not an Excel serial) and number-formatted codes keep their
+      // formatting instead of being stringified through String(number).
+      const aoa = XLSX.utils.sheet_to_json(worksheet, {
+        header: 1,
+        blankrows: false,
+        defval: "",
+        raw: false,
+      });
+      const parsed = parseMassExcelToRows(aoa);
+      if (parsed.error) {
+        setImportFeedback({ severity: "error", message: parsed.error });
+        return;
+      }
+
+      // Warn before discarding any existing work: filled text rows, uploaded
+      // attachments, or files that were picked but not yet uploaded.
+      const hasExistingData =
+        rows.some(
+          row =>
+            isMassRowFilled(row) ||
+            (Array.isArray(row.attachments) && row.attachments.length > 0)
+        ) ||
+        selectedFilesByRow.some(list => Array.isArray(list) && list.length > 0);
+
+      if (hasExistingData) {
+        pendingImportRef.current = parsed;
+        setOverwriteConfirmOpen(true);
+      } else {
+        applyImportedRows(parsed);
+      }
+    } catch (error) {
+      setImportFeedback({
+        severity: "error",
+        message:
+          "Gagal membaca file Excel. Pastikan file berformat .xlsx atau .xls yang valid.",
+      });
+    }
+  };
+
+  const handleOverwriteConfirm = () => {
+    setOverwriteConfirmOpen(false);
+    if (pendingImportRef.current) {
+      applyImportedRows(pendingImportRef.current);
+    }
+  };
+
+  const handleOverwriteCancel = () => {
+    setOverwriteConfirmOpen(false);
+    pendingImportRef.current = null;
+    setImportFeedback({
+      severity: "info",
+      message: "Import dibatalkan. Data yang sudah ada tetap dipertahankan.",
+    });
+  };
+
   const handleSuccessConfirm = () => {
     setSaveSuccessOpen(false);
     navigate("/dashboard/materials/request");
@@ -149,6 +355,7 @@ const MassMaterialForm = ({ onBack }) => {
 
   const handleSave = () => {
     setSubmitError("");
+    setImportFeedback(null);
 
     const { errors: rowErrors, filledRowIndexes } =
       validateMassRequestBatch(rows);
@@ -302,14 +509,56 @@ const MassMaterialForm = ({ onBack }) => {
           <Typography variant="h6" sx={{ fontWeight: 700, color: "#1a237e" }}>
             Mass Material Request
           </Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" color="text.secondary" display="block">
             *Maksimal {MASS_MAX_ROWS} baris per submit. Setiap baris wajib
             memiliki minimal 1 attachment.
           </Typography>
+          <Typography variant="caption" color="text.secondary" display="block">
+            Gunakan Export Excel untuk mengunduh template/data, lalu Import Excel
+            untuk mengisi tabel otomatis (data tetap bisa diedit).
+          </Typography>
         </Box>
+        <Stack direction="row" spacing={1.5} flexWrap="wrap">
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<FileDownloadOutlined fontSize="small" />}
+            onClick={handleExportExcel}
+            disabled={submitting}
+            sx={{ textTransform: "none" }}
+          >
+            Export Excel
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<FileUploadOutlined fontSize="small" />}
+            onClick={handleImportClick}
+            disabled={submitting}
+            sx={{ textTransform: "none" }}
+          >
+            Import Excel
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            hidden
+            accept=".xlsx,.xls"
+            onChange={handleImportFileChange}
+          />
+        </Stack>
       </Box>
 
       <CardContent sx={{ p: 2 }}>
+        {importFeedback ? (
+          <Alert
+            severity={importFeedback.severity}
+            sx={{ mb: 2, borderRadius: 0 }}
+            onClose={() => setImportFeedback(null)}
+          >
+            {importFeedback.message}
+          </Alert>
+        ) : null}
         <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 0 }}>
           <Table size="small" sx={{ borderCollapse: "collapse" }}>
             <TableHead>
@@ -453,6 +702,11 @@ const MassMaterialForm = ({ onBack }) => {
                               accept={ALLOWED_ATTACHMENT_EXTENSIONS.map(
                                 ext => `.${ext}`
                               ).join(",")}
+                              onClick={e => {
+                                // Reset so re-picking the same filename (e.g. to
+                                // re-add a removed file) still fires onChange.
+                                e.currentTarget.value = "";
+                              }}
                               onChange={e =>
                                 handleAttachmentPick(rowIndex, e.target.files)
                               }
@@ -576,6 +830,30 @@ const MassMaterialForm = ({ onBack }) => {
           {submitting ? "Saving..." : "Save"}
         </Button>
       </Box>
+      <Dialog
+        open={overwriteConfirmOpen}
+        onClose={handleOverwriteCancel}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Ganti data yang ada?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            Form saat ini sudah memiliki data. Import dari Excel akan mengganti
+            semua baris pada tabel (attachment yang sudah dipilih akan direset).
+            Lanjutkan?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button variant="text" onClick={handleOverwriteCancel}>
+            Batal
+          </Button>
+          <Button variant="contained" onClick={handleOverwriteConfirm}>
+            Ya, Ganti Data
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Dialog
         open={reasonDialogOpen}
         onClose={handleReasonDialogClose}
