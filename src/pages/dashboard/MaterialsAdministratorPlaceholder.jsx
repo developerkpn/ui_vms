@@ -1,19 +1,19 @@
-import { Search } from "@mui/icons-material";
+
 import {
   Autocomplete,
   Box,
   Chip,
-  InputAdornment,
-  Paper,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   TextField,
   Typography,
 } from "@mui/material";
+import PageHeader from "src/components/common/PageHeader";
+import PageTablePaper, { PAGE_TABLE_HEADER_SX } from "src/components/common/PageTablePaper";
+import PageSearchField from "src/components/common/PageSearchField";
 import { useEffect, useMemo, useState } from "react";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import { useSnackBar } from "src/provider/SnackbarProvider";
@@ -96,94 +96,91 @@ export default function MaterialsAdministratorPlaceholder() {
   };
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pb: 4 }}>
-      <TextField
-        placeholder="Search username..."
-        value={searchQuery}
-        onChange={event => setSearchQuery(event.target.value)}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <Search />
-            </InputAdornment>
-          ),
-        }}
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 3, p: { xs: 2, md: 3 } }}>
+      <PageHeader
+        title="Material Administrator"
+        subtitle="Assign approvers for material requests"
       />
-      <Paper>
-        <TableContainer>
-          <Table>
-            <TableHead>
+      <Box>
+        <PageSearchField
+          placeholder="Search username..."
+          value={searchQuery}
+          onChange={event => setSearchQuery(event.target.value)}
+        />
+      </Box>
+      <PageTablePaper>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell sx={PAGE_TABLE_HEADER_SX}>No</TableCell>
+              <TableCell sx={PAGE_TABLE_HEADER_SX}>Username</TableCell>
+              <TableCell sx={PAGE_TABLE_HEADER_SX}>Approval 1</TableCell>
+              <TableCell sx={PAGE_TABLE_HEADER_SX}>Approval 2</TableCell>
+              <TableCell sx={PAGE_TABLE_HEADER_SX}>Approval 3</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {loading && (
               <TableRow>
-                <TableCell>No</TableCell>
-                <TableCell>Username</TableCell>
-                <TableCell>Approval 1</TableCell>
-                <TableCell>Approval 2</TableCell>
-                <TableCell>Approval 3</TableCell>
+                <TableCell colSpan={5} align="center">Loading...</TableCell>
               </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading && (
-                <TableRow>
-                  <TableCell colSpan={5} align="center">Loading...</TableCell>
+            )}
+            {!loading && visibleRows.map((row, index) => {
+              const approval1Options = getApproverSelectOptions({
+                manualApprovers: approverPools.manualApprovers,
+                requesterUserId: row.requesterUserId,
+                requesterUsername: row.requesterUsername,
+                selectedApproval1UserId: row.approval1UserId,
+                selectedApproval2UserId: row.approval2UserId,
+                field: "approval1",
+              });
+              const approval2Options = getApproverSelectOptions({
+                manualApprovers: approverPools.manualApprovers,
+                requesterUserId: row.requesterUserId,
+                requesterUsername: row.requesterUsername,
+                selectedApproval1UserId: row.approval1UserId,
+                selectedApproval2UserId: row.approval2UserId,
+                field: "approval2",
+              });
+              return (
+                <TableRow key={row.id}>
+                  <TableCell>{index + 1}</TableCell>
+                  <TableCell>
+                    <Typography>{row.requesterUsername}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Autocomplete
+                      size="small"
+                      options={approval1Options}
+                      value={approval1Options.find(o => o.id === row.approval1UserId) || null}
+                      disabled={savingRows[row.id] === true}
+                      onChange={(event, value) => handleApproverChange(row, "approval1UserId", value)}
+                      isOptionEqualToValue={(option, value) => option.id === value?.id}
+                      getOptionLabel={option => option.label || ""}
+                      renderInput={params => <TextField {...params} placeholder="Pilih Approval 1" />}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Autocomplete
+                      size="small"
+                      options={approval2Options}
+                      value={approval2Options.find(o => o.id === row.approval2UserId) || null}
+                      disabled={savingRows[row.id] === true}
+                      onChange={(event, value) => handleApproverChange(row, "approval2UserId", value)}
+                      isOptionEqualToValue={(option, value) => option.id === value?.id}
+                      getOptionLabel={option => option.label || ""}
+                      renderInput={params => <TextField {...params} placeholder="Pilih Approval 2" />}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Chip label="By system" size="small" />
+                  </TableCell>
                 </TableRow>
-              )}
-              {!loading && visibleRows.map((row, index) => {
-                const approval1Options = getApproverSelectOptions({
-                  manualApprovers: approverPools.manualApprovers,
-                  requesterUserId: row.requesterUserId,
-                  requesterUsername: row.requesterUsername,
-                  selectedApproval1UserId: row.approval1UserId,
-                  selectedApproval2UserId: row.approval2UserId,
-                  field: "approval1",
-                });
-                const approval2Options = getApproverSelectOptions({
-                  manualApprovers: approverPools.manualApprovers,
-                  requesterUserId: row.requesterUserId,
-                  requesterUsername: row.requesterUsername,
-                  selectedApproval1UserId: row.approval1UserId,
-                  selectedApproval2UserId: row.approval2UserId,
-                  field: "approval2",
-                });
-                return (
-                  <TableRow key={row.id}>
-                    <TableCell>{index + 1}</TableCell>
-                    <TableCell>
-                      <Typography>{row.requesterUsername}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Autocomplete
-                        size="small"
-                        options={approval1Options}
-                        value={approval1Options.find(o => o.id === row.approval1UserId) || null}
-                        disabled={savingRows[row.id] === true}
-                        onChange={(event, value) => handleApproverChange(row, "approval1UserId", value)}
-                        isOptionEqualToValue={(option, value) => option.id === value?.id}
-                        getOptionLabel={option => option.label || ""}
-                        renderInput={params => <TextField {...params} placeholder="Pilih Approval 1" />}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Autocomplete
-                        size="small"
-                        options={approval2Options}
-                        value={approval2Options.find(o => o.id === row.approval2UserId) || null}
-                        disabled={savingRows[row.id] === true}
-                        onChange={(event, value) => handleApproverChange(row, "approval2UserId", value)}
-                        isOptionEqualToValue={(option, value) => option.id === value?.id}
-                        getOptionLabel={option => option.label || ""}
-                        renderInput={params => <TextField {...params} placeholder="Pilih Approval 2" />}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Chip label="By system" size="small" />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </PageTablePaper>
     </Box>
   );
 }

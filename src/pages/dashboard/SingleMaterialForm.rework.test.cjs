@@ -34,6 +34,17 @@ test("single material rework keeps plant and storage location in payload without
   assert.doesNotMatch(source, /label="Storage Location"/);
 });
 
+test("single material form previews existing attachments via stored file path", () => {
+  const source = fs.readFileSync(formPath, "utf8");
+
+  assert.match(
+    source,
+    /const getAttachmentPreviewSrc = attachment =>[\s\S]*attachment\?\.path[\s\S]*\/material\/file\/\$\{attachment\.path\}/
+  );
+  assert.match(source, /src=\{getAttachmentPreviewSrc\(file\)\}/);
+  assert.doesNotMatch(source, /\/material\/file\/\" \+ file\.name/);
+});
+
 test("single request rework starts from initial screen with existing plant and storage", () => {
   const pageSource = fs.readFileSync(pagePath, "utf8");
   const formSource = fs.readFileSync(formPath, "utf8");

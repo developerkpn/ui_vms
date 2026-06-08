@@ -31,6 +31,8 @@ import TableSimple from "src/components/table/TableSimple";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import usePaginationStore from "src/store/usePaginationStore";
 import usePermissionStore from "src/store/userPermissionStore";
+import PageHeader from "src/components/common/PageHeader";
+import PageTablePaper from "src/components/common/PageTablePaper";
 
 const columnHelper = createColumnHelper();
 
@@ -496,55 +498,59 @@ export default function LookupMaterials() {
         width: "100%",
       }}
     >
-      {/* Header section with Excel import/export */}
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-        <Box sx={{ flexGrow: 1, mr: 2 }}>
-          <SearchFieldComp setQuery={handleSearchChange} placeholder="Search material groups..." />
-        </Box>
-        <Box sx={{ display: "flex", gap: 1, flexShrink: 0 }}>
-          {permission["Material Groups"]?.create && (
-            <Button
-              variant="contained"
-              startIcon={<Add />}
-              onClick={() => handleOpenGroupDialog()}
-              sx={{ py: 1 }}
-            >
-              Add Group
-            </Button>
-          )}
-          <Button
-            variant="contained"
-            startIcon={<FileDownload />}
-            onClick={handleExportToExcel}
-            disabled={loading}
-            sx={{ py: 1 }}
-          >
-            Export Groups
-          </Button>
-          {(permission["Material Groups"]?.update || permission["Material Groups"]?.create) && (
-            <>
+      {/* Header section */}
+      <PageHeader
+        title="Material Groups"
+        subtitle="Browse and manage material groups"
+        actions={
+          <>
+            {permission["Material Groups"]?.create && (
               <Button
                 variant="contained"
-                color="secondary"
-                startIcon={
-                  importLoading ? <CircularProgress size={20} color="inherit" /> : <FileUpload />
-                }
-                onClick={handleExcelFileSelect}
-                disabled={loading || importLoading}
+                startIcon={<Add />}
+                onClick={() => handleOpenGroupDialog()}
                 sx={{ py: 1 }}
               >
-                {importLoading ? "Importing..." : "Import Groups"}
+                Add Group
               </Button>
-              <input
-                type="file"
-                ref={excelFileInputRef}
-                style={{ display: "none" }}
-                onChange={handleImportFromExcel}
-                accept=".xlsx,.xls"
-              />
-            </>
-          )}
-        </Box>
+            )}
+            <Button
+              variant="contained"
+              startIcon={<FileDownload />}
+              onClick={handleExportToExcel}
+              disabled={loading}
+              sx={{ py: 1 }}
+            >
+              Export Groups
+            </Button>
+            {(permission["Material Groups"]?.update || permission["Material Groups"]?.create) && (
+              <>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  startIcon={
+                    importLoading ? <CircularProgress size={20} color="inherit" /> : <FileUpload />
+                  }
+                  onClick={handleExcelFileSelect}
+                  disabled={loading || importLoading}
+                  sx={{ py: 1 }}
+                >
+                  {importLoading ? "Importing..." : "Import Groups"}
+                </Button>
+                <input
+                  type="file"
+                  ref={excelFileInputRef}
+                  style={{ display: "none" }}
+                  onChange={handleImportFromExcel}
+                  accept=".xlsx,.xls"
+                />
+              </>
+            )}
+          </>
+        }
+      />
+      <Box sx={{ mb: 2 }}>
+        <SearchFieldComp setQuery={handleSearchChange} placeholder="Search material groups..." />
       </Box>
 
       {/* Main content area */}
@@ -557,26 +563,28 @@ export default function LookupMaterials() {
 
         {groups.length > 0 ? (
           <>
-            <TableSimple
-              columns={columns}
-              rowsData={groups}
-              sx={{
-                height: "100%",
-                width: "100%",
-                "& .MuiTableRow-root": {
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
-                },
-                "& .MuiTableRow-root:hover": {
-                  backgroundColor: "rgba(0, 0, 0, 0.04)",
-                  transform: "translateY(-2px)",
-                  boxShadow: "0 4px 8px rgba(0, 0, 0, 0.05)",
-                },
-                "& .MuiTableCell-root": {
-                  transition: "all 0.2s ease",
-                },
-              }}
-            />
+            <PageTablePaper>
+              <TableSimple
+                columns={columns}
+                rowsData={groups}
+                sx={{
+                  height: "100%",
+                  width: "100%",
+                  "& .MuiTableRow-root": {
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                  },
+                  "& .MuiTableRow-root:hover": {
+                    backgroundColor: "rgba(0, 0, 0, 0.04)",
+                    transform: "translateY(-2px)",
+                    boxShadow: "0 4px 8px rgba(0, 0, 0, 0.05)",
+                  },
+                  "& .MuiTableCell-root": {
+                    transition: "all 0.2s ease",
+                  },
+                }}
+              />
+            </PageTablePaper>
             <Box
               sx={{
                 display: "flex",
@@ -592,7 +600,7 @@ export default function LookupMaterials() {
                 onChange={handlePageChange}
                 color="primary"
                 disabled={pagination.totalPages <= 1}
-                size="large"
+                size="medium"
               />
             </Box>
           </>

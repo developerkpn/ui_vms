@@ -287,7 +287,7 @@ function resolveApprovalStage(row = {}) {
   return "Completed";
 }
 
-function formatDateTime(value) {
+export function formatDateTime(value) {
   if (!value) {
     return "-";
   }
@@ -311,6 +311,16 @@ function formatDateTime(value) {
   const minutes = String(date.getMinutes()).padStart(2, "0");
 
   return `${year}-${month}-${day} ${hours}:${minutes}`;
+}
+
+// Like formatDateTime, but preserves null/undefined instead of falling back to "-".
+// Use for fields where the absence of a value must remain nullish for downstream
+// nullish-coalescing chains (e.g. picking the active stage's timestamp).
+export function formatOptionalDateTime(value) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+  return formatDateTime(value);
 }
 
 function stringOrFallback(...values) {
@@ -358,17 +368,17 @@ export function normalizeMassApprovalRows(rows = []) {
       firstItemApproval1Status: row.first_item_approval_1_status || null,
       firstItemApproval1UserId: row.first_item_approval_1_user_id || null,
       firstItemApproval1UserName: row.first_item_approval_1_user_name || null,
-      firstItemApproval1At: row.first_item_approval_1_at || null,
+      firstItemApproval1At: formatOptionalDateTime(row.first_item_approval_1_at ?? row.firstItemApproval1At),
       firstItemApproval1Remark: row.first_item_approval_1_remark || null,
       // Approval 2
       firstItemApproval2Status: row.first_item_approval_2_status || null,
       firstItemApproval2UserId: row.first_item_approval_2_user_id || null,
-      firstItemApproval2At: row.first_item_approval_2_at || null,
+      firstItemApproval2At: formatOptionalDateTime(row.first_item_approval_2_at ?? row.firstItemApproval2At),
       firstItemApproval2Remark: row.first_item_approval_2_remark || null,
       // Approval 3
       firstItemApproval3Status: row.first_item_approval_3_status || null,
       firstItemApproval3UserId: row.first_item_approval_3_user_id || null,
-      firstItemApproval3At: row.first_item_approval_3_at || null,
+      firstItemApproval3At: formatOptionalDateTime(row.first_item_approval_3_at ?? row.firstItemApproval3At),
       firstItemApproval3Remark: row.first_item_approval_3_remark || null,
       // Items placeholder (populated by massApprovalDetail)
       items: [],

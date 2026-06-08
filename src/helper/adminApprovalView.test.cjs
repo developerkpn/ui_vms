@@ -330,6 +330,61 @@ test("normalizeMassApprovalRows maps API rows", async () => {
   assert.equal(rows[0].firstItemApproval2Status, null);
 });
 
+test("normalizeMassApprovalRows formats raw ISO approval timestamps to YYYY-MM-DD HH:MM", async () => {
+  const { normalizeMassApprovalRows } = await loadHelper();
+
+  const rows = normalizeMassApprovalRows([
+    {
+      id: 99,
+      mass_request_no: "MR-2026-0007",
+      item_count: 2,
+      first_item_status: "Submit",
+      first_item_assigned_to: "Approval 1",
+      first_item_approval_1_user_id: "APP-01",
+      first_item_approval_1_status: "APPROVED",
+      first_item_approval_1_at: "2026-06-05T03:44:39.139Z",
+      first_item_approval_2_user_id: null,
+      first_item_approval_2_status: null,
+      first_item_approval_2_at: null,
+      first_item_approval_3_user_id: null,
+      first_item_approval_3_status: null,
+      first_item_approval_3_at: null,
+    },
+  ]);
+
+  // Raw ISO 8601 string is condensed to a friendly local-format timestamp.
+  assert.equal(rows[0].firstItemApproval1At, "2026-06-05 03:44");
+  // Null backend values must stay nullish so the ?? chain in
+  // buildMassReworkSummary can fall through to the next stage.
+  assert.equal(rows[0].firstItemApproval2At, null);
+  assert.equal(rows[0].firstItemApproval3At, null);
+});
+
+test("normalizeMassApprovalRows leaves already-formatted timestamps unchanged", async () => {
+  const { normalizeMassApprovalRows } = await loadHelper();
+
+  const rows = normalizeMassApprovalRows([
+    {
+      id: 100,
+      mass_request_no: "MR-2026-0008",
+      item_count: 1,
+      first_item_status: "Submit",
+      first_item_assigned_to: "Approval 1",
+      first_item_approval_1_user_id: "APP-01",
+      first_item_approval_1_status: "APPROVED",
+      first_item_approval_1_at: "2026-06-05 03:44",
+      first_item_approval_2_user_id: null,
+      first_item_approval_2_status: null,
+      first_item_approval_2_at: null,
+      first_item_approval_3_user_id: null,
+      first_item_approval_3_status: null,
+      first_item_approval_3_at: null,
+    },
+  ]);
+
+  assert.equal(rows[0].firstItemApproval1At, "2026-06-05 03:44");
+});
+
 test("normalizeMassApprovalRows handles empty array", async () => {
   const { normalizeMassApprovalRows } = await loadHelper();
   assert.deepEqual(normalizeMassApprovalRows(), []);

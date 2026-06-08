@@ -18,6 +18,8 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
+  DialogTitle,
+  Divider,
   Grid,
   IconButton,
   Paper,
@@ -333,14 +335,33 @@ function ApprovalHistoryItem({ item }) {
   );
 }
 
-function AttachmentItem({ attachment, index }) {
+const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp"];
+const isImageFile = fileName => {
+  if (!fileName || !fileName.includes(".")) return false;
+  const ext = fileName.split(".").pop().toLowerCase();
+  return IMAGE_EXTENSIONS.includes(ext);
+};
+
+function AttachmentItem({ attachment, index, onView }) {
+  const fileUrl = attachment.path
+    ? import.meta.env.VITE_URL_LOC + "/material/file/" + attachment.path
+    : "";
+  const isImage = isImageFile(attachment.name);
   const extension = attachment.name.includes(".")
     ? attachment.name.split(".").pop().toUpperCase()
     : "FILE";
 
+  const handleClick = () => {
+    if (fileUrl && onView) {
+      onView({ name: attachment.name, url: fileUrl, type: attachment.type || "" });
+    }
+  };
+
   return (
     <Paper
       elevation={0}
+      onClick={handleClick}
+      title={fileUrl ? "Click to view file" : ""}
       sx={{
         width: { xs: "100%", sm: 280 },
         p: 1.25,
@@ -350,6 +371,10 @@ function AttachmentItem({ attachment, index }) {
         display: "flex",
         alignItems: "center",
         gap: 1.5,
+        cursor: fileUrl ? "pointer" : "default",
+        "&:hover": fileUrl
+          ? { borderColor: "primary.main", bgcolor: "action.hover" }
+          : {},
       }}
     >
       <Box
@@ -359,13 +384,32 @@ function AttachmentItem({ attachment, index }) {
           borderRadius: 1.5,
           bgcolor: "#edf4ff",
           color: "#2457c5",
-          display: "grid",
-          placeItems: "center",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          overflow: "hidden",
+          position: "relative",
+          flexShrink: 0,
           fontWeight: 900,
           fontSize: "0.72rem",
         }}
       >
         {extension}
+        {isImage && fileUrl && (
+          <Box
+            component="img"
+            src={fileUrl}
+            onError={e => { e.target.style.display = "none"; }}
+            sx={{
+              width: 52,
+              height: 52,
+              objectFit: "cover",
+              position: "absolute",
+              top: 0,
+              left: 0,
+            }}
+          />
+        )}
       </Box>
       <Box sx={{ minWidth: 0 }}>
         <Typography variant="body2" noWrap sx={{ fontWeight: 800 }}>
@@ -435,8 +479,15 @@ export default function AdminApprovalFormDialog({
 
   const [draftValues, setDraftValues] = useState(() => createApprovalDraft(detail));
   const [remarkDialogOpen, setRemarkDialogOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewFile, setPreviewFile] = useState(null);
   const [currentAction, setCurrentAction] = useState("");
   const [remarkText, setRemarkText] = useState("");
+
+  const handleViewAttachment = file => {
+    setPreviewFile(file);
+    setPreviewOpen(true);
+  };
   const [remarkError, setRemarkError] = useState("");
   const [clientFieldErrors, setClientFieldErrors] = useState({});
   const [hasInteracted, setHasInteracted] = useState(false);
@@ -951,6 +1002,7 @@ export default function AdminApprovalFormDialog({
                         key={attachment.id || `${attachment.name}-${index}`}
                         attachment={attachment}
                         index={index}
+                        onView={handleViewAttachment}
                       />
                     ))}
                   </Stack>
@@ -963,6 +1015,69 @@ export default function AdminApprovalFormDialog({
         </Stack>
       </DialogContent>
 
+
+      <Dialog
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Typography variant="h6">{previewFile?.name || "File Preview"}</Typography>
+            <IconButton onClick={() => setPreviewOpen(false)}>
+              <Close />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <Divider />
+        <DialogContent
+          sx={{
+            height: "70vh",
+            p: 0,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          {previewFile &&
+            (previewFile.type?.includes("image") ? (
+              <img
+                src={previewFile.url}
+                alt={previewFile.name}
+                style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
+              />
+            ) : previewFile.type?.includes("pdf") ? (
+              <iframe
+                src={previewFile.url}
+                title={previewFile.name}
+                width="100%"
+                height="100%"
+                style={{ border: "none" }}
+              />
+            ) : (
+              <Box sx={{ textAlign: "center", p: 3 }}>
+                <Typography variant="body1" gutterBottom>
+                  This file type cannot be previewed directly.
+                </Typography>
+                <Button variant="contained" href={previewFile.url} target="_blank" sx={{ mt: 2 }}>
+                  Open File
+                </Button>
+              </Box>
+            ))}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPreviewOpen(false)}>Close</Button>
+          <Button
+            variant="contained"
+            href={previewFile?.url}
+            download={previewFile?.name}
+            disabled={!previewFile}
+          >
+            Download
+          </Button>
+        </DialogActions>
+      </Dialog>
       <DialogActions
         sx={{
           px: { xs: 2, md: 3 },

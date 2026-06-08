@@ -188,24 +188,24 @@ export default function MassApprovalFormDialog({
     setRemarkDialogOpen(true);
   };
 
-  // Remark dialog confirm — fire the action
+  // Remark dialog confirm — fire the action.
+  // Approval, Rework, and Reject all require a non-empty remark/reason.
   const handleRemarkConfirm = () => {
     const trimmed = remarkText.trim();
 
+    if (!trimmed) {
+      const message =
+        currentAction === "Rework"
+          ? "Rework reason is required."
+          : currentAction === "Reject"
+            ? "Reject reason is required."
+            : "Approve remark is required.";
+      setRemarkError(message);
+      return;
+    }
+
     if (currentAction === "Rework" || currentAction === "Reject") {
-      if (!trimmed) {
-        setRemarkError(
-          currentAction === "Rework"
-            ? "Rework reason is required."
-            : "Reject reason is required."
-        );
-        return;
-      }
-      onAction?.(
-        currentAction.toLowerCase(),
-        trimmed,
-        null // no item edits for rework/reject
-      );
+      onAction?.(currentAction.toLowerCase(), trimmed, null);
       return;
     }
 

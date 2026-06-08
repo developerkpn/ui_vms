@@ -43,6 +43,13 @@ import {
   validateRequesterField,
 } from "./singleMaterialFormValidation.mjs";
 
+
+const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp"];
+const isImageFile = fileName => {
+  const ext = getAttachmentExtension(fileName).toLowerCase();
+  return IMAGE_EXTENSIONS.includes(ext);
+};
+
 const parsePayload = payload => {
   if (!payload) {
     return {};
@@ -70,6 +77,12 @@ const normalizeExistingAttachment = attachment => ({
 const isExistingAttachment = attachment => Boolean(attachment?.existing);
 
 const getAttachmentName = attachment => attachment?.name || attachment?.file_name || "Attachment";
+const getAttachmentPreviewSrc = attachment =>
+  attachment instanceof File
+    ? URL.createObjectURL(attachment)
+    : attachment?.path
+      ? `${import.meta.env.VITE_URL_LOC}/material/file/${attachment.path}`
+      : "";
 
 const getRequestValue = (sources, ...keys) => {
   for (const key of keys) {
@@ -1013,42 +1026,73 @@ const SingleMaterialForm = ({
                   sx={{
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "space-between",
+                    gap: 1.5,
                     p: 1,
                     border: "1px solid",
                     borderColor: "divider",
                     borderRadius: 1,
-                    maxWidth: 400,
                   }}
                 >
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                    <Box
+                  <Box
+                    sx={{
+                      width: 44,
+                      height: 44,
+                      bgcolor: "#eeeeee",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: 1,
+                      overflow: "hidden",
+                      position: "relative",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {isImageFile(getAttachmentName(file)) && (
+                      <Box
+                        component="img"
+                        src={getAttachmentPreviewSrc(file)}
+                        onError={e => { e.target.style.display = "none"; }}
+                        sx={{
+                          width: 44,
+                          height: 44,
+                          objectFit: "cover",
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                        }}
+                      />
+                    )}
+                    <Typography
+                      variant="caption"
                       sx={{
-                        width: 50,
-                        height: 50,
-                        bgcolor: "#eeeeee",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        borderRadius: 1,
+                        fontWeight: 700,
+                        color: "#757575",
+                        position: "absolute",
+                        lineHeight: 1,
                       }}
                     >
-                      <Typography variant="caption" sx={{ fontWeight: 700, color: "#757575" }}>
-                        {getAttachmentExtension(getAttachmentName(file)).toUpperCase() || "FILE"}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {getAttachmentName(file)}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {isExistingAttachment(file)
-                          ? "Existing file"
-                          : formatAttachmentSize(file.size)}
-                      </Typography>
-                    </Box>
+                      {getAttachmentExtension(getAttachmentName(file)).toUpperCase() || "FILE"}
+                    </Typography>
                   </Box>
-                  <IconButton size="small" color="error" onClick={() => handleRemoveAttachment(i)}>
+                  <Box sx={{ flex: 1, overflow: "hidden", minWidth: 0 }}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: 600,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {getAttachmentName(file)}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {isExistingAttachment(file)
+                        ? "Existing file"
+                        : formatAttachmentSize(file.size)}
+                    </Typography>
+                  </Box>
+                  <IconButton size="small" color="error" onClick={() => handleRemoveAttachment(i)} sx={{ flexShrink: 0 }}>
                     <Delete />
                   </IconButton>
                 </Box>

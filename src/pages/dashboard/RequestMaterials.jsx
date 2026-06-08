@@ -16,27 +16,29 @@ import {
   Select,
   Snackbar,
   Stack,
-  Tab,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   Pagination,
   TableRow,
-  Tabs,
   TextField,
   Typography,
 } from "@mui/material";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.mjs";
+import { formatOptionalDateTime } from "src/helper/adminApprovalView.mjs";
 import {
   buildPlantOptions,
   buildStorageOptionsForPlant,
 } from "src/helper/materialChangeExtendRequest.mjs";
 import MassReworkForm from "src/components/request-material/MassReworkForm";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
+import PageHeader from "src/components/common/PageHeader";
+import PageTablePaper, { PAGE_TABLE_HEADER_SX } from "src/components/common/PageTablePaper";
+import PageSearchField from "src/components/common/PageSearchField";
+import PageTabs from "src/components/common/PageTabs";
 
 const APPROVAL_STATUS_BADGES = {
   APPROVED: { label: "Approve", bgcolor: "#2146d8", color: "#ffffff" },
@@ -424,7 +426,7 @@ export default function RequestMaterials() {
             reworkStage: item.rework_stage,
             reworkByUserId: item.rework_by_user_id,
             reworkByUsername: item.rework_by_username,
-            reworkAt: item.rework_at,
+            reworkAt: formatOptionalDateTime(item.rework_at),
             reworkReason: item.rework_reason || "",
             approval_1_user_id: item.approval_1_user_id,
             approval_1_user_name: item.approval_1_user_name,
@@ -469,7 +471,7 @@ export default function RequestMaterials() {
               reworks.push({
                 stage: "Approval 1",
                 by_username: item.first_item_approval_1_user_name,
-                at: item.first_item_approval_1_at,
+                at: formatOptionalDateTime(item.first_item_approval_1_at),
                 reason: item.first_item_approval_1_remark,
               });
             }
@@ -477,7 +479,7 @@ export default function RequestMaterials() {
               reworks.push({
                 stage: "Approval 2",
                 by_username: item.first_item_approval_2_user_name,
-                at: item.first_item_approval_2_at,
+                at: formatOptionalDateTime(item.first_item_approval_2_at),
                 reason: item.first_item_approval_2_remark,
               });
             }
@@ -485,7 +487,7 @@ export default function RequestMaterials() {
               reworks.push({
                 stage: "Approval 3",
                 by_username: item.first_item_approval_3_user_name,
-                at: item.first_item_approval_3_at,
+                at: formatOptionalDateTime(item.first_item_approval_3_at),
                 reason: item.first_item_approval_3_remark,
               });
             }
@@ -508,15 +510,15 @@ export default function RequestMaterials() {
               // Approval chain fields for buildApprovalDetail
               approval_1_status: item.first_item_approval_1_status,
               approval_1_user_name: item.first_item_approval_1_user_name,
-              approval_1_at: item.first_item_approval_1_at,
+              approval_1_at: formatOptionalDateTime(item.first_item_approval_1_at),
               approval_1_remark: item.first_item_approval_1_remark,
               approval_2_status: item.first_item_approval_2_status,
               approval_2_user_name: item.first_item_approval_2_user_name,
-              approval_2_at: item.first_item_approval_2_at,
+              approval_2_at: formatOptionalDateTime(item.first_item_approval_2_at),
               approval_2_remark: item.first_item_approval_2_remark,
               approval_3_status: item.first_item_approval_3_status,
               approval_3_user_name: item.first_item_approval_3_user_name,
-              approval_3_at: item.first_item_approval_3_at,
+              approval_3_at: formatOptionalDateTime(item.first_item_approval_3_at),
               approval_3_remark: item.first_item_approval_3_remark,
               // Rework metadata for buildReworkSummary (latest rework)
               rework_stage: latestRework?.stage ?? null,
@@ -744,68 +746,33 @@ export default function RequestMaterials() {
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: { xs: "flex-start", md: "center" },
-          flexDirection: { xs: "column", md: "row" },
-          gap: 2,
-        }}
-      >
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 900, letterSpacing: "-0.03em" }}>
-            My Request
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            List of requests created by the user with their status.
-          </Typography>
-        </Box>
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: { xs: "stretch", md: "flex-end" },
-            gap: 1,
-            width: { xs: "100%", md: "auto" },
-          }}
-        >
-          <Button
-            variant="contained"
-            onClick={() => openSnackbar("Download to Excel will be connected to API later", "info")}
-          >
-            Download to Excel
-          </Button>
-          <TextField
-            size="small"
-            placeholder="Search"
-            value={searchQuery}
-            onChange={event => {
-              setSearchQuery(event.target.value);
-              setPage(0);
-            }}
-            sx={{ width: { xs: "100%", md: 220 } }}
-          />
-        </Box>
-      </Box>
+      <PageHeader
+        title="My Request"
+        subtitle="List of requests created by the user with their status."
+        actions={
+          <>
+            <Button variant="contained" onClick={() => openSnackbar("Download to Excel will be connected to API later", "info")}>
+              Download to Excel
+            </Button>
+            <PageSearchField
+              placeholder="Search"
+              value={searchQuery}
+              onChange={event => { setSearchQuery(event.target.value); setPage(0); }}
+              sx={{ width: { xs: "100%", md: 220 } }}
+            />
+          </>
+        }
+      />
 
-      <Paper
-        sx={{
-          overflow: "hidden",
-        }}
-      >
         <Box sx={{ p: { xs: 2, md: 3 } }}>
-          <Tabs
+          <PageTabs
             value={activeTab}
-            onChange={(_, value) => {
-              setActiveTab(value);
-              setPage(0);
-            }}
-            sx={{ mb: 2 }}
-          >
-            <Tab value="single" label="Single Request" />
-            <Tab value="mass" label="Mass Request" />
-          </Tabs>
+            onChange={(_, value) => { setActiveTab(value); setPage(0); }}
+            tabs={[
+              { value: "single", label: "Single Request" },
+              { value: "mass", label: "Mass Request" },
+            ]}
+          />
 
           <Box
             sx={{
@@ -861,21 +828,21 @@ export default function RequestMaterials() {
             </Box>
           )}
 
-          <TableContainer>
+          <PageTablePaper>
             <Table size="small" sx={{ minWidth: 980 }}>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ whiteSpace: "nowrap" }}>Action</TableCell>
-                  <TableCell sx={{ whiteSpace: "nowrap" }}>Ticket Number</TableCell>
-                  <TableCell sx={{ whiteSpace: "nowrap" }}>Ticket Type</TableCell>
-                  <TableCell sx={{ minWidth: 280 }}>
+                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>Action</TableCell>
+                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>Ticket Number</TableCell>
+                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>Ticket Type</TableCell>
+                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, minWidth: 280 }}>
                     {activeTab === "mass" ? "Mass Request Reason" : "Material Description"}
                   </TableCell>
-                  <TableCell sx={{ whiteSpace: "nowrap" }}>UOM</TableCell>
-                  <TableCell sx={{ whiteSpace: "nowrap" }}>Status</TableCell>
-                  <TableCell sx={{ whiteSpace: "nowrap" }}>Created by</TableCell>
-                  <TableCell sx={{ whiteSpace: "nowrap" }}>Created at</TableCell>
-                  <TableCell sx={{ whiteSpace: "nowrap" }}>Assigned to</TableCell>
+                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>UOM</TableCell>
+                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>Status</TableCell>
+                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>Created by</TableCell>
+                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>Created at</TableCell>
+                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>Assigned to</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -930,7 +897,7 @@ export default function RequestMaterials() {
                   ))}
               </TableBody>
             </Table>
-          </TableContainer>
+          </PageTablePaper>
 
           <Box
             sx={{
@@ -961,7 +928,6 @@ export default function RequestMaterials() {
             </Paper>
           )}
         </Box>
-      </Paper>
 
       <Menu
         anchorEl={menuAnchorEl}

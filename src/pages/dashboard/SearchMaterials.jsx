@@ -1,4 +1,5 @@
 import {
+  Close,
   Download,
   Edit,
   Visibility,
@@ -48,6 +49,8 @@ import {
 import TableSorting from "src/components/table/TableSorting";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import attachmentPlaceholder from "src/images/material-attachment-placeholder.svg";
+import PageHeader from "src/components/common/PageHeader";
+import PageTablePaper from "src/components/common/PageTablePaper";
 import usePermissionStore from "src/store/userPermissionStore";
 
 const columnHelper = createColumnHelper();
@@ -387,6 +390,7 @@ export default function SearchMaterials() {
   const [activeRequestCheck, setActiveRequestCheck] = useState({ change: false, extend: false, loading: false });
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
+  const [imageLoadError, setImageLoadError] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   const [anchorEl, setAnchorEl] = useState(null);
   const [menuMaterial, setMenuMaterial] = useState(null);
@@ -463,6 +467,26 @@ export default function SearchMaterials() {
           totalPages: singleRow.length ? 1 : 0,
           page: 1,
         }));
+
+        // Fetch attachments for found materials (non-blocking)
+        if (singleRow.length > 0) {
+          const codes = singleRow.map(m => m.code).filter(Boolean);
+          if (codes.length > 0) {
+            axiosPrivate.post("/material/by-codes", { codes })
+              .then(attRes => {
+                const byCode = {};
+                (attRes.data?.data || []).forEach(m => {
+                  byCode[m.code] = m.attachments || [];
+                });
+                setMaterials(prev =>
+                  prev.map(m => ({ ...m, attachments: byCode[m.code] || [] }))
+                );
+              })
+              .catch(() => {
+                // Attachments are optional; keep materials without them
+              });
+          }
+        }
       } catch (error) {
         console.error("Failed to fetch materials:", error);
       } finally {
@@ -654,6 +678,7 @@ export default function SearchMaterials() {
 
   const handleViewAttachment = attachment => {
     const fileUrl = `${import.meta.env.VITE_URL_LOC}/material/file/${attachment.attachment}`;
+    setImageLoadError(false);
     setPreviewFile({
       url: fileUrl,
       name: attachment.attachment,
@@ -912,31 +937,15 @@ export default function SearchMaterials() {
 
   return (
     <>
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: { xs: "column", sm: "row" },
-          justifyContent: "space-between",
-          alignItems: { xs: "flex-start", sm: "center" },
-          gap: 2,
-          mb: 4,
-        }}
-      >
-        <Typography
-          variant="h4"
-          sx={{ fontWeight: 800, color: "text.primary", letterSpacing: "-0.5px" }}
-        >
-          Material Search
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<Download />}
-          color="primary"
-          sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 600, px: 3 }}
-        >
-          Download To Excel
-        </Button>
-      </Box>
+      <PageHeader
+        title="Material Search"
+        subtitle="Search and manage materials across all groups"
+        actions={
+          <Button variant="contained" startIcon={<Download />} color="primary" sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 600, px: 3 }}>
+            Download To Excel
+          </Button>
+        }
+      />
 
       <Box
         sx={{
@@ -1030,7 +1039,7 @@ export default function SearchMaterials() {
         </FormControl>
       </Box>
 
-      <Box sx={{ width: "100%", overflowX: "auto" }}>
+      <PageTablePaper>
         <TableSorting
           rowsData={materials}
           columns={columns}
@@ -1039,7 +1048,7 @@ export default function SearchMaterials() {
           loading={loading}
           emptyMessage={emptyMessage}
         />
-      </Box>
+      </PageTablePaper>
 
       <Box sx={{ py: 3, display: "flex", justifyContent: "center" }}>
         <Pagination
@@ -1089,6 +1098,78 @@ export default function SearchMaterials() {
         </DialogActions>
       </Dialog>
 
+
+      {/* File Preview Modal */}
+      <Dialog
+        open={previewModalOpen}
+        onClose={() => setPreviewModalOpen(false)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Typography variant="h6">{previewFile?.name || "File Preview"}</Typography>
+            <IconButton onClick={() => setPreviewModalOpen(false)}>
+              <Close />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <Divider />
+        <DialogContent
+          sx={{
+            height: "70vh",
+            p: 0,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          {previewFile &&
+            (previewFile.type.includes("image") ? (
+              imageLoadError ? (
+                <Box sx={{ textAlign: "center", p: 3 }}>
+                  <Typography variant="body1" gutterBottom color="error">
+                    Unable to load image. The file may be missing or empty.
+                  </Typography>
+                </Box>
+              ) : (
+                <img
+                  src={previewFile.url}
+                  alt={previewFile.name}
+                  onError={() => setImageLoadError(true)}
+                  style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
+                />
+              )
+            ) : previewFile.type.includes("pdf") ? (
+              <iframe
+                src={previewFile.url}
+                title={previewFile.name}
+                width="100%"
+                height="100%"
+                style={{ border: "none" }}
+              />
+            ) : (
+              <Box sx={{ textAlign: "center", p: 3 }}>
+                <Typography variant="body1" gutterBottom>
+                  This file type cannot be previewed directly.
+                </Typography>
+                <Button variant="contained" href={previewFile.url} target="_blank" sx={{ mt: 2 }}>
+                  Open File
+                </Button>
+              </Box>
+            ))}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPreviewModalOpen(false)}>Close</Button>
+          <Button
+            variant="contained"
+            href={previewFile?.url}
+            download={previewFile?.name}
+            disabled={!previewFile || imageLoadError}>
+            Download
+          </Button>
+        </DialogActions>
+      </Dialog>
       <MaterialActionDialog
         open={materialActionDialog.open}
         mode={materialActionDialog.mode}

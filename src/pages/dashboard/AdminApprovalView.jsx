@@ -24,13 +24,11 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableContainer,
+
   TableHead,
   TableRow,
   TextField,
   Typography,
-  Tabs,
-  Tab,
 } from "@mui/material";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AdminApprovalFormDialog from "src/components/admin-approval/AdminApprovalFormDialog";
@@ -56,18 +54,10 @@ import {
   sortMassApprovalRows,
   summarizeMassApprovalGroups,
 } from "src/helper/adminApprovalView.mjs";
+import PageHeader from "src/components/common/PageHeader";
+import PageTablePaper, { PAGE_TABLE_HEADER_SX } from "src/components/common/PageTablePaper";
+import PageTabs from "src/components/common/PageTabs";
 
-const tableHeaderSx = {
-  color: "text.secondary",
-  fontSize: "0.78rem",
-  fontWeight: 800,
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-  whiteSpace: "nowrap",
-  py: 2.25,
-  borderBottom: "1px solid",
-  borderColor: "divider",
-};
 
 const statusStyleMap = {
   Submit: { bgcolor: "#2f62d6", color: "common.white" },
@@ -577,68 +567,41 @@ export default function AdminApprovalView() {
 
   return (
     <Box sx={{ pb: { xs: 4, md: 6 } }}>
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: { xs: "flex-start", sm: "center" },
-          flexDirection: { xs: "column", md: "row" },
-          gap: 2,
-          mb: 4,
-        }}
-      >
-        <Box>
-          <Typography
-            variant="h4"
-            sx={{ fontWeight: 800, color: "text.primary", letterSpacing: "-0.5px" }}
-          >
-            My Approval
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mt: 0.5 }}>
-            A list of items awaiting your approval
-          </Typography>
-        </Box>
-
-        <Button
-          variant="contained"
-          startIcon={<Download />}
-          onClick={() => openSnackbar("Download to Excel akan disambungkan ke API export.", "info")}
-          sx={{
-            borderRadius: "10px",
-            textTransform: "none",
-            fontWeight: 700,
-            px: 3,
-            py: 1.25,
-            bgcolor: "#3367d6",
-            boxShadow: "0 14px 26px rgba(51, 103, 214, 0.26)",
-            "&:hover": {
-              bgcolor: "#2557c7",
-              boxShadow: "0 16px 30px rgba(51, 103, 214, 0.32)",
-            },
-          }}
-        >
-          Download To Excel
-        </Button>
-      </Box>
-
-      <Box sx={{ mb: 3, borderBottom: 1, borderColor: "divider" }}>
-        <Tabs
-          value={activeTab}
-          onChange={handleTabChange}
-          aria-label="Approval type tabs"
-          sx={{
-            "& .MuiTab-root": {
+      <PageHeader
+        title="My Approval"
+        subtitle="A list of items awaiting your approval"
+        actions={
+          <Button
+            variant="contained"
+            startIcon={<Download />}
+            onClick={() => openSnackbar("Download to Excel akan disambungkan ke API export.", "info")}
+            sx={{
+              borderRadius: "10px",
               textTransform: "none",
               fontWeight: 700,
-              fontSize: "0.95rem",
-              minWidth: 120,
-            },
-          }}
-        >
-          <Tab value="single" label="Single Requests" />
-          <Tab value="mass" label="Mass Requests" />
-        </Tabs>
-      </Box>
+              px: 3,
+              py: 1.25,
+              bgcolor: "#3367d6",
+              boxShadow: "0 14px 26px rgba(51, 103, 214, 0.26)",
+              "&:hover": {
+                bgcolor: "#2557c7",
+                boxShadow: "0 16px 30px rgba(51, 103, 214, 0.32)",
+              },
+            }}
+          >
+            Download To Excel
+          </Button>
+        }
+      />
+
+      <PageTabs
+        value={activeTab}
+        onChange={handleTabChange}
+        tabs={[
+          { value: "single", label: "Single Requests" },
+          { value: "mass", label: "Mass Requests" },
+        ]}
+      />
 
       <Stack
         direction={{ xs: "column", md: "row" }}
@@ -760,39 +723,27 @@ export default function AdminApprovalView() {
 
       {/* Single tab table */}
       {activeTab === "single" && (
-        <Box sx={{ width: "100%", overflowX: "auto" }}>
-          <Paper
-            elevation={0}
-            sx={{
-              minWidth: 1060,
-              border: "1px solid",
-              borderColor: "divider",
-              borderRadius: "12px",
-              overflow: "hidden",
-              bgcolor: "background.paper",
-            }}
-          >
-            <TableContainer>
+        <PageTablePaper>
               <Table size="small" sx={{ minWidth: 1060 }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell align="center" sx={tableHeaderSx}>
+                    <TableCell align="center" sx={PAGE_TABLE_HEADER_SX}>
                       Action
                     </TableCell>
-                    <TableCell sx={tableHeaderSx}>Ticket Number</TableCell>
-                    <TableCell sx={tableHeaderSx}>Ticket Type</TableCell>
-                    <TableCell sx={{ ...tableHeaderSx, minWidth: 280 }}>
+                    <TableCell sx={PAGE_TABLE_HEADER_SX}>Ticket Number</TableCell>
+                    <TableCell sx={PAGE_TABLE_HEADER_SX}>Ticket Type</TableCell>
+                    <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, minWidth: 280 }}>
                       Material Description
                     </TableCell>
-                    <TableCell align="center" sx={tableHeaderSx}>
+                    <TableCell align="center" sx={PAGE_TABLE_HEADER_SX}>
                       UOM
                     </TableCell>
-                    <TableCell align="center" sx={tableHeaderSx}>
+                    <TableCell align="center" sx={PAGE_TABLE_HEADER_SX}>
                       Status
                     </TableCell>
-                    <TableCell sx={tableHeaderSx}>Created by</TableCell>
-                    <TableCell sx={tableHeaderSx}>Created at</TableCell>
-                    <TableCell sx={tableHeaderSx}>Assigned to</TableCell>
+                    <TableCell sx={PAGE_TABLE_HEADER_SX}>Created by</TableCell>
+                    <TableCell sx={PAGE_TABLE_HEADER_SX}>Created at</TableCell>
+                    <TableCell sx={PAGE_TABLE_HEADER_SX}>Assigned to</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -886,43 +837,29 @@ export default function AdminApprovalView() {
                   )}
                 </TableBody>
               </Table>
-            </TableContainer>
-          </Paper>
-        </Box>
+        </PageTablePaper>
       )}
       {/* Mass tab table */}
 
       {activeTab === "mass" && (
-        <Box sx={{ width: "100%", overflowX: "auto" }}>
-          <Paper
-            elevation={0}
-            sx={{
-              minWidth: 1060,
-              border: "1px solid",
-              borderColor: "divider",
-              borderRadius: "12px",
-              overflow: "hidden",
-              bgcolor: "background.paper",
-            }}
-          >
-            <TableContainer>
+        <PageTablePaper>
               <Table size="small" sx={{ minWidth: 1060 }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell align="center" sx={tableHeaderSx}>
+                    <TableCell align="center" sx={PAGE_TABLE_HEADER_SX}>
                       Action
                     </TableCell>
-                    <TableCell sx={tableHeaderSx}>Ticket Number</TableCell>
-                    <TableCell sx={tableHeaderSx}>Ticket Type</TableCell>
-                    <TableCell sx={{ ...tableHeaderSx, minWidth: 280 }}>
+                    <TableCell sx={PAGE_TABLE_HEADER_SX}>Ticket Number</TableCell>
+                    <TableCell sx={PAGE_TABLE_HEADER_SX}>Ticket Type</TableCell>
+                    <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, minWidth: 280 }}>
                       Mass Request Reason
                     </TableCell>
-                    <TableCell align="center" sx={tableHeaderSx}>
+                    <TableCell align="center" sx={PAGE_TABLE_HEADER_SX}>
                       Status
                     </TableCell>
-                    <TableCell sx={tableHeaderSx}>Created by</TableCell>
-                    <TableCell sx={tableHeaderSx}>Created at</TableCell>
-                    <TableCell sx={tableHeaderSx}>Assigned to</TableCell>
+                    <TableCell sx={PAGE_TABLE_HEADER_SX}>Created by</TableCell>
+                    <TableCell sx={PAGE_TABLE_HEADER_SX}>Created at</TableCell>
+                    <TableCell sx={PAGE_TABLE_HEADER_SX}>Assigned to</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1024,9 +961,7 @@ export default function AdminApprovalView() {
                   )}
                 </TableBody>
               </Table>
-            </TableContainer>
-          </Paper>
-        </Box>
+        </PageTablePaper>
       )}
       <Menu
         anchorEl={menuAnchorEl}
