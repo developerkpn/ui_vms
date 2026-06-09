@@ -80,12 +80,15 @@ export default function SearchSuggestionField({
   );
 
   const highlightMatch = (text, query) => {
-    if (!query) return text;
-    const parts = text.split(new RegExp(`(${query})`, "gi"));
+    if (!query || !text) return text || "";
+    const words = query.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return text;
+    const escaped = words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+    const parts = text.split(new RegExp(`(${escaped})`, "gi"));
     return (
       <span>
         {parts.map((part, i) =>
-          part.toLowerCase() === query.toLowerCase() ? (
+          words.some(w => part.toLowerCase() === w.toLowerCase()) ? (
             <b key={i} style={{ color: "#1976d2" }}>
               {part}
             </b>
@@ -225,7 +228,7 @@ export default function SearchSuggestionField({
             variant="body2"
             sx={{ fontWeight: 600, width: "100px", color: "text.primary" }}
           >
-            {option.code}
+            {highlightMatch(option.code || "", inputValue)}
           </Typography>
           <Typography variant="body2" sx={{ minWidth: 0, flex: 1, px: 2, color: "text.primary" }}>
             {highlightMatch(option.combined_description || option.description || "", inputValue)}
@@ -242,13 +245,13 @@ export default function SearchSuggestionField({
             }}
             title={getAliasText(option) || "-"}
           >
-            {getAliasText(option) || "-"}
+            {highlightMatch(getAliasText(option) || "-", inputValue)}
           </Typography>
           <Typography
             variant="caption"
             sx={{ width: "56px", textAlign: "right", color: "text.secondary", fontWeight: 600 }}
           >
-            {option.unit_of_measurement || "-"}
+            {highlightMatch(option.unit_of_measurement || "-", inputValue)}
           </Typography>
         </Box>
       )}
