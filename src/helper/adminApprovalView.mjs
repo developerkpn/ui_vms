@@ -104,8 +104,8 @@ export function normalizeApprovalRows(rows = []) {
       status: normalizeApprovalStatusForFilter(row.status || "Submit"),
       createdBy: stringOrFallback(row.created_by, row.createdBy, "-"),
       createdAt: formatDateTime(row.created_at || row.createdAt),
-      assignedTo: stringOrFallback(row.assigned_to, row.assignedTo, "-"),
       approvalStage: resolveApprovalStage(row),
+      assignedTo: computeAssignedToDisplay(row),
     };
 
     addStringProp(normalized, "materialCode", row.material_code, row.materialCode);
@@ -289,6 +289,56 @@ function resolveApprovalStage(row = {}) {
   return "Completed";
 }
 
+export function computeAssignedToDisplay(row = {}) {
+  const normalizedStatus = String(row.status || "")
+    .trim()
+    .toUpperCase();
+  const rawAssignedTo = String(row.assigned_to || row.assignedTo || "").trim();
+
+  if (["REJECT", "REJECTED", "CANCEL", "CANCELLED"].includes(normalizedStatus)) {
+    return "-";
+  }
+
+  if (rawAssignedTo === "Requester") {
+    return stringOrFallback(row.created_by, row.createdBy, "-");
+  }
+
+  const stage = resolveApprovalStage(row);
+
+  if (stage === "Completed") {
+    return "-";
+  }
+
+  if (stage === "Approval 1") {
+    return stringOrFallback(
+      row.approval_1_user_name,
+      row.approval1UserName,
+      row.approval1Username,
+      "-"
+    );
+  }
+
+  if (stage === "Approval 2") {
+    return stringOrFallback(
+      row.approval_2_user_name,
+      row.approval2UserName,
+      row.approval2Username,
+      "-"
+    );
+  }
+
+  if (stage === "Approval 3") {
+    return stringOrFallback(
+      row.approval_3_user_name,
+      row.approval3UserName,
+      row.approval3Username,
+      "-"
+    );
+  }
+
+  return rawAssignedTo || "-";
+}
+
 export function formatDateTime(value) {
   if (!value) {
     return "-";
@@ -362,8 +412,8 @@ export function normalizeMassApprovalRows(rows = []) {
       status: normalizeApprovalStatusForFilter(row.first_item_status || "Submit"),
       createdBy: stringOrFallback(row.created_by_username, row.created_by, row.createdBy, "-"),
       createdAt: formatDateTime(row.created_at || row.createdAt),
-      assignedTo: stringOrFallback(row.first_item_assigned_to, row.firstItemAssignedTo, "-"),
       approvalStage: resolveMassApprovalStage(row),
+      assignedTo: computeMassAssignedToDisplay(row),
       ticketType: "Create",
       // First item approval fields (shared by all items in batch)
       // Approval 1
@@ -375,11 +425,13 @@ export function normalizeMassApprovalRows(rows = []) {
       // Approval 2
       firstItemApproval2Status: row.first_item_approval_2_status || null,
       firstItemApproval2UserId: row.first_item_approval_2_user_id || null,
+      firstItemApproval2UserName: row.first_item_approval_2_user_name || null,
       firstItemApproval2At: formatOptionalDateTime(row.first_item_approval_2_at ?? row.firstItemApproval2At),
       firstItemApproval2Remark: row.first_item_approval_2_remark || null,
       // Approval 3
       firstItemApproval3Status: row.first_item_approval_3_status || null,
       firstItemApproval3UserId: row.first_item_approval_3_user_id || null,
+      firstItemApproval3UserName: row.first_item_approval_3_user_name || null,
       firstItemApproval3At: formatOptionalDateTime(row.first_item_approval_3_at ?? row.firstItemApproval3At),
       firstItemApproval3Remark: row.first_item_approval_3_remark || null,
       // Items placeholder (populated by massApprovalDetail)
@@ -387,6 +439,8 @@ export function normalizeMassApprovalRows(rows = []) {
     };
 
     addStringProp(normalized, "firstItemApproval1UserName", row.first_item_approval_1_user_name);
+    addStringProp(normalized, "firstItemApproval2UserName", row.first_item_approval_2_user_name);
+    addStringProp(normalized, "firstItemApproval3UserName", row.first_item_approval_3_user_name);
 
     return normalized;
   });
@@ -486,4 +540,51 @@ export function resolveMassApprovalStage(row = {}) {
   }
 
   return "Completed";
+}
+
+export function computeMassAssignedToDisplay(row = {}) {
+  const normalizedStatus = String(row.first_item_status || row.status || "")
+    .trim()
+    .toUpperCase();
+  const rawAssignedTo = String(row.first_item_assigned_to || row.firstItemAssignedTo || "").trim();
+
+  if (["REJECT", "REJECTED", "CANCEL", "CANCELLED"].includes(normalizedStatus)) {
+    return "-";
+  }
+
+  if (rawAssignedTo === "Requester") {
+    return stringOrFallback(row.created_by_username, row.created_by, row.createdBy, "-");
+  }
+
+  const stage = resolveMassApprovalStage(row);
+
+  if (stage === "Completed") {
+    return "-";
+  }
+
+  if (stage === "Approval 1") {
+    return stringOrFallback(
+      row.first_item_approval_1_user_name,
+      row.firstItemApproval1UserName,
+      "-"
+    );
+  }
+
+  if (stage === "Approval 2") {
+    return stringOrFallback(
+      row.first_item_approval_2_user_name,
+      row.firstItemApproval2UserName,
+      "-"
+    );
+  }
+
+  if (stage === "Approval 3") {
+    return stringOrFallback(
+      row.first_item_approval_3_user_name,
+      row.firstItemApproval3UserName,
+      "-"
+    );
+  }
+
+  return rawAssignedTo || "-";
 }

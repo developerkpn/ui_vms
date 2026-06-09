@@ -4,10 +4,13 @@
 // a single pass: trim, check non-empty, then check attachments count.
 
 export const MASS_MAX_ROWS = 10;
-export const MASS_MIN_ROWS = 1;
+export const MASS_MIN_ROWS = 2;
 export const MASS_MAX_ATTACHMENTS_PER_ROW = 3;
 export const MASS_MIN_ATTACHMENTS_PER_ROW = 1;
-export const MASS_MAX_DESCRIPTION_LENGTH = 255;
+export const MASS_SHARED_MIN_ATTACHMENTS = 1;
+export const MASS_MAX_DESCRIPTION_LENGTH = 40;
+
+export const MASS_OPTIONAL_FIELDS = new Set(["poText", "spesifikasiTambahan"]);
 
 export const MASS_TEXT_FIELDS = [
   "plant",
@@ -26,9 +29,7 @@ const FIELD_INDONESIAN_MESSAGES = {
   materialGroup: "Material group wajib diisi.",
   materialSubGroup: "Sub material group wajib diisi.",
   description: "Material description wajib diisi.",
-  poText: "PO Text wajib diisi.",
   uom: "Base UoM wajib diisi.",
-  spesifikasiTambahan: "Spesifikasi tambahan wajib diisi.",
 };
 
 const toTrimmedString = value => {
@@ -66,6 +67,9 @@ export function validateMassRow(row) {
   }
 
   for (const fieldKey of MASS_TEXT_FIELDS) {
+    if (MASS_OPTIONAL_FIELDS.has(fieldKey)) {
+      continue;
+    }
     if (!isNonEmptyString(row[fieldKey])) {
       errors[fieldKey] = createFieldError(
         FIELD_INDONESIAN_MESSAGES[fieldKey] || "Field wajib diisi."
@@ -80,17 +84,6 @@ export function validateMassRow(row) {
     );
   }
 
-  const attachments = Array.isArray(row.attachments) ? row.attachments : [];
-  if (attachments.length < MASS_MIN_ATTACHMENTS_PER_ROW) {
-    errors.attachments = createFieldError(
-      `Minimal ${MASS_MIN_ATTACHMENTS_PER_ROW} attachment per baris.`
-    );
-  } else if (attachments.length > MASS_MAX_ATTACHMENTS_PER_ROW) {
-    errors.attachments = createFieldError(
-      `Maksimal ${MASS_MAX_ATTACHMENTS_PER_ROW} attachment per baris.`
-    );
-  }
-
   return errors;
 }
 
@@ -98,7 +91,8 @@ export function validateMassRow(row) {
 // Returns:
 //   errors: { [rowIndex]: { [fieldKey]: { error, message } } }
 //   filledRowIndexes: number[] (row indexes that are not empty)
-export function validateMassRequestBatch(rows) {
+export function validateMassRequestBatch(rows, options = {}) {
+  const { useSharedImage = false, sharedFileCount = 0 } = options;
   const errors = {};
   const filledRowIndexes = [];
   const sourceRows = Array.isArray(rows) ? rows : [];
@@ -117,6 +111,20 @@ export function validateMassRequestBatch(rows) {
     filledRowIndexes.push(rowIndex);
 
     const rowErrors = validateMassRow(row);
+
+    if (!useSharedImage) {
+      const attachments = Array.isArray(row.attachments) ? row.attachments : [];
+      if (attachments.length < MASS_MIN_ATTACHMENTS_PER_ROW) {
+        rowErrors.attachments = createFieldError(
+          `Minimal ${MASS_MIN_ATTACHMENTS_PER_ROW} attachment per baris.`
+        );
+      } else if (attachments.length > MASS_MAX_ATTACHMENTS_PER_ROW) {
+        rowErrors.attachments = createFieldError(
+          `Maksimal ${MASS_MAX_ATTACHMENTS_PER_ROW} attachment per baris.`
+        );
+      }
+    }
+
     if (Object.keys(rowErrors).length > 0) {
       errors[rowIndex] = rowErrors;
     }
@@ -126,7 +134,16 @@ export function validateMassRequestBatch(rows) {
     if (!errors[-1]) {
       errors[-1] = {};
     }
-    errors[-1].rows = createFieldError("Minimal isi 1 baris.");
+    errors[-1].rows = createFieldError("Minimal 2 baris harus diisi.");
+  }
+
+  if (useSharedImage && sharedFileCount < MASS_SHARED_MIN_ATTACHMENTS) {
+    if (!errors[-1]) {
+      errors[-1] = {};
+    }
+    errors[-1].sharedAttachments = createFieldError(
+      "Minimal 1 attachment harus diisi untuk mode file bersama."
+    );
   }
 
   return { errors, filledRowIndexes };

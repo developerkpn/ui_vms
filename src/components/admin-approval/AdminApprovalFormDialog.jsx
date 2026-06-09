@@ -22,7 +22,6 @@ import {
   Divider,
   Grid,
   IconButton,
-  InputAdornment,
   Paper,
   Popover,
   Snackbar,
@@ -483,6 +482,7 @@ export default function AdminApprovalFormDialog({
 
   const [draftValues, setDraftValues] = useState(() => createApprovalDraft(detail));
   const [remarkDialogOpen, setRemarkDialogOpen] = useState(false);
+  const [finalCodeDialogOpen, setFinalCodeDialogOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
   const [previewImageError, setPreviewImageError] = useState(false);
@@ -506,6 +506,7 @@ export default function AdminApprovalFormDialog({
   useEffect(() => {
     if (!open) {
       setRemarkDialogOpen(false);
+      setFinalCodeDialogOpen(false);
       setCurrentAction("");
       setRemarkText("");
       setFinalCodeSuffix("");
@@ -598,7 +599,22 @@ export default function AdminApprovalFormDialog({
     setRemarkError("");
     setFinalCodeSuffix("");
     setFinalCodeSuffixError("");
-    setRemarkDialogOpen(true);
+
+    const isApproval3 = String(
+      row?.approvalStage ||
+        detail?.rawRow?.approvalStage ||
+        detail?.assignedTo ||
+        row?.assignedTo ||
+        ""
+    )
+      .trim()
+      .toUpperCase() === "APPROVAL 3";
+
+    if (isApproval3 && !isScopedChangeExtendRequest) {
+      setFinalCodeDialogOpen(true);
+    } else {
+      setRemarkDialogOpen(true);
+    }
   };
 
   const handleReworkClick = () => {
@@ -643,22 +659,28 @@ export default function AdminApprovalFormDialog({
     setRemarkDialogOpen(false);
   };
 
-  const finalCodePrefix = useMemo(() => {
-    const rawRow = detail?.rawRow || row || {};
-    const groupCode = String(rawRow.materialGroupCode || rawRow.material_group_code || "").trim();
-    const subGroupCode = String(
-      rawRow.subMaterialGroupCode ||
-        rawRow.material_sub_group_code ||
-        rawRow.sub_material_group_code ||
-        ""
-    ).trim();
-
-    if (!groupCode || !subGroupCode) {
-      return "";
+  const handleFinalCodeDialogClose = (_, reason) => {
+    if (submitting && (reason === "backdropClick" || reason === "escapeKeyDown")) {
+      return;
     }
 
-    return `${groupCode}.${subGroupCode}.`;
-  }, [detail, row]);
+    if (submitting) {
+      return;
+    }
+
+    setFinalCodeDialogOpen(false);
+    setFinalCodeSuffixError("");
+  };
+
+  const handleFinalCodeNext = () => {
+    if (!/^\d{3}$/.test(String(finalCodeSuffix || "").trim())) {
+      setFinalCodeSuffixError("Final code suffix must be 3 digits.");
+      return;
+    }
+    setFinalCodeDialogOpen(false);
+    setFinalCodeSuffixError("");
+    setRemarkDialogOpen(true);
+  };
 
   const isApproval3Active = String(
     row?.approvalStage ||
@@ -669,7 +691,7 @@ export default function AdminApprovalFormDialog({
   )
     .trim()
     .toUpperCase() === "APPROVAL 3";
-  const isApproval3Approve = currentAction === "Approve" && isApproval3Active;
+  const isApproval3Approve = currentAction === "Approve" && isApproval3Active && !isScopedChangeExtendRequest;
 
   const renderFieldHint = fieldKey => {
     const hintText = fieldHints[fieldKey];
@@ -1188,6 +1210,158 @@ export default function AdminApprovalFormDialog({
       </DialogActions>
 
       <Dialog
+        open={finalCodeDialogOpen}
+        onClose={handleFinalCodeDialogClose}
+        maxWidth="sm"
+        fullWidth
+      >
+        <Box sx={{ p: 2, display: "flex", alignItems: "center", gap: 1 }}>
+          <WarningAmber sx={{ color: "#f59e0b" }} />
+          <Typography variant="h6" sx={{ fontWeight: 900, color: "#1e3a5f" }}>
+            Final Code Required
+          </Typography>
+        </Box>
+        <DialogContent sx={{ pt: 0 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Material code has not been assigned. Please maintain the material code to complete the process.
+          </Typography>
+          <Stack direction="row" spacing={2} alignItems="flex-start">
+            {(() => {
+              const rawRow = detail?.rawRow || row || {};
+              const materialGroupCode = String(rawRow.materialGroupCode || rawRow.material_group_code || "").trim();
+              const materialGroupName = String(rawRow.materialGroupName || rawRow.material_group_name || "").trim();
+              const subGroupCode = String(
+                rawRow.subMaterialGroupCode ||
+                  rawRow.material_sub_group_code ||
+                  rawRow.sub_material_group_code ||
+                  ""
+              ).trim();
+              const subGroupName = String(
+                rawRow.subMaterialGroupName ||
+                  rawRow.material_sub_group_name ||
+                  rawRow.sub_material_group_name ||
+                  ""
+              ).trim();
+
+              return (
+                <>
+                  <Box sx={{ flex: 1, textAlign: "center" }}>
+                    <Paper
+                      variant="outlined"
+                      sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        borderColor: "#cfd8dc",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        height: 80,
+                      }}
+                    >
+                      <Typography variant="h3" sx={{ fontWeight: 900, color: "#212121" }}>
+                        {materialGroupCode || "-"}
+                      </Typography>
+                    </Paper>
+                    <Typography variant="body2" sx={{ mt: 1, fontWeight: 700, color: "text.secondary" }}>
+                      {materialGroupName || "Material Group"}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ flex: 1, textAlign: "center" }}>
+                    <Paper
+                      variant="outlined"
+                      sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        borderColor: "#cfd8dc",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        height: 80,
+                      }}
+                    >
+                      <Typography variant="h3" sx={{ fontWeight: 900, color: "#212121" }}>
+                        {subGroupCode || "-"}
+                      </Typography>
+                    </Paper>
+                    <Typography variant="body2" sx={{ mt: 1, fontWeight: 700, color: "text.secondary" }}>
+                      {subGroupName || "Sub Material Group"}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ flex: 1, textAlign: "center" }}>
+                    <TextField
+                      fullWidth
+                      value={finalCodeSuffix}
+                      placeholder="000"
+                      inputProps={{
+                        maxLength: 3,
+                        inputMode: "numeric",
+                        pattern: "[0-9]*",
+                        style: { textAlign: "center" },
+                      }}
+                      sx={{
+                        "& .MuiInputBase-root": {
+                          borderRadius: 2,
+                          border: "1px solid",
+                          borderColor: finalCodeSuffixError ? "#ef5350" : "#cfd8dc",
+                          height: 80,
+                          justifyContent: "center",
+                          alignItems: "center",
+                          bgcolor: "#fff",
+                          px: 1,
+                          py: 0,
+                        },
+                        "& .MuiInputBase-input": {
+                          padding: 0,
+                          fontSize: "3rem",
+                          fontWeight: 900,
+                          color: "#212121",
+                          lineHeight: 1,
+                          textAlign: "center",
+                        },
+                        "& .MuiOutlinedInput-notchedOutline": { border: "none" },
+                      }}
+                      onChange={event => {
+                        setFinalCodeSuffix(event.target.value.replace(/\D/g, "").slice(0, 3));
+                        if (finalCodeSuffixError) {
+                          setFinalCodeSuffixError("");
+                        }
+                      }}
+                    />
+                    <Typography variant="body2" sx={{ mt: 1, fontWeight: 700, color: "text.secondary" }}>
+                      Final Code
+                    </Typography>
+                    {finalCodeSuffixError && (
+                      <Typography variant="caption" color="error" sx={{ display: "block", mt: 0.5 }}>
+                        {finalCodeSuffixError}
+                      </Typography>
+                    )}
+                  </Box>
+                </>
+              );
+            })()}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button
+            variant="contained"
+            onClick={handleFinalCodeDialogClose}
+            disabled={submitting}
+            sx={{ bgcolor: "#757575", textTransform: "none", fontWeight: 800 }}
+          >
+            Back
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleFinalCodeNext}
+            disabled={submitting}
+            sx={{ textTransform: "none", fontWeight: 800 }}
+          >
+            Next
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
         open={remarkDialogOpen}
         onClose={handleRemarkDialogClose}
         maxWidth="xs"
@@ -1225,33 +1399,6 @@ export default function AdminApprovalFormDialog({
               },
             }}
           />
-          {isApproval3Approve && (
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="caption" sx={{ display: "block", mb: 0.75, fontWeight: 800 }}>
-                Final Code
-              </Typography>
-              <TextField
-                fullWidth
-                size="small"
-                value={finalCodeSuffix}
-                placeholder="123"
-                inputProps={{ maxLength: 3, inputMode: "numeric", pattern: "[0-9]*" }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">{finalCodePrefix || "-.-."}</InputAdornment>
-                  ),
-                }}
-                error={Boolean(finalCodeSuffixError)}
-                helperText={finalCodeSuffixError || "Masukkan 3 digit terakhir final code."}
-                onChange={event => {
-                  setFinalCodeSuffix(event.target.value.replace(/\D/g, "").slice(0, 3));
-                  if (finalCodeSuffixError) {
-                    setFinalCodeSuffixError("");
-                  }
-                }}
-              />
-            </Box>
-          )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button
@@ -1266,11 +1413,6 @@ export default function AdminApprovalFormDialog({
             onClick={() => {
               if (currentAction === "Reject" && !String(remarkText || "").trim()) {
                 setRemarkError("Reject reason is required.");
-                return;
-              }
-
-              if (isApproval3Approve && !/^\d{3}$/.test(String(finalCodeSuffix || "").trim())) {
-                setFinalCodeSuffixError("Final code suffix must be 3 digits.");
                 return;
               }
 

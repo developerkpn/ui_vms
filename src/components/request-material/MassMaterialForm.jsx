@@ -10,9 +10,11 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   Paper,
   Stack,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -34,6 +36,7 @@ import { useNavigate } from "react-router-dom";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 import {
   MASS_MAX_ROWS,
+  MASS_SHARED_MIN_ATTACHMENTS,
   MASS_TEXT_FIELDS,
   isMassRowFilled,
   mapMassRequestServerErrors,
@@ -74,6 +77,15 @@ const MASS_ROW_FIELD_LABELS = {
   spesifikasiTambahan: "Spesifikasi Tambahan",
 };
 
+const MASS_REQUIRED_FIELDS = new Set([
+  "plant",
+  "sloc",
+  "materialGroup",
+  "materialSubGroup",
+  "description",
+  "uom",
+]);
+
 const createEmptyRow = () => ({
   plant: "",
   sloc: "",
@@ -106,6 +118,10 @@ const MassMaterialForm = ({ onBack }) => {
   const [reasonError, setReasonError] = useState("");
   const [importFeedback, setImportFeedback] = useState(null);
   const [overwriteConfirmOpen, setOverwriteConfirmOpen] = useState(false);
+  const [useSharedImage, setUseSharedImage] = useState(false);
+  const [sharedFiles, setSharedFiles] = useState([]);
+  const [selectedSharedFiles, setSelectedSharedFiles] = useState([]);
+  const [sharedFileError, setSharedFileError] = useState("");
   const pendingSubmitRef = useRef(null);
   const fileInputRef = useRef(null);
   const pendingImportRef = useRef(null);
@@ -164,6 +180,45 @@ const MassMaterialForm = ({ onBack }) => {
       attachments: row.attachments.filter((_, idx) => idx !== attachIndex),
       attachmentError: "",
     }));
+  };
+
+  const handleToggleSharedImage = (_, checked) => {
+    setUseSharedImage(checked);
+    if (checked) {
+      setRows(prev =>
+        prev.map(row => ({
+          ...row,
+          attachments: [],
+          attachmentError: "",
+          rowErrors: { ...row.rowErrors, attachments: undefined },
+        }))
+      );
+      setSelectedFilesByRow(Array.from({ length: MASS_MAX_ROWS }, () => []));
+    } else {
+      setSharedFiles([]);
+      setSelectedSharedFiles([]);
+      setSharedFileError("");
+    }
+  };
+
+  const handleSharedFilePick = fileList => {
+    setSelectedSharedFiles(Array.from(fileList || []));
+    setSharedFileError("");
+  };
+
+  const handleSharedFileUpload = () => {
+    const result = normalizeAttachmentSelection(
+      selectedSharedFiles,
+      sharedFiles
+    );
+    setSharedFiles(result.files);
+    setSharedFileError(result.error || "");
+    setSelectedSharedFiles([]);
+  };
+
+  const handleSharedFileRemove = attachIndex => {
+    setSharedFiles(prev => prev.filter((_, idx) => idx !== attachIndex));
+    setSharedFileError("");
   };
 
   const handleExportExcel = () => {
@@ -245,6 +300,9 @@ const MassMaterialForm = ({ onBack }) => {
 
     setRows(nextRows);
     setSelectedFilesByRow(Array.from({ length: MASS_MAX_ROWS }, () => []));
+    setSharedFiles([]);
+    setSelectedSharedFiles([]);
+    setSharedFileError("");
     setSubmitError("");
     pendingImportRef.current = null;
 
@@ -358,10 +416,13 @@ const MassMaterialForm = ({ onBack }) => {
     setImportFeedback(null);
 
     const { errors: rowErrors, filledRowIndexes } =
-      validateMassRequestBatch(rows);
+      validateMassRequestBatch(rows, {
+        useSharedImage,
+        sharedFileCount: sharedFiles.length,
+      });
 
     if (filledRowIndexes.length === 0) {
-      setSubmitError("Minimal isi 1 baris.");
+      setSubmitError("Minimal 2 baris harus diisi.");
       return;
     }
 
@@ -381,9 +442,13 @@ const MassMaterialForm = ({ onBack }) => {
           };
         })
       );
-      const topLevelRowError = rowErrors[-1]?.rows?.message;
+      const topLevelRowError =
+        rowErrors[-1]?.rows?.message ||
+        rowErrors[-1]?.sharedAttachments?.message;
       if (topLevelRowError) {
         setSubmitError(topLevelRowError);
+      } else if (rowErrors[-1]?.sharedAttachments?.error) {
+        setSharedFileError(rowErrors[-1].sharedAttachments.message);
       }
       return;
     }
@@ -435,11 +500,20 @@ const MassMaterialForm = ({ onBack }) => {
     );
 
     formPayload.append("massRequestReason", trimmed);
-    for (const rowIndex of filledRowIndexes) {
-      const row = rows[rowIndex];
-      for (const file of row.attachments) {
-        formPayload.append("files", file);
-        formPayload.append("fileRowIndex", String(rowIndex));
+    if (useSharedImage) {
+      for (const file of sharedFiles) {
+        for (const rowIndex of filledRowIndexes) {
+          formPayload.append("files", file);
+          formPayload.append("fileRowIndex", String(rowIndex));
+        }
+      }
+    } else {
+      for (const rowIndex of filledRowIndexes) {
+        const row = rows[rowIndex];
+        for (const file of row.attachments) {
+          formPayload.append("files", file);
+          formPayload.append("fileRowIndex", String(rowIndex));
+        }
       }
     }
 
@@ -510,8 +584,8 @@ const MassMaterialForm = ({ onBack }) => {
             Mass Material Request
           </Typography>
           <Typography variant="caption" color="text.secondary" display="block">
-            *Maksimal {MASS_MAX_ROWS} baris per submit. Setiap baris wajib
-            memiliki minimal 1 attachment.
+            *Maksimal {MASS_MAX_ROWS} baris per submit. Minimal 2 baris harus
+            diisi. Setiap baris wajib memiliki minimal 1 attachment.
           </Typography>
           <Typography variant="caption" color="text.secondary" display="block">
             Gunakan Export Excel untuk mengunduh template/data, lalu Import Excel
@@ -547,6 +621,36 @@ const MassMaterialForm = ({ onBack }) => {
             onChange={handleImportFileChange}
           />
         </Stack>
+      </Box>
+
+      <Box
+        sx={{
+          px: 2,
+          py: 1,
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          bgcolor: "#fafafa",
+          display: "flex",
+          alignItems: "center",
+          gap: 2,
+          flexWrap: "wrap",
+        }}
+      >
+        <FormControlLabel
+          control={
+            <Switch
+              checked={useSharedImage}
+              onChange={handleToggleSharedImage}
+              disabled={submitting}
+              size="small"
+            />
+          }
+          label={
+            <Typography variant="body2">
+              Gunakan 1 file attachment untuk semua baris
+            </Typography>
+          }
+        />
       </Box>
 
       <CardContent sx={{ p: 2 }}>
@@ -585,6 +689,14 @@ const MassMaterialForm = ({ onBack }) => {
                     }}
                   >
                     {MASS_ROW_FIELD_LABELS[fieldKey]}
+                    {MASS_REQUIRED_FIELDS.has(fieldKey) && (
+                      <Typography
+                        component="span"
+                        sx={{ color: "error.main", ml: 0.25 }}
+                      >
+                        *
+                      </Typography>
+                    )}
                   </TableCell>
                 ))}
                 <TableCell
@@ -597,6 +709,12 @@ const MassMaterialForm = ({ onBack }) => {
                   }}
                 >
                   Attach
+                  <Typography
+                    component="span"
+                    sx={{ color: "error.main", ml: 0.25 }}
+                  >
+                    *
+                  </Typography>
                 </TableCell>
               </TableRow>
             </TableHead>
@@ -628,16 +746,23 @@ const MassMaterialForm = ({ onBack }) => {
                             variant="standard"
                             fullWidth
                             multiline={
+                              fieldKey === "description" ||
                               fieldKey === "poText" ||
                               fieldKey === "spesifikasiTambahan"
                             }
                             minRows={
+                              fieldKey === "description" ||
                               fieldKey === "poText" ||
                               fieldKey === "spesifikasiTambahan"
                                 ? 1
                                 : undefined
                             }
                             maxRows={4}
+                            inputProps={
+                              fieldKey === "description"
+                                ? { maxLength: 40 }
+                                : undefined
+                            }
                             value={row[fieldKey]}
                             onChange={e =>
                               handleFieldChange(
@@ -652,131 +777,253 @@ const MassMaterialForm = ({ onBack }) => {
                         </TableCell>
                       );
                     })}
-                    <TableCell
-                      align="left"
-                      sx={{
-                        border: "1px solid #e0e0e0",
-                        verticalAlign: "top",
-                        p: 1,
-                      }}
-                    >
-                      <Stack spacing={0.75}>
-                        <Stack
-                          direction="row"
-                          spacing={1}
-                          alignItems="center"
-                          flexWrap="wrap"
+                    {useSharedImage ? (
+                      rowIndex === 0 ? (
+                        <TableCell
+                          align="left"
+                          rowSpan={MASS_MAX_ROWS}
+                          sx={{
+                            border: "1px solid #e0e0e0",
+                            verticalAlign: "top",
+                            p: 1,
+                          }}
                         >
-                          <Chip
-                            size="small"
-                            label={`${row.attachments.length}/3 attached`}
-                            color={
-                              row.attachments.length === 0
-                                ? "default"
-                                : row.attachments.length >= 3
-                                ? "success"
-                                : "primary"
-                            }
-                            variant="outlined"
-                          />
-                        </Stack>
-                        <Stack
-                          direction="row"
-                          spacing={1}
-                          alignItems="center"
-                          flexWrap="wrap"
-                        >
-                          <Button
-                            component="label"
-                            size="small"
-                            variant="text"
-                            startIcon={<AttachFile fontSize="small" />}
-                            disabled={row.attachments.length >= 3}
-                            sx={{ textTransform: "none" }}
-                          >
-                            Browse
-                            <input
-                              type="file"
-                              hidden
-                              multiple
-                              accept={ALLOWED_ATTACHMENT_EXTENSIONS.map(
-                                ext => `.${ext}`
-                              ).join(",")}
-                              onClick={e => {
-                                // Reset so re-picking the same filename (e.g. to
-                                // re-add a removed file) still fires onChange.
-                                e.currentTarget.value = "";
-                              }}
-                              onChange={e =>
-                                handleAttachmentPick(rowIndex, e.target.files)
-                              }
-                            />
-                          </Button>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            onClick={() => handleAttachmentUpload(rowIndex)}
-                            disabled={!canUpload}
-                            sx={{ textTransform: "none" }}
-                          >
-                            Upload
-                          </Button>
-                        </Stack>
-                        {picked.length > 0 ? (
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                          >
-                            {picked.length} file dipilih (klik Upload untuk
-                            menambahkan ke baris).
-                          </Typography>
-                        ) : null}
-                        {row.attachmentError ? (
-                          <Typography variant="caption" color="error">
-                            {row.attachmentError}
-                          </Typography>
-                        ) : null}
-                        {row.rowErrors.attachments?.error ? (
-                          <Typography variant="caption" color="error">
-                            {row.rowErrors.attachments.message}
-                          </Typography>
-                        ) : null}
-                        {row.attachments.map((file, attachIndex) => (
+                          <Stack spacing={0.75}>
+                            <Stack
+                              direction="row"
+                              spacing={1}
+                              alignItems="center"
+                              flexWrap="wrap"
+                            >
+                              <Chip
+                                size="small"
+                                label={`${sharedFiles.length}/1 attached`}
+                                color={
+                                  sharedFiles.length === 0
+                                    ? "default"
+                                    : "success"
+                                }
+                                variant="outlined"
+                              />
+                            </Stack>
+                            <Stack
+                              direction="row"
+                              spacing={1}
+                              alignItems="center"
+                              flexWrap="wrap"
+                            >
+                              <Button
+                                component="label"
+                                size="small"
+                                variant="text"
+                                startIcon={<AttachFile fontSize="small" />}
+                                disabled={sharedFiles.length >= 1}
+                                sx={{ textTransform: "none" }}
+                              >
+                                Browse
+                                <input
+                                  type="file"
+                                  hidden
+                                  accept={ALLOWED_ATTACHMENT_EXTENSIONS.map(
+                                    ext => `.${ext}`
+                                  ).join(",")}
+                                  onClick={e => {
+                                    e.currentTarget.value = "";
+                                  }}
+                                  onChange={e =>
+                                    handleSharedFilePick(e.target.files)
+                                  }
+                                />
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={handleSharedFileUpload}
+                                disabled={
+                                  selectedSharedFiles.length === 0 ||
+                                  sharedFiles.length >= 1
+                                }
+                                sx={{ textTransform: "none" }}
+                              >
+                                Upload
+                              </Button>
+                            </Stack>
+                            {selectedSharedFiles.length > 0 ? (
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {selectedSharedFiles.length} file dipilih (klik
+                                Upload untuk menambahkan).
+                              </Typography>
+                            ) : null}
+                            {sharedFileError ? (
+                              <Typography variant="caption" color="error">
+                                {sharedFileError}
+                              </Typography>
+                            ) : null}
+                            {sharedFiles.map((file, attachIndex) => (
+                              <Stack
+                                key={`shared-${attachIndex}-${file.name}`}
+                                direction="row"
+                                spacing={1}
+                                alignItems="center"
+                                justifyContent="space-between"
+                                sx={{
+                                  border: "1px solid #e0e0e0",
+                                  borderRadius: 0.5,
+                                  px: 1,
+                                  py: 0.5,
+                                }}
+                              >
+                                <Tooltip title={file.name} placement="top">
+                                  <Typography
+                                    variant="caption"
+                                    noWrap
+                                    sx={{ maxWidth: 140 }}
+                                  >
+                                    {file.name}
+                                  </Typography>
+                                </Tooltip>
+                                <IconButton
+                                  size="small"
+                                  onClick={() =>
+                                    handleSharedFileRemove(attachIndex)
+                                  }
+                                  aria-label="Remove shared attachment"
+                                >
+                                  <Delete fontSize="small" />
+                                </IconButton>
+                              </Stack>
+                            ))}
+                          </Stack>
+                        </TableCell>
+                      ) : null
+                    ) : (
+                      <TableCell
+                        align="left"
+                        sx={{
+                          border: "1px solid #e0e0e0",
+                          verticalAlign: "top",
+                          p: 1,
+                        }}
+                      >
+                        <Stack spacing={0.75}>
                           <Stack
-                            key={`${rowIndex}-${attachIndex}-${file.name}`}
                             direction="row"
                             spacing={1}
                             alignItems="center"
-                            justifyContent="space-between"
-                            sx={{
-                              border: "1px solid #e0e0e0",
-                              borderRadius: 0.5,
-                              px: 1,
-                              py: 0.5,
-                            }}
+                            flexWrap="wrap"
                           >
-                            <Tooltip title={file.name} placement="top">
-                              <Typography
-                                variant="caption"
-                                noWrap
-                                sx={{ maxWidth: 140 }}
-                              >
-                                {file.name}
-                              </Typography>
-                            </Tooltip>
-                            <IconButton
+                            <Chip
                               size="small"
-                              onClick={() =>
-                                handleAttachmentRemove(rowIndex, attachIndex)
+                              label={`${row.attachments.length}/3 attached`}
+                              color={
+                                row.attachments.length === 0
+                                  ? "default"
+                                  : row.attachments.length >= 3
+                                  ? "success"
+                                  : "primary"
                               }
-                              aria-label="Remove attachment"
-                            >
-                              <Delete fontSize="small" />
-                            </IconButton>
+                              variant="outlined"
+                            />
                           </Stack>
-                        ))}
-                      </Stack>
-                    </TableCell>
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                            flexWrap="wrap"
+                          >
+                            <Button
+                              component="label"
+                              size="small"
+                              variant="text"
+                              startIcon={<AttachFile fontSize="small" />}
+                              disabled={row.attachments.length >= 3}
+                              sx={{ textTransform: "none" }}
+                            >
+                              Browse
+                              <input
+                                type="file"
+                                hidden
+                                multiple
+                                accept={ALLOWED_ATTACHMENT_EXTENSIONS.map(
+                                  ext => `.${ext}`
+                                ).join(",")}
+                                onClick={e => {
+                                  e.currentTarget.value = "";
+                                }}
+                                onChange={e =>
+                                  handleAttachmentPick(rowIndex, e.target.files)
+                                }
+                              />
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => handleAttachmentUpload(rowIndex)}
+                              disabled={!canUpload}
+                              sx={{ textTransform: "none" }}
+                            >
+                              Upload
+                            </Button>
+                          </Stack>
+                          {picked.length > 0 ? (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {picked.length} file dipilih (klik Upload untuk
+                              menambahkan ke baris).
+                            </Typography>
+                          ) : null}
+                          {row.attachmentError ? (
+                            <Typography variant="caption" color="error">
+                              {row.attachmentError}
+                            </Typography>
+                          ) : null}
+                          {row.rowErrors.attachments?.error ? (
+                            <Typography variant="caption" color="error">
+                              {row.rowErrors.attachments.message}
+                            </Typography>
+                          ) : null}
+                          {row.attachments.map((file, attachIndex) => (
+                            <Stack
+                              key={`${rowIndex}-${attachIndex}-${file.name}`}
+                              direction="row"
+                              spacing={1}
+                              alignItems="center"
+                              justifyContent="space-between"
+                              sx={{
+                                border: "1px solid #e0e0e0",
+                                borderRadius: 0.5,
+                                px: 1,
+                                py: 0.5,
+                              }}
+                            >
+                              <Tooltip title={file.name} placement="top">
+                                <Typography
+                                  variant="caption"
+                                  noWrap
+                                  sx={{ maxWidth: 140 }}
+                                >
+                                  {file.name}
+                                </Typography>
+                              </Tooltip>
+                              <IconButton
+                                size="small"
+                                onClick={() =>
+                                  handleAttachmentRemove(rowIndex, attachIndex)
+                                }
+                                aria-label="Remove attachment"
+                              >
+                                <Delete fontSize="small" />
+                              </IconButton>
+                            </Stack>
+                          ))}
+                        </Stack>
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })}

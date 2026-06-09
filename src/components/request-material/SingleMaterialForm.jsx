@@ -573,18 +573,7 @@ const SingleMaterialForm = ({
   const hasSelectedMaterialGroup = Boolean(formState.materialGroup);
   const showSpecificationSection = !hasSelectedMaterialGroup || specificationFields.length > 0;
   const handleSpecFieldChange = (field, rawValue) => {
-    const ruleType = (
-      field.validationRuleType ||
-      field.validation_rule_type ||
-      "NONE"
-    ).toUpperCase();
-    const shouldUppercase = [
-      "CAPITAL_NO_SPECIAL_CHARS",
-      "ALPHANUMERIC_CAPITAL",
-      "CAPITAL_ONLY",
-    ].includes(ruleType);
-
-    const value = shouldUppercase ? rawValue.toUpperCase() : rawValue;
+    const value = rawValue.toUpperCase();
 
     handleTemplateFieldChange(field.fieldKey, value);
 

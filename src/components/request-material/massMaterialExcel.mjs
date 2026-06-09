@@ -8,7 +8,7 @@
 // and cannot live in a spreadsheet, so imported rows always start with no
 // attachments and the user must add them before submitting.
 
-import { MASS_MAX_ROWS, MASS_TEXT_FIELDS } from "./massMaterialFormValidation.mjs";
+import { MASS_MAX_ROWS, MASS_MIN_ROWS, MASS_TEXT_FIELDS } from "./massMaterialFormValidation.mjs";
 
 // Human-friendly column headers used when exporting. These intentionally match
 // the on-screen column labels so an exported file reads the same as the table.
@@ -187,8 +187,12 @@ export function parseMassExcelToRows(aoa) {
   result.rows = dataRows;
   result.importedCount = dataRows.length;
 
-  if (dataRows.length === 0) {
-    result.error = "Tidak ada baris data yang ditemukan pada file Excel.";
+  if (dataRows.length < MASS_MIN_ROWS) {
+    if (dataRows.length === 0) {
+      result.error = "Tidak ada baris data yang ditemukan pada file Excel.";
+    } else {
+      result.error = `Minimal ${MASS_MIN_ROWS} baris data diperlukan. Hanya ${dataRows.length} baris ditemukan.`;
+    }
   }
 
   return result;

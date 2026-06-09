@@ -22,12 +22,6 @@ const APPROVAL_EDITABLE_REQUEST_FIELD_KEYS = new Set([
   "sloc_code",
 ]);
 
-const SPEC_UPPERCASE_RULES = new Set([
-  "CAPITAL_NO_SPECIAL_CHARS",
-  "ALPHANUMERIC_CAPITAL",
-  "CAPITAL_ONLY",
-]);
-
 const MATERIAL_DESCRIPTION_MAX_LENGTH = 40;
 const LONG_TEXT_MAX_LENGTH = 40;
 
@@ -37,12 +31,6 @@ function toTrimmedString(value) {
   }
 
   return String(value);
-}
-
-function normalizeRuleType(field = {}) {
-  return String(
-    field.validationRuleType || field.validation_rule_type || "NONE"
-  ).toUpperCase();
 }
 
 function getSections(formSchema = {}) {
@@ -79,10 +67,8 @@ function buildSchemaTemplateFieldMap(formSchema = {}) {
 }
 
 export function normalizeApprovalInputValue(field = {}, rawValue = "") {
-  const ruleType = normalizeRuleType(field);
   const value = toTrimmedString(rawValue);
-
-  return SPEC_UPPERCASE_RULES.has(ruleType) ? value.toUpperCase() : value;
+  return value.toUpperCase();
 }
 
 export function buildApprovalSpecificationFields({

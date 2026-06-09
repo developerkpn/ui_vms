@@ -28,7 +28,11 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.mjs";
-import { formatOptionalDateTime } from "src/helper/adminApprovalView.mjs";
+import {
+  computeAssignedToDisplay,
+  computeMassAssignedToDisplay,
+  formatOptionalDateTime,
+} from "src/helper/adminApprovalView.mjs";
 import {
   buildPlantOptions,
   buildStorageOptionsForPlant,
@@ -423,7 +427,7 @@ export default function RequestMaterials() {
             status: item.status,
             createdBy: item.created_by,
             createdAt: item.created_at,
-            assignedTo: item.assigned_to,
+            assignedTo: computeAssignedToDisplay(item),
             reworkStage: item.rework_stage,
             reworkByUserId: item.rework_by_user_id,
             reworkByUsername: item.rework_by_username,
@@ -505,7 +509,7 @@ export default function RequestMaterials() {
               status: item.first_item_status,
               createdBy: item.created_by_username || item.created_by,
               createdAt: item.created_at,
-              assignedTo: item.first_item_assigned_to,
+              assignedTo: computeMassAssignedToDisplay(item),
               massRequestReason: item.mass_request_reason,
               itemCount: item.item_count,
               // Approval chain fields for buildApprovalDetail

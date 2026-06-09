@@ -20,7 +20,7 @@ import SingleMaterialForm from "../../components/request-material/SingleMaterial
 import MassMaterialForm from "../../components/request-material/MassMaterialForm";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 
-const DEFAULT_MATERIAL_TYPE = "SARS - Non Trade Material";
+const DEFAULT_MATERIAL_TYPE = "SPARC - Non Trade Material";
 const PREFERENCE_KEY = "material_request_preferences";
 
 const parseTemplatePayload = payload => {

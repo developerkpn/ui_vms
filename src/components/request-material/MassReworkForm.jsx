@@ -35,13 +35,13 @@ const FIELD_META = [
     label: "Description",
     required: true,
   },
-  { key: "poText", dbKey: "po_text", label: "PO Text", required: true },
+  { key: "poText", dbKey: "po_text", label: "PO Text", required: false },
   { key: "uom", dbKey: "base_uom", label: "UoM", required: true },
   {
     key: "spesifikasiTambahan",
     dbKey: "spesifikasi_tambahan",
     label: "Spesifikasi Tambahan",
-    required: true,
+    required: false,
   },
 ];
 
@@ -287,6 +287,7 @@ export default function MassReworkForm({
                       </TableCell>
                       {FIELD_META.map(meta => {
                         const isMultiline =
+                          meta.key === "description" ||
                           meta.key === "poText" ||
                           meta.key === "spesifikasiTambahan";
                         const value = resolveValue(item, meta.key);
@@ -326,6 +327,9 @@ export default function MassReworkForm({
                               disabled={submitting}
                               inputProps={{
                                 style: { fontSize: "0.8125rem" },
+                                ...(meta.key === "description"
+                                  ? { maxLength: 40 }
+                                  : {}),
                               }}
                             />
                           </TableCell>

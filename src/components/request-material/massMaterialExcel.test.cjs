@@ -82,10 +82,11 @@ test("parseMassExcelToRows matches headers case/spacing-insensitively and via al
   const aoa = [
     ["plant", "SLOC", "mat group", "sub material group", "Description", "po text", "base uom", "additional specification"],
     ["1000", "1101", "GR-A", "SUB-A", "desc", "PO-1", "EA", "spec"],
+    ["2000", "2202", "GR-B", "SUB-B", "desc2", "PO-2", "PC", "spec2"],
   ];
   const parsed = parseMassExcelToRows(aoa);
   assert.equal(parsed.error, "");
-  assert.equal(parsed.importedCount, 1);
+  assert.equal(parsed.importedCount, 2);
   const row = parsed.rows[0];
   assert.equal(row.plant, "1000");
   assert.equal(row.materialGroup, "GR-A");
@@ -156,10 +157,11 @@ test("parseMassExcelToRows tolerates a leading title row above the header", asyn
     [],
     ["Plant", "Sloc"],
     ["1000", "1101"],
+    ["2000", "2202"],
   ];
   const parsed = parseMassExcelToRows(aoa);
   assert.equal(parsed.error, "");
-  assert.equal(parsed.importedCount, 1);
+  assert.equal(parsed.importedCount, 2);
   assert.equal(parsed.rows[0].plant, "1000");
 });
 
@@ -172,10 +174,11 @@ test("parseMassExcelToRows ignores a single-cell title that collides with a fiel
     ["isi dengan satuan, contoh EA"],
     ["No", "Plant", "Sloc", "UoM"],
     [1, "1000", "1101", "EA"],
+    [2, "2000", "2202", "PC"],
   ];
   const parsed = parseMassExcelToRows(aoa);
   assert.equal(parsed.error, "");
-  assert.equal(parsed.importedCount, 1);
+  assert.equal(parsed.importedCount, 2);
   assert.equal(parsed.rows[0].plant, "1000");
   assert.equal(parsed.rows[0].sloc, "1101");
   assert.equal(parsed.rows[0].uom, "EA");
@@ -206,11 +209,11 @@ test("parseMassExcelToRows errors on empty input", async () => {
   assert.notEqual(parseMassExcelToRows(null).error, "");
 });
 
-test("parseMassExcelToRows errors when header exists but no data rows", async () => {
+test("parseMassExcelToRows errors when header exists but fewer than MASS_MIN_ROWS data rows", async () => {
   const { parseMassExcelToRows } = await loadHelper();
-  const parsed = parseMassExcelToRows([["Plant", "Sloc"]]);
+  const parsed = parseMassExcelToRows([["Plant", "Sloc"], ["1000", "1101"]]);
   assert.notEqual(parsed.error, "");
-  assert.equal(parsed.importedCount, 0);
+  assert.match(parsed.error, /minimal 2 baris/i);
 });
 
 test("parseMassExcelToRows keeps the first column when a field is duplicated", async () => {

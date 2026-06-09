@@ -47,12 +47,14 @@ test("validateMassRow flags missing fields on a partially-filled row", async () 
 test("validateMassRow returns no errors for a fully-filled row", async () => {
   const { validateMassRow } = await loadHelper();
 
-  const errors = validateMassRow(createFilledRow());
+  const row = createFilledRow();
+  delete row.attachments;
+  const errors = validateMassRow(row);
 
   assert.deepEqual(errors, {});
 });
 
-test("validateMassRow flags material_description exceeding 255 chars", async () => {
+test("validateMassRow flags material_description exceeding 40 chars", async () => {
   const { validateMassRow, MASS_MAX_DESCRIPTION_LENGTH } = await loadHelper();
 
   const longDescription = "D".repeat(MASS_MAX_DESCRIPTION_LENGTH + 10);
@@ -61,25 +63,66 @@ test("validateMassRow flags material_description exceeding 255 chars", async () 
   );
 
   assert.equal(errors.description.error, true);
-  assert.match(errors.description.message, /maksimal 255 karakter/i);
+  assert.match(errors.description.message, /maksimal 40 karakter/i);
 });
 
-test("validateMassRow flags missing attachments on a filled row", async () => {
+test("validateMassRow does not validate attachments (handled by batch validator)", async () => {
   const { validateMassRow } = await loadHelper();
 
   const errors = validateMassRow(createFilledRow({ attachments: [] }));
 
-  assert.equal(errors.attachments.error, true);
+  assert.equal(errors.attachments, undefined);
+});
+
+test("validateMassRequestBatch flags missing attachments when not in shared mode", async () => {
+  const { validateMassRequestBatch } = await loadHelper();
+
+  const result = validateMassRequestBatch([
+    createFilledRow({ attachments: [] }),
+    createFilledRow(),
+  ]);
+
+  assert.equal(result.errors[0].attachments.error, true);
   assert.equal(
-    errors.attachments.message,
+    result.errors[0].attachments.message,
     "Minimal 1 attachment per baris."
   );
 });
 
-test("validateMassRow flags >3 attachments on a row", async () => {
-  const { validateMassRow } = await loadHelper();
+test("validateMassRequestBatch skips attachment check in shared mode", async () => {
+  const { validateMassRequestBatch } = await loadHelper();
 
-  const errors = validateMassRow(
+  const result = validateMassRequestBatch(
+    [
+      createFilledRow({ attachments: [] }),
+      createFilledRow({ attachments: [] }),
+    ],
+    { useSharedImage: true, sharedFileCount: 1 }
+  );
+
+  assert.equal(result.errors[0], undefined);
+  assert.equal(result.errors[1], undefined);
+});
+
+test("validateMassRequestBatch flags missing shared file", async () => {
+  const { validateMassRequestBatch } = await loadHelper();
+
+  const result = validateMassRequestBatch(
+    [createFilledRow(), createFilledRow()],
+    { useSharedImage: true, sharedFileCount: 0 }
+  );
+
+  assert.equal(result.errors[-1].sharedAttachments.error, true);
+  assert.match(
+    result.errors[-1].sharedAttachments.message,
+    /minimal 1 attachment/i
+  );
+});
+
+test("validateMassRequestBatch flags >3 attachments on a row", async () => {
+  const { validateMassRequestBatch } = await loadHelper();
+
+  const result = validateMassRequestBatch([
     createFilledRow({
       attachments: [
         { name: "1.pdf", size: 1 },
@@ -87,12 +130,13 @@ test("validateMassRow flags >3 attachments on a row", async () => {
         { name: "3.pdf", size: 1 },
         { name: "4.pdf", size: 1 },
       ],
-    })
-  );
+    }),
+    createFilledRow(),
+  ]);
 
-  assert.equal(errors.attachments.error, true);
+  assert.equal(result.errors[0].attachments.error, true);
   assert.equal(
-    errors.attachments.message,
+    result.errors[0].attachments.message,
     "Maksimal 3 attachment per baris."
   );
 });
@@ -154,7 +198,7 @@ test("validateMassRequestBatch flags empty submission (0 filled rows)", async ()
 
   assert.equal(result.filledRowIndexes.length, 0);
   assert.equal(result.errors[-1].rows.error, true);
-  assert.equal(result.errors[-1].rows.message, "Minimal isi 1 baris.");
+  assert.equal(result.errors[-1].rows.message, "Minimal 2 baris harus diisi.");
 });
 
 test("validateMassRequestBatch returns trailing-empty rows as not-in-error when 3 of 10 rows are filled", async () => {
@@ -223,7 +267,9 @@ test("validateMassRequestBatch flags a partially-filled middle row as an error",
   assert.equal(result.errors[0], undefined);
   assert.equal(result.errors[1].sloc.error, true);
   assert.equal(result.errors[1].materialGroup.error, true);
+  assert.equal(result.errors[1].materialSubGroup.error, true);
   assert.equal(result.errors[1].description.error, true);
+  assert.equal(result.errors[1].uom.error, true);
   assert.equal(result.errors[1].attachments.error, true);
 });
 
@@ -234,7 +280,7 @@ test("mapMassRequestServerErrors flattens the array into the nested shape", asyn
     { rowIndex: 0, fieldKey: "description", message: "Material description wajib diisi." },
     { rowIndex: 0, fieldKey: "attachments", message: "Minimal 1 attachment per baris." },
     { rowIndex: 1, fieldKey: "uom", message: "Base UoM wajib diisi." },
-    { rowIndex: -1, fieldKey: "rows", message: "Minimal isi 1 baris." },
+    { rowIndex: -1, fieldKey: "rows", message: "Minimal 2 baris harus diisi." },
   ]);
 
   assert.equal(mapped[0].description.error, true);
@@ -243,5 +289,5 @@ test("mapMassRequestServerErrors flattens the array into the nested shape", asyn
   assert.equal(mapped[1].uom.error, true);
   assert.equal(mapped[1].uom.message, "Base UoM wajib diisi.");
   assert.equal(mapped[-1].rows.error, true);
-  assert.equal(mapped[-1].rows.message, "Minimal isi 1 baris.");
+  assert.equal(mapped[-1].rows.message, "Minimal 2 baris harus diisi.");
 });
