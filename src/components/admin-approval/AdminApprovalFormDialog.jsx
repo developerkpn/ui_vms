@@ -45,6 +45,7 @@ import {
   findSubGroupOptionById,
   formatSubGroupOptionLabel,
 } from "src/helper/adminApprovalSubGroup.mjs";
+import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 
 const approvalStatusColors = {
   APPROVED: { bgcolor: "#e8f5e9", color: "#1b5e20" },
@@ -501,6 +502,19 @@ export default function AdminApprovalFormDialog({
   const [hasInteracted, setHasInteracted] = useState(false);
   const [validationSnackbarOpen, setValidationSnackbarOpen] = useState(false);
   const [validationErrorCount, setValidationErrorCount] = useState(0);
+  const [uomOptions, setUomOptions] = useState([]);
+  const axiosPrivate = useAxiosPrivate();
+
+  useEffect(() => {
+    let active = true;
+    axiosPrivate.get("/material/uom").then(res => {
+      if (active && res.data?.success) {
+        setUomOptions(res.data.data || []);
+      }
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+
   const contentRef = useRef(null);
 
   useEffect(() => {
@@ -718,6 +732,10 @@ export default function AdminApprovalFormDialog({
     );
   };
 
+  const selectedUomOption = uomOptions.find(
+    opt => opt.uom_code === draftValues.base_uom
+  ) || null;
+
   return (
     <Dialog open={open} onClose={handleDialogClose} fullWidth maxWidth="lg" scroll="paper">
       <Box
@@ -893,18 +911,27 @@ export default function AdminApprovalFormDialog({
                   sections={detail.fieldHistory?.base_uom || []}
                 />
                 <Box sx={{ display: "flex", alignItems: "flex-end", gap: 1 }}>
-                  <TextField
+                  <Autocomplete
                     fullWidth
                     size="small"
-                    value={draftValues.base_uom}
-                    onChange={event =>
+                    options={uomOptions}
+                    value={selectedUomOption}
+                    onChange={(_, val) =>
                       updateDraftValues(current => ({
                         ...current,
-                        base_uom: event.target.value,
+                        base_uom: val?.uom_code || "",
                       }))
                     }
-                    error={Boolean(displayFieldErrors.base_uom?.error)}
-                    helperText={displayFieldErrors.base_uom?.message || ""}
+                    noOptionsText="No UoM found"
+                    isOptionEqualToValue={(opt, val) => opt?.uom_code === val?.uom_code}
+                    getOptionLabel={opt => opt?.uom_code ? `${opt.uom_code} - ${opt.description}` : ""}
+                    renderInput={params => (
+                      <TextField
+                        {...params}
+                        error={Boolean(displayFieldErrors.base_uom?.error)}
+                        helperText={displayFieldErrors.base_uom?.message || ""}
+                      />
+                    )}
                   />
                   {renderFieldHint("base_uom")}
                 </Box>

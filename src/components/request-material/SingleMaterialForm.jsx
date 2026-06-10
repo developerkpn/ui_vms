@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -317,6 +318,18 @@ const SingleMaterialForm = ({
       active = false;
     };
   }, [axiosPrivate, formData, isReworkMode, prefetchedGroups, requestId]);
+
+  const [uomOptions, setUomOptions] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+    axiosPrivate.get("/material/uom").then(res => {
+      if (active && res.data?.success) {
+        setUomOptions(res.data.data || []);
+      }
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [axiosPrivate]);
 
   const applySchemaFromCache = useCallback(
     groupCode => {
@@ -646,6 +659,10 @@ const SingleMaterialForm = ({
     );
   };
 
+  const selectedUomOption = uomOptions.find(
+    opt => opt.uom_code === formState.requestFieldValues.base_unit_of_measure
+  ) || null;
+
   if (loadingExistingRequest) {
     return (
       <Card
@@ -874,13 +891,22 @@ const SingleMaterialForm = ({
                 <Typography variant="caption" sx={{ fontWeight: 700, mb: 1, display: "block" }}>
                   Base UoM <span style={{ color: "red" }}>*</span>
                 </Typography>
-                <TextField
+                <Autocomplete
                   fullWidth
                   size="small"
-                  value={formState.requestFieldValues.base_unit_of_measure || ""}
-                  onChange={e => handleRequestFieldChange("base_unit_of_measure", e.target.value)}
-                  error={Boolean(fieldErrors.base_unit_of_measure?.error)}
-                  helperText={fieldErrors.base_unit_of_measure?.message || ""}
+                  options={uomOptions}
+                  value={selectedUomOption}
+                  onChange={(_, val) => handleRequestFieldChange("base_unit_of_measure", val?.uom_code || "")}
+                  noOptionsText="No UoM found"
+                  isOptionEqualToValue={(opt, val) => opt?.uom_code === val?.uom_code}
+                  getOptionLabel={opt => opt?.uom_code ? `${opt.uom_code} - ${opt.description}` : ""}
+                  renderInput={params => (
+                    <TextField
+                      {...params}
+                      error={Boolean(fieldErrors.base_unit_of_measure?.error)}
+                      helperText={fieldErrors.base_unit_of_measure?.message || ""}
+                    />
+                  )}
                 />
               </Grid>
 

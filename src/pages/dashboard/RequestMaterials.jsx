@@ -1,6 +1,7 @@
 import { Add, Close, Download, MoreHoriz } from "@mui/icons-material";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -280,6 +281,19 @@ function ChangeExtendReworkForm({
     storageLocation: row?.slocCode || "",
   });
 
+  const [uomOptions, setUomOptions] = useState([]);
+  const axiosPrivate = useAxiosPrivate();
+
+  useEffect(() => {
+    let active = true;
+    axiosPrivate.get("/material/uom").then(res => {
+      if (active && res.data?.success) {
+        setUomOptions(res.data.data || []);
+      }
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+
   useEffect(() => {
     setDraft({
       materialName: row?.materialDescription || "",
@@ -312,6 +326,10 @@ function ChangeExtendReworkForm({
           },
     });
   };
+
+  const selectedUomOption = uomOptions.find(
+    opt => opt.uom_code === draft.baseUom
+  ) || null;
 
   return (
     <Stack spacing={2}>
@@ -360,10 +378,18 @@ function ChangeExtendReworkForm({
               setDraft(current => ({ ...current, materialName: event.target.value }))
             }
           />
-          <TextField
-            label="Base UoM"
-            value={draft.baseUom}
-            onChange={event => setDraft(current => ({ ...current, baseUom: event.target.value }))}
+          <Autocomplete
+            fullWidth
+            size="small"
+            options={uomOptions}
+            value={selectedUomOption}
+            onChange={(_, val) =>
+              setDraft(current => ({ ...current, baseUom: val?.uom_code || "" }))
+            }
+            noOptionsText="No UoM found"
+            isOptionEqualToValue={(opt, val) => opt?.uom_code === val?.uom_code}
+            getOptionLabel={opt => opt?.uom_code ? `${opt.uom_code} - ${opt.description}` : ""}
+            renderInput={params => <TextField {...params} label="Base UoM" />}
           />
         </>
       )}

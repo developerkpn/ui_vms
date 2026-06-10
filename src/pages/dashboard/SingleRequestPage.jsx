@@ -89,7 +89,8 @@ export default function SingleRequestPage({ mode = "single" }) {
   const isMassMode = mode === "mass";
   const isReworkMode = mode === "rework";
   const isSingleCreateMode = mode === "single";
-  const usesInitialScreen = isSingleCreateMode || isReworkMode;
+  const usesInitialScreen = isSingleCreateMode;
+  const needsInitialData = isSingleCreateMode || isReworkMode;
   const [step, setStep] = useState(1);
   const [rememberPreference, setRememberPreference] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -121,7 +122,7 @@ export default function SingleRequestPage({ mode = "single" }) {
   });
 
   useEffect(() => {
-    if (!usesInitialScreen) {
+    if (!needsInitialData) {
       setLoading(false);
       return undefined;
     }
@@ -174,6 +175,7 @@ export default function SingleRequestPage({ mode = "single" }) {
                 DEFAULT_MATERIAL_TYPE,
             }));
             setRememberPreference(false);
+            setStep(2);
             return;
           }
 
@@ -221,7 +223,7 @@ export default function SingleRequestPage({ mode = "single" }) {
     return () => {
       active = false;
     };
-  }, [axiosPrivate, isReworkMode, requestId, usesInitialScreen]);
+  }, [axiosPrivate, isReworkMode, requestId, needsInitialData]);
 
   // 2. Logika Filtering
 
