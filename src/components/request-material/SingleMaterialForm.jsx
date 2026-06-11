@@ -852,43 +852,6 @@ const SingleMaterialForm = ({
 
               <Grid item xs={12} md={6}>
                 <Typography variant="caption" sx={{ fontWeight: 700, mb: 1, display: "block" }}>
-                  Material Description <span style={{ color: "red" }}>*</span>
-                </Typography>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    value={formState.requestFieldValues.material_description || ""}
-                    onChange={e => handleRequestFieldChange("material_description", e.target.value)}
-                    inputProps={{ maxLength: 40 }}
-                    error={Boolean(fieldErrors.material_description?.error)}
-                    helperText={fieldErrors.material_description?.message || ""}
-                    sx={{ "& .MuiOutlinedInput-notchedOutline": { borderStyle: "dashed" } }}
-                  />
-                  <Tooltip
-                    title={
-                      <Box sx={{ p: 1 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
-                          Notes
-                        </Typography>
-                        <Typography variant="caption">
-                          Field length &le; 40 characters; only alphanumeric characters (A-Z, 0-9)
-                          are permitted; spaces, special characters, and emojis are not allowed.
-                        </Typography>
-                      </Box>
-                    }
-                    arrow
-                    placement="right"
-                  >
-                    <IconButton size="small" sx={{ color: "#3f51b5" }}>
-                      <InfoOutlined fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </Box>
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <Typography variant="caption" sx={{ fontWeight: 700, mb: 1, display: "block" }}>
                   Base UoM <span style={{ color: "red" }}>*</span>
                 </Typography>
                 <Autocomplete
@@ -907,42 +870,6 @@ const SingleMaterialForm = ({
                       helperText={fieldErrors.base_unit_of_measure?.message || ""}
                     />
                   )}
-                />
-              </Grid>
-
-              <Grid item xs={12}>
-                <Typography variant="caption" sx={{ fontWeight: 700, mb: 1, display: "block" }}>
-                  Long Text
-                </Typography>
-                <TextField
-                  fullWidth
-                  size="small"
-                  value={formState.requestFieldValues.long_text_1 || ""}
-                  onChange={e => handleRequestFieldChange("long_text_1", e.target.value)}
-                  inputProps={{ maxLength: 40 }}
-                  error={Boolean(fieldErrors.long_text_1?.error)}
-                  helperText={fieldErrors.long_text_1?.message || ""}
-                  sx={{ mb: 1, "& .MuiOutlinedInput-notchedOutline": { borderStyle: "dashed" } }}
-                />
-                <TextField
-                  fullWidth
-                  size="small"
-                  value={formState.requestFieldValues.long_text_2 || ""}
-                  onChange={e => handleRequestFieldChange("long_text_2", e.target.value)}
-                  inputProps={{ maxLength: 40 }}
-                  error={Boolean(fieldErrors.long_text_2?.error)}
-                  helperText={fieldErrors.long_text_2?.message || ""}
-                  sx={{ mb: 1, "& .MuiOutlinedInput-notchedOutline": { borderStyle: "dashed" } }}
-                />
-                <TextField
-                  fullWidth
-                  size="small"
-                  value={formState.requestFieldValues.long_text_3 || ""}
-                  onChange={e => handleRequestFieldChange("long_text_3", e.target.value)}
-                  inputProps={{ maxLength: 40 }}
-                  error={Boolean(fieldErrors.long_text_3?.error)}
-                  helperText={fieldErrors.long_text_3?.message || ""}
-                  sx={{ "& .MuiOutlinedInput-notchedOutline": { borderStyle: "dashed" } }}
                 />
               </Grid>
             </Grid>

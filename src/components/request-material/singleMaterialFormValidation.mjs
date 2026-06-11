@@ -11,9 +11,6 @@ const SERVER_FIELD_KEY_MAP = {
   base_uom: "base_unit_of_measure",
 };
 
-const MATERIAL_DESCRIPTION_MAX_LENGTH = 40;
-const LONG_TEXT_MAX_LENGTH = 40;
-
 function toStringValue(value) {
   if (value === undefined || value === null) {
     return "";
@@ -58,26 +55,9 @@ export function validateRequesterField(fieldKey = "", rawValue = "") {
         return toFieldError("Sub material group wajib dipilih.");
       }
       break;
-    case "material_description":
-      if (!trimmedValue) {
-        return toFieldError("Material Description wajib diisi.");
-      }
-      if (value.length > MATERIAL_DESCRIPTION_MAX_LENGTH) {
-        return toFieldError(
-          `Material Description maksimal ${MATERIAL_DESCRIPTION_MAX_LENGTH} karakter.`
-        );
-      }
-      break;
     case "base_unit_of_measure":
       if (!trimmedValue) {
         return toFieldError("Base UoM wajib diisi.");
-      }
-      break;
-    case "long_text_1":
-    case "long_text_2":
-    case "long_text_3":
-      if (value.length > LONG_TEXT_MAX_LENGTH) {
-        return toFieldError(`Long Text maksimal ${LONG_TEXT_MAX_LENGTH} karakter.`);
       }
       break;
     default:
@@ -95,11 +75,7 @@ export function validateRequesterDraft({ formState = {} } = {}) {
   [
     ["materialGroup", formState?.materialGroup],
     ["subgroup", formState?.subgroup],
-    ["material_description", requestFieldValues.material_description],
     ["base_unit_of_measure", requestFieldValues.base_unit_of_measure],
-    ["long_text_1", requestFieldValues.long_text_1],
-    ["long_text_2", requestFieldValues.long_text_2],
-    ["long_text_3", requestFieldValues.long_text_3],
   ].forEach(([fieldKey, value]) => {
     const result = validateRequesterField(fieldKey, value);
     if (result.error) {

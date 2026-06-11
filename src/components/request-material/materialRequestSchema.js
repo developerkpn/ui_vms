@@ -8,7 +8,7 @@ const DEFAULT_STATE = {
   templateFieldValues: {},
 };
 
-const STATIC_REQUEST_FIELD_KEYS = ["long_text_1", "long_text_2", "long_text_3"];
+const STATIC_REQUEST_FIELD_KEYS = [];
 
 const isVisibleField = field => !field?.isHidden;
 
