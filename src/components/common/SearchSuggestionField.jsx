@@ -81,7 +81,10 @@ export default function SearchSuggestionField({
 
   const highlightMatch = (text, query) => {
     if (!query || !text) return text || "";
-    const words = query.trim().split(/\s+/).filter(Boolean);
+    const hasWildcard = query.includes("*");
+    const words = hasWildcard
+      ? query.split("*").map(s => s.trim()).filter(Boolean)
+      : query.trim().split(/\s+/).filter(Boolean);
     if (words.length === 0) return text;
     const escaped = words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
     const parts = text.split(new RegExp(`(${escaped})`, "gi"));
