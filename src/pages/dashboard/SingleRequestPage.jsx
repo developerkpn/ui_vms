@@ -231,6 +231,21 @@ export default function SingleRequestPage({ mode = "single" }) {
   const plantOptions = [...new Set(allLocations.map(l => l.plant_code).filter(Boolean))].sort();
   const selectedPlantOption = plantOptions.find(code => code === formData.plant) || null;
 
+  // Map kode plant -> deskripsi master data, untuk label "KODE - Deskripsi"
+  const plantDescriptionByCode = new Map(
+    allLocations.filter(l => l.plant_code).map(l => [l.plant_code, l.plant_description])
+  );
+  const formatPlantLabel = code => {
+    const desc = plantDescriptionByCode.get(code);
+    return desc ? `${code} - ${desc}` : code;
+  };
+  const formatSlocLabel = option => {
+    const base = option.sloc_description
+      ? `${option.storage_location} - ${option.sloc_description}`
+      : option.storage_location;
+    return formData.plant ? base : `${base} (Plant: ${option.plant_code})`;
+  };
+
   // Daftar Storage Location yang ditampilkan (terfilter atau semua)
   const storageOptions = (
     formData.plant ? allLocations.filter(l => l.plant_code === formData.plant) : allLocations
@@ -393,6 +408,7 @@ export default function SingleRequestPage({ mode = "single" }) {
                   value={selectedPlantOption}
                   onChange={handlePlantChange}
                   noOptionsText="No plants found"
+                  getOptionLabel={formatPlantLabel}
                   renderInput={params => <TextField {...params} label="Plant" />}
                 />
 
@@ -408,11 +424,7 @@ export default function SingleRequestPage({ mode = "single" }) {
                     option.storage_location === value.storage_location &&
                     option.plant_code === value.plant_code
                   }
-                  getOptionLabel={option =>
-                    formData.plant
-                      ? option.storage_location
-                      : `${option.storage_location} (Plant: ${option.plant_code})`
-                  }
+                  getOptionLabel={formatSlocLabel}
                   renderInput={params => <TextField {...params} label="Storage Location" />}
                 />
 

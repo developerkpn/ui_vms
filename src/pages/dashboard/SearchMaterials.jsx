@@ -43,6 +43,7 @@ import {
   buildChangeTemplateFields,
   buildExtendRequestPayload,
   buildPlantOptions,
+  buildPlantLabelMap,
   buildStorageOptionsForPlant,
   extractChangeTemplateValues,
 } from "src/helper/materialChangeExtendRequest.mjs";
@@ -150,6 +151,7 @@ function MaterialActionDialog({
   mode,
   draft,
   plantOptions,
+  plantLabelMap = new Map(),
   storageOptions,
   submitting,
   onClose,
@@ -221,7 +223,7 @@ function MaterialActionDialog({
               >
                 {plantOptions.map(option => (
                   <MenuItem key={option} value={option}>
-                    {option}
+                    {plantLabelMap.get(option) || option}
                   </MenuItem>
                 ))}
               </TextField>
@@ -902,6 +904,7 @@ export default function SearchMaterials() {
   );
 
   const plantOptions = useMemo(() => buildPlantOptions(initialLocations), [initialLocations]);
+  const plantLabelMap = useMemo(() => buildPlantLabelMap(initialLocations), [initialLocations]);
   const storageOptions = useMemo(
     () => buildStorageOptionsForPlant(initialLocations, materialActionDialog.draft.plantCode),
     [initialLocations, materialActionDialog.draft.plantCode]
@@ -1175,6 +1178,7 @@ export default function SearchMaterials() {
         mode={materialActionDialog.mode}
         draft={materialActionDialog.draft}
         plantOptions={plantOptions}
+        plantLabelMap={plantLabelMap}
         storageOptions={storageOptions}
         submitting={materialActionSubmitting}
         onClose={handleCloseMaterialActionDialog}

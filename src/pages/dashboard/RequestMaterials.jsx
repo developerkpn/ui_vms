@@ -36,6 +36,7 @@ import {
 } from "src/helper/adminApprovalView.mjs";
 import {
   buildPlantOptions,
+  buildPlantLabelMap,
   buildStorageOptionsForPlant,
 } from "src/helper/materialChangeExtendRequest.mjs";
 import MassReworkForm from "src/components/request-material/MassReworkForm";
@@ -304,6 +305,7 @@ function ChangeExtendReworkForm({
   }, [row]);
 
   const plantOptions = useMemo(() => buildPlantOptions(locations), [locations]);
+  const plantLabelMap = useMemo(() => buildPlantLabelMap(locations), [locations]);
   const storageOptions = useMemo(
     () => buildStorageOptionsForPlant(locations, draft.plantCode),
     [draft.plantCode, locations]
@@ -349,7 +351,7 @@ function ChangeExtendReworkForm({
           >
             {plantOptions.map(option => (
               <MenuItem key={option} value={option}>
-                {option}
+                {plantLabelMap.get(option) || option}
               </MenuItem>
             ))}
           </TextField>

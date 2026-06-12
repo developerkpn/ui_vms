@@ -22,7 +22,9 @@ function buildStorageOption(location = {}) {
     location?.storage_location_code,
     location?.storage_location
   );
-  const label = readText(location?.storage_location, value);
+  const code = readText(location?.storage_location, value);
+  const description = readText(location?.sloc_description);
+  const label = description ? `${code} - ${description}` : code;
 
   if (!value) {
     return null;
@@ -62,6 +64,21 @@ export function buildPlantOptions(locations = []) {
   return unique(
     locations.map(location => readText(location?.plant_code))
   );
+}
+
+// Map plant_code -> "CODE - Description" label (from master data), for dropdowns
+// that keep the plant code as their value but show the description to the user.
+export function buildPlantLabelMap(locations = []) {
+  const map = new Map();
+  for (const location of locations) {
+    const code = readText(location?.plant_code);
+    if (!code || map.has(code)) {
+      continue;
+    }
+    const description = readText(location?.plant_description);
+    map.set(code, description ? `${code} - ${description}` : code);
+  }
+  return map;
 }
 
 export function buildStorageOptionsForPlant(locations = [], plantCode = "") {
