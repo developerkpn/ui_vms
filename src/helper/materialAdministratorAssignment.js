@@ -1,4 +1,6 @@
 export const MDM_MATERIAL_GROUP_NAME = "MDM_MATERIAL";
+export const MASTER_DATA_LABEL = "Master Data";
+export const MASTER_DATA_HINT = "Master Data — assigned by grab";
 
 export function normalizeApproverOptions(rows = []) {
   const normalizedRows = Array.isArray(rows) ? rows : [];
@@ -9,16 +11,20 @@ export function normalizeApproverOptions(rows = []) {
   };
 }
 
+// Build the list of selectable approvers for ONE manual slot in the chain.
+// Excludes: every MDM_MATERIAL user, every admin, the requester, and every
+// approver already chosen elsewhere in the chain (so the same person can't be
+// picked twice). The slot's own currently-selected approver stays selectable.
 export function getApproverSelectOptions({
   manualApprovers = [],
   requesterUserId,
   requesterUsername,
-  selectedApproval1UserId,
-  selectedApproval2UserId,
-  field,
+  selectedApproverIds = [],
+  currentSlotUserId,
 } = {}) {
-  const selectedFieldUserId = field === "approval2" ? selectedApproval2UserId : selectedApproval1UserId;
-  const oppositeSelectedUserId = field === "approval2" ? selectedApproval1UserId : selectedApproval2UserId;
+  const takenElsewhere = (Array.isArray(selectedApproverIds) ? selectedApproverIds : []).filter(
+    id => id && !identifiersMatch(id, currentSlotUserId)
+  );
   return (Array.isArray(manualApprovers) ? manualApprovers : []).filter(option => {
     if (normalizeGroupName(option?.userGroupName ?? option?.roleGroupName) === MDM_MATERIAL_GROUP_NAME) {
       return false;
@@ -29,13 +35,10 @@ export function getApproverSelectOptions({
     if (optionMatchesRequester(option, { requesterUserId, requesterUsername })) {
       return false;
     }
-    if (!oppositeSelectedUserId) {
-      return true;
+    if (takenElsewhere.some(takenId => optionMatchesSelected(option, takenId))) {
+      return false;
     }
-    if (optionMatchesSelected(option, selectedFieldUserId)) {
-      return true;
-    }
-    return !optionMatchesSelected(option, oppositeSelectedUserId);
+    return true;
   });
 }
 
@@ -46,6 +49,11 @@ export function normalizeAdministratorMasterRows(rows = []) {
 }
 
 export function mergeAdministratorMasterRow(previousRow = {}, responseData = {}) {
+  const rawSteps =
+    responseData.manualApprovers ??
+    responseData.manual_approvers ??
+    previousRow.manualApprovers ??
+    [];
   return normalizeAdministratorMasterRow({
     ...previousRow,
     ...responseData,
@@ -73,54 +81,7 @@ export function mergeAdministratorMasterRow(previousRow = {}, responseData = {})
       previousRow.requesterEmail,
       ""
     ),
-    approval_1_user_id: pickDefinedValue(
-      responseData.approval_1_user_id,
-      responseData.approval1UserId,
-      previousRow.approval1UserId,
-      ""
-    ),
-    approval_1_user_name: pickDefinedValue(
-      responseData.approval_1_user_name,
-      responseData.approval1UserName,
-      previousRow.approval1UserName,
-      ""
-    ),
-    approval_2_user_id: pickDefinedValue(
-      responseData.approval_2_user_id,
-      responseData.approval2UserId,
-      previousRow.approval2UserId,
-      ""
-    ),
-    approval_2_user_name: pickDefinedValue(
-      responseData.approval_2_user_name,
-      responseData.approval2UserName,
-      previousRow.approval2UserName,
-      ""
-    ),
-    approval_3_user_id: pickDefinedValue(
-      responseData.approval_3_user_id,
-      responseData.approval3UserId,
-      previousRow.approval3UserId,
-      ""
-    ),
-    approval_3_user_name: pickDefinedValue(
-      responseData.approval_3_user_name,
-      responseData.approval3UserName,
-      previousRow.approval3UserName,
-      ""
-    ),
-    approval_3_type: pickDefinedValue(
-      responseData.approval_3_type,
-      responseData.approval3Type,
-      previousRow.approval3Type,
-      "SYSTEM"
-    ),
-    approval_3_group: pickDefinedValue(
-      responseData.approval_3_group,
-      responseData.approval3Group,
-      previousRow.approval3Group,
-      MDM_MATERIAL_GROUP_NAME
-    ),
+    manualApprovers: rawSteps,
     is_locked: responseData.is_locked ?? responseData.isLocked ?? previousRow.isLocked,
   });
 }
@@ -130,17 +91,17 @@ export function isAdministratorMasterLocked(row = {}) {
 }
 
 export function buildAssignmentSuccessMessage() {
-  return "Approver assignment saved.";
+  return "Approver chain saved.";
 }
 
-export function buildAssignApproverPayload({ previousRow = {}, nextField, nextValue }) {
-  if (nextField === "approval1UserId" && previousRow.approval1UserId !== nextValue) {
-    return { approval1UserId: nextValue };
-  }
-  if (nextField === "approval2UserId" && previousRow.approval2UserId !== nextValue) {
-    return { approval2UserId: nextValue };
-  }
-  return {};
+// Turn an ordered list of draft selections (option objects or raw ids, possibly
+// containing empty/blank slots) into the PUT body the backend expects:
+//   { manualApprovers: [userId1, userId2, ...] }  (ordered, empties dropped).
+export function buildSaveChainPayload(draftManualIds = []) {
+  const manualApprovers = (Array.isArray(draftManualIds) ? draftManualIds : [])
+    .map(extractApproverId)
+    .filter(id => id !== "");
+  return { manualApprovers };
 }
 
 function isActiveUser(row = {}) {
@@ -175,25 +136,54 @@ function buildApproverOption(row = {}) {
   };
 }
 
+// Normalize a single requester row into the variable-length chain shape.
+// manualApprovers: ordered [{ level, approverUserId, approverName,
+//   approverUsername, approverEmail }]. Accepts either the new array shape
+// (camel or snake), or — as a fallback — falls back to an empty chain.
 function normalizeAdministratorMasterRow(row = {}) {
+  const requesterUserId = String(pickDefinedValue(row.requester_user_id, row.requesterUserId, ""));
   return {
-    id: String(pickDefinedValue(row.requester_user_id, row.requesterUserId, "")),
-    requesterUserId: String(pickDefinedValue(row.requester_user_id, row.requesterUserId, "")),
+    id: requesterUserId,
+    requesterUserId,
     requesterUsername: String(pickDefinedValue(row.requester_username, row.requesterUsername, "-")),
     requesterFullname: String(pickDefinedValue(row.requester_fullname, row.requesterFullname, "")),
     requesterEmail: String(pickDefinedValue(row.requester_email, row.requesterEmail, "")),
-    approval1UserId: String(pickDefinedValue(row.approval_1_user_id, row.approval1UserId, "")),
-    approval1UserName: String(pickDefinedValue(row.approval_1_user_name, row.approval1UserName, "")),
-    approval2UserId: String(pickDefinedValue(row.approval_2_user_id, row.approval2UserId, "")),
-    approval2UserName: String(pickDefinedValue(row.approval_2_user_name, row.approval2UserName, "")),
-    approval3UserId: String(pickDefinedValue(row.approval_3_user_id, row.approval3UserId, "")),
-    approval3UserName: String(pickDefinedValue(row.approval_3_user_name, row.approval3UserName, "")),
-    approval3Type: String(pickDefinedValue(row.approval_3_type, row.approval3Type, "SYSTEM")),
-    approval3Group: String(
-      pickDefinedValue(row.approval_3_group, row.approval3Group, MDM_MATERIAL_GROUP_NAME)
+    manualApprovers: normalizeManualApprovers(
+      pickDefinedValue(row.manualApprovers, row.manual_approvers, [])
     ),
     isLocked: Boolean(row.is_locked ?? row.isLocked),
   };
+}
+
+function normalizeManualApprovers(steps = []) {
+  return (Array.isArray(steps) ? steps : [])
+    .map((step, index) => normalizeManualApprover(step, index))
+    .filter(step => step.approverUserId !== "");
+}
+
+function normalizeManualApprover(step = {}, index = 0) {
+  const approverUserId = String(
+    pickDefinedValue(step.approverUserId, step.approver_user_id, step.userId, step.user_id, "")
+  );
+  return {
+    level: Number(pickDefinedValue(step.level, index + 1)),
+    approverUserId,
+    approverName: String(
+      pickDefinedValue(step.approverName, step.approver_name, step.fullName, step.full_name, "")
+    ),
+    approverUsername: String(
+      pickDefinedValue(step.approverUsername, step.approver_username, step.username, "")
+    ),
+    approverEmail: String(pickDefinedValue(step.approverEmail, step.approver_email, step.email, "")),
+  };
+}
+
+function extractApproverId(entry) {
+  if (entry === undefined || entry === null) return "";
+  if (typeof entry === "object") {
+    return String(pickDefinedValue(entry.approverUserId, entry.id, entry.userId, entry.value, "")).trim();
+  }
+  return String(entry).trim();
 }
 
 function pickValue(...values) {
@@ -233,6 +223,7 @@ function optionMatchesRequester(option = {}, requester = {}) {
 }
 
 function optionMatchesSelected(option = {}, selectedValue) {
+  if (selectedValue === undefined || selectedValue === null || selectedValue === "") return false;
   const candidates = [option.id, option.userId, option.username, option.value];
   return candidates.some(candidate => identifiersMatch(candidate, selectedValue));
 }

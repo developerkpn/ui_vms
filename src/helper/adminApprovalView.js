@@ -89,12 +89,51 @@ export const APPROVAL_FALLBACK_ROWS = [
   },
 ];
 
+// Normalize the N-stage approval steps the backend now sends.
+// Accepts either camelCase `approvalSteps` or snake_case `approval_steps`.
+export function normalizeApprovalSteps(row = {}) {
+  const rawSteps = row.approvalSteps ?? row.approval_steps;
+  if (!Array.isArray(rawSteps)) {
+    return [];
+  }
+
+  return rawSteps.map((step, index) => {
+    const level = step.level ?? step.stage_level ?? index + 1;
+    const label =
+      stringOrUndefined(step.label, step.stage_label) ?? `Approval ${level}`;
+    const approverName = stringOrUndefined(step.approverName, step.approver_name) ?? null;
+    const status = String(step.status ?? "WAITING").toUpperCase();
+    const actedAt = step.actedAt ?? step.acted_at ?? null;
+    const claimedAt = step.claimedAt ?? step.claimed_at ?? null;
+    const remark = stringOrUndefined(step.remark) ?? null;
+
+    return {
+      level,
+      kind: stringOrUndefined(step.kind, step.stage_kind) ?? null,
+      label,
+      approverUserId: step.approverUserId ?? step.approver_user_id ?? null,
+      approverName,
+      status,
+      claimedAt,
+      actedAt,
+      remark,
+      // Aliases so consumers that read the older step shape (buildApprovalDetail)
+      // keep working without per-step field-name knowledge.
+      step: Number.isInteger(Number(level)) ? Number(level) : index + 1,
+      title: label,
+      approver: approverName,
+      approvedAt: actedAt ?? claimedAt,
+    };
+  });
+}
+
 export function normalizeApprovalRows(rows = []) {
   if (!Array.isArray(rows)) {
     return [];
   }
 
   return rows.map(row => {
+    const approvalSteps = normalizeApprovalSteps(row);
     const normalized = {
       id: row.id,
       ticketNumber: stringOrFallback(row.ticket_number, row.ticketNumber, "-"),
@@ -106,7 +145,30 @@ export function normalizeApprovalRows(rows = []) {
       createdAt: formatDateTime(row.created_at || row.createdAt),
       approvalStage: resolveApprovalStage(row),
       assignedTo: computeAssignedToDisplay(row),
+      // Pass the N-stage data straight through for downstream consumers.
+      approvalSteps,
     };
+
+    addRawProp(
+      normalized,
+      "currentStageLevel",
+      row.currentStageLevel,
+      row.current_stage_level
+    );
+    addStringProp(
+      normalized,
+      "currentStageLabel",
+      row.currentStageLabel,
+      row.current_stage_label
+    );
+    addStringProp(
+      normalized,
+      "currentStageKind",
+      row.currentStageKind,
+      row.current_stage_kind
+    );
+    addRawProp(normalized, "isFinalStage", row.isFinalStage, row.is_final_stage);
+    addRawProp(normalized, "totalStages", row.totalStages, row.total_stages);
 
     addStringProp(normalized, "materialCode", row.material_code, row.materialCode);
     addStringProp(normalized, "finalCode", row.final_code, row.finalCode);
@@ -155,40 +217,62 @@ export function normalizeApprovalRows(rows = []) {
     );
     addStringProp(normalized, "reworkReason", row.rework_reason, row.reworkReason);
 
-    [1, 2, 3].forEach(step => {
-      addStringProp(
-        normalized,
-        `approval${step}UserId`,
-        row[`approval_${step}_user_id`],
-        row[`approval${step}UserId`]
-      );
-      addStringProp(
-        normalized,
-        `approval${step}UserName`,
-        row[`approval_${step}_user_name`],
-        row[`approval_${step}_username`],
-        row[`approval${step}UserName`],
-        row[`approval${step}Username`]
-      );
-      addStringProp(
-        normalized,
-        `approval${step}Status`,
-        row[`approval_${step}_status`],
-        row[`approval${step}Status`]
-      );
-      addStringProp(
-        normalized,
-        `approval${step}At`,
-        row[`approval_${step}_at`],
-        row[`approval${step}At`]
-      );
-      addStringProp(
-        normalized,
-        `approval${step}Remark`,
-        row[`approval_${step}_remark`],
-        row[`approval${step}Remark`]
-      );
-    });
+    // Iterate the N approval steps when present, deriving the flat
+    // approval{n}* fields so downstream consumers that still read them keep
+    // working. Fall back to the legacy approval_1/2/3_* fields otherwise.
+    if (approvalSteps.length > 0) {
+      approvalSteps.forEach(step => {
+        const level = Number(step.level);
+        if (!Number.isInteger(level) || level < 1) {
+          return;
+        }
+        addStringProp(normalized, `approval${level}UserId`, step.approverUserId);
+        addStringProp(normalized, `approval${level}UserName`, step.approverName);
+        addStringProp(normalized, `approval${level}Status`, step.status);
+        addStringProp(
+          normalized,
+          `approval${level}At`,
+          step.actedAt,
+          step.claimedAt
+        );
+        addStringProp(normalized, `approval${level}Remark`, step.remark);
+      });
+    } else {
+      [1, 2, 3].forEach(step => {
+        addStringProp(
+          normalized,
+          `approval${step}UserId`,
+          row[`approval_${step}_user_id`],
+          row[`approval${step}UserId`]
+        );
+        addStringProp(
+          normalized,
+          `approval${step}UserName`,
+          row[`approval_${step}_user_name`],
+          row[`approval_${step}_username`],
+          row[`approval${step}UserName`],
+          row[`approval${step}Username`]
+        );
+        addStringProp(
+          normalized,
+          `approval${step}Status`,
+          row[`approval_${step}_status`],
+          row[`approval${step}Status`]
+        );
+        addStringProp(
+          normalized,
+          `approval${step}At`,
+          row[`approval_${step}_at`],
+          row[`approval${step}At`]
+        );
+        addStringProp(
+          normalized,
+          `approval${step}Remark`,
+          row[`approval_${step}_remark`],
+          row[`approval${step}Remark`]
+        );
+      });
+    }
 
     return normalized;
   });
@@ -244,6 +328,35 @@ function resolveApprovalStage(row = {}) {
   const normalizedStatus = String(row.status || "")
     .trim()
     .toUpperCase();
+
+  if (["REJECT", "REJECTED", "CANCEL", "CANCELLED"].includes(normalizedStatus)) {
+    return "Cancelled";
+  }
+
+  // Prefer the server-provided N-stage view when available.
+  const serverStageLabel = stringOrUndefined(row.currentStageLabel, row.current_stage_label);
+  const isFinalStage = row.isFinalStage ?? row.is_final_stage;
+  const steps = normalizeApprovalSteps(row);
+
+  if (steps.length > 0 || serverStageLabel !== undefined) {
+    const allApproved =
+      steps.length > 0 && steps.every(step => step.status === "APPROVED");
+    if (allApproved && (isFinalStage === true || serverStageLabel === undefined)) {
+      return "Completed";
+    }
+    // The active stage is the first non-approved/non-rejected step.
+    const activeStep = steps.find(
+      step => step.status !== "APPROVED" && step.status !== "REJECTED"
+    );
+    if (serverStageLabel !== undefined) {
+      return allApproved ? "Completed" : serverStageLabel;
+    }
+    if (activeStep) {
+      return activeStep.label;
+    }
+    return "Completed";
+  }
+
   const ticketType = String(row.ticketType || row.ticket_type || "")
     .trim()
     .toUpperCase();
@@ -252,10 +365,6 @@ function resolveApprovalStage(row = {}) {
   const approval1 = String(row.approval_1_status || "").toUpperCase();
   const approval2 = String(row.approval_2_status || "").toUpperCase();
   const approval3 = String(row.approval_3_status || "").toUpperCase();
-
-  if (["REJECT", "REJECTED", "CANCEL", "CANCELLED"].includes(normalizedStatus)) {
-    return "Cancelled";
-  }
 
   if (isExtend) {
     if (approval3 !== "APPROVED") {
@@ -301,6 +410,36 @@ export function computeAssignedToDisplay(row = {}) {
 
   if (rawAssignedTo === "Requester") {
     return stringOrFallback(row.created_by, row.createdBy, "-");
+  }
+
+  // Prefer the server-provided N-stage view when available.
+  const steps = normalizeApprovalSteps(row);
+  const serverStageKind = stringOrUndefined(row.currentStageKind, row.current_stage_kind);
+  if (steps.length > 0 || serverStageKind !== undefined) {
+    const stage = resolveApprovalStage(row);
+    if (stage === "Completed" || stage === "Cancelled") {
+      return "-";
+    }
+
+    const activeStep = steps.find(
+      step => step.status !== "APPROVED" && step.status !== "REJECTED"
+    );
+
+    // An unclaimed Master Data (MDM) step is a grab queue: nobody is assigned yet.
+    if (activeStep) {
+      if (activeStep.kind === "MDM" && !activeStep.approverUserId) {
+        return "Master Data — to grab";
+      }
+      if (activeStep.approverName) {
+        return activeStep.approverName;
+      }
+    }
+
+    // assigned_to may be a human name from the backend; show it when present.
+    if (rawAssignedTo && rawAssignedTo !== "Requester") {
+      return rawAssignedTo;
+    }
+    return "-";
   }
 
   const stage = resolveApprovalStage(row);
@@ -398,6 +537,13 @@ function stringOrFallback(...values) {
   return value === undefined ? "-" : String(value);
 }
 
+// Like stringOrFallback but returns undefined (not "-") when nothing is present,
+// so callers can distinguish "absent" from a literal "-".
+function stringOrUndefined(...values) {
+  const value = values.find(item => item !== undefined && item !== null && item !== "");
+  return value === undefined ? undefined : String(value);
+}
+
 function addStringProp(target, key, ...values) {
   const value = values.find(item => item !== undefined && item !== null && item !== "");
   if (value !== undefined) {
@@ -422,6 +568,7 @@ export function normalizeMassApprovalRows(rows = []) {
   }
 
   return rows.map(row => {
+    const approvalSteps = normalizeApprovalSteps(row);
     const normalized = {
       id: row.id,
       massRequestNo: stringOrFallback(row.mass_request_no, row.massRequestNo, "-"),
@@ -433,6 +580,8 @@ export function normalizeMassApprovalRows(rows = []) {
       approvalStage: resolveMassApprovalStage(row),
       assignedTo: computeMassAssignedToDisplay(row),
       ticketType: "Create",
+      // Pass the N-stage data straight through for downstream consumers.
+      approvalSteps,
       // First item approval fields (shared by all items in batch)
       // Approval 1
       firstItemApproval1Status: row.first_item_approval_1_status || null,
@@ -459,6 +608,27 @@ export function normalizeMassApprovalRows(rows = []) {
     addStringProp(normalized, "firstItemApproval1UserName", row.first_item_approval_1_user_name);
     addStringProp(normalized, "firstItemApproval2UserName", row.first_item_approval_2_user_name);
     addStringProp(normalized, "firstItemApproval3UserName", row.first_item_approval_3_user_name);
+
+    addRawProp(
+      normalized,
+      "currentStageLevel",
+      row.currentStageLevel,
+      row.current_stage_level
+    );
+    addStringProp(
+      normalized,
+      "currentStageLabel",
+      row.currentStageLabel,
+      row.current_stage_label
+    );
+    addStringProp(
+      normalized,
+      "currentStageKind",
+      row.currentStageKind,
+      row.current_stage_kind
+    );
+    addRawProp(normalized, "isFinalStage", row.isFinalStage, row.is_final_stage);
+    addRawProp(normalized, "totalStages", row.totalStages, row.total_stages);
 
     return normalized;
   });
@@ -531,6 +701,29 @@ export function resolveMassApprovalStage(row = {}) {
   const normalizedStatus = String(row.first_item_status || row.status || "")
     .trim()
     .toUpperCase();
+
+  if (["REJECT", "REJECTED", "CANCEL", "CANCELLED"].includes(normalizedStatus)) {
+    return "Cancelled";
+  }
+
+  // Prefer the server-provided N-stage view when available.
+  const serverStageLabel = stringOrUndefined(row.currentStageLabel, row.current_stage_label);
+  const steps = normalizeApprovalSteps(row);
+  if (steps.length > 0 || serverStageLabel !== undefined) {
+    const allApproved =
+      steps.length > 0 && steps.every(step => step.status === "APPROVED");
+    if (allApproved) {
+      return "Completed";
+    }
+    if (serverStageLabel !== undefined) {
+      return serverStageLabel;
+    }
+    const activeStep = steps.find(
+      step => step.status !== "APPROVED" && step.status !== "REJECTED"
+    );
+    return activeStep ? activeStep.label : "Completed";
+  }
+
   const approval1 = String(
     row.first_item_approval_1_status || row.firstItemApproval1Status || ""
   ).toUpperCase();
@@ -540,10 +733,6 @@ export function resolveMassApprovalStage(row = {}) {
   const approval3 = String(
     row.first_item_approval_3_status || row.firstItemApproval3Status || ""
   ).toUpperCase();
-
-  if (["REJECT", "REJECTED", "CANCEL", "CANCELLED"].includes(normalizedStatus)) {
-    return "Cancelled";
-  }
 
   if (!approval1 || approval1 === "WAITING") {
     return "Approval 1";
@@ -572,6 +761,31 @@ export function computeMassAssignedToDisplay(row = {}) {
 
   if (rawAssignedTo === "Requester") {
     return stringOrFallback(row.created_by_username, row.created_by, row.createdBy, "-");
+  }
+
+  // Prefer the server-provided N-stage view when available.
+  const steps = normalizeApprovalSteps(row);
+  const serverStageKind = stringOrUndefined(row.currentStageKind, row.current_stage_kind);
+  if (steps.length > 0 || serverStageKind !== undefined) {
+    const stage = resolveMassApprovalStage(row);
+    if (stage === "Completed" || stage === "Cancelled") {
+      return "-";
+    }
+    const activeStep = steps.find(
+      step => step.status !== "APPROVED" && step.status !== "REJECTED"
+    );
+    if (activeStep) {
+      if (activeStep.kind === "MDM" && !activeStep.approverUserId) {
+        return "Master Data — to grab";
+      }
+      if (activeStep.approverName) {
+        return activeStep.approverName;
+      }
+    }
+    if (rawAssignedTo && rawAssignedTo !== "Requester") {
+      return rawAssignedTo;
+    }
+    return "-";
   }
 
   const stage = resolveMassApprovalStage(row);

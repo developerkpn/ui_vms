@@ -205,6 +205,57 @@ function ReworkStatusDialog({ open, row, onClose }) {
 const isChangeExtendRequest = row =>
   ["CHANGE", "EXTEND"].includes(String(row?.ticketType || row?.ticket_type || "").toUpperCase());
 
+// The current stage is an unclaimed Master Data (MDM) step that any MDM_MATERIAL
+// user may grab. The backend inbox already scopes these to MDM users.
+const isUnclaimedMdmStage = row => {
+  const kind = String(row?.currentStageKind || row?.current_stage_kind || "").toUpperCase();
+  if (kind !== "MDM") {
+    return false;
+  }
+  const steps = Array.isArray(row?.approvalSteps) ? row.approvalSteps : [];
+  const activeStep = steps.find(
+    step => step.status !== "APPROVED" && step.status !== "REJECTED"
+  );
+  return Boolean(activeStep) && !activeStep.approverUserId;
+};
+
+// Subtle "current stage" cell content for the inbox: shows the stage label and a
+// "to grab" hint for an unclaimed Master Data step.
+function AssignedToCell({ row }) {
+  const stageLabel = row.currentStageLabel || row.approvalStage;
+  const mdmToGrab = isUnclaimedMdmStage(row);
+
+  return (
+    <Stack spacing={0.25}>
+      <Typography variant="body2" sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
+        {mdmToGrab ? "Master Data" : row.assignedTo}
+      </Typography>
+      {mdmToGrab ? (
+        <Chip
+          label="Master Data — to grab"
+          size="small"
+          sx={{
+            height: 20,
+            fontSize: "0.7rem",
+            fontWeight: 700,
+            bgcolor: "#fff7ed",
+            color: "#b45309",
+            border: "1px solid #fcd34d",
+          }}
+        />
+      ) : (
+        stageLabel &&
+        stageLabel !== "-" &&
+        stageLabel !== "Completed" && (
+          <Typography variant="caption" sx={{ color: "text.disabled", whiteSpace: "nowrap" }}>
+            {stageLabel}
+          </Typography>
+        )
+      )}
+    </Stack>
+  );
+}
+
 export default function AdminApprovalView() {
   const axiosPrivate = useAxiosPrivate();
   const refreshWarningTimeoutRef = useRef(null);
@@ -821,8 +872,8 @@ export default function AdminApprovalView() {
                         <TableCell sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
                           {row.createdAt}
                         </TableCell>
-                        <TableCell sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
-                          {row.assignedTo}
+                        <TableCell sx={{ whiteSpace: "nowrap" }}>
+                          <AssignedToCell row={row} />
                         </TableCell>
                       </TableRow>
                     ))}
@@ -945,8 +996,8 @@ export default function AdminApprovalView() {
                         <TableCell sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
                           {row.createdAt}
                         </TableCell>
-                        <TableCell sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
-                          {row.assignedTo}
+                        <TableCell sx={{ whiteSpace: "nowrap" }}>
+                          <AssignedToCell row={row} />
                         </TableCell>
                       </TableRow>
                     ))}

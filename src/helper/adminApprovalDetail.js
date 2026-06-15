@@ -25,17 +25,6 @@ const SPEC_FIELD_ORDER = [
   "brand",
 ];
 
-const APPROVAL_STEP_LABELS = {
-  1: "Approval 1",
-  2: "Approval 2",
-  3: "Master Data",
-};
-
-const TICKET_TYPE_APPROVAL_SKIPPED_STEPS = {
-  CHANGE: [2],
-  EXTEND: [1, 2],
-};
-
 export function buildApprovalDetail(row = {}) {
   const payload = parsePayload(row.templatePayload ?? row.template_payload);
   const requestFields = {
@@ -64,7 +53,16 @@ export function buildApprovalDetail(row = {}) {
     requestFields.base_unit_of_measure,
     requestFields.base_uom
   );
-  const approvalHistory = buildApprovalHistory(row);
+  const approvalSteps = resolveApprovalSteps(row);
+  const approvalHistory = buildApprovalHistory(approvalSteps);
+  const currentStageLevel = firstNonEmpty(row.currentStageLevel, row.current_stage_level);
+  const currentStageLabel = pickText(row.currentStageLabel, row.current_stage_label);
+  const currentStageKind = normalizeStageKind(
+    firstNonEmpty(row.currentStageKind, row.current_stage_kind)
+  );
+  const isFinalStage = toBoolean(firstNonEmpty(row.isFinalStage, row.is_final_stage));
+  const totalStages = toInteger(firstNonEmpty(row.totalStages, row.total_stages));
+  const currentStep = resolveCurrentStep(approvalSteps, currentStageLevel, currentStageKind);
 
   return {
     id: row.id ?? null,
@@ -75,6 +73,13 @@ export function buildApprovalDetail(row = {}) {
     ticketNumber,
     ticketType: pickText(row.ticketType, row.ticket_type, "Create"),
     status: pickText(row.status, "Waiting"),
+    approvalSteps,
+    currentStageLevel: currentStageLevel ?? null,
+    currentStageLabel,
+    currentStageKind,
+    isFinalStage,
+    totalStages,
+    currentStep,
     assignedTo: pickText(row.assignedTo, row.assigned_to),
     createdBy: pickText(row.createdBy, row.created_by),
     createdAt: pickText(row.createdAt, row.created_at),
@@ -223,70 +228,74 @@ function normalizeAttachments(attachments = []) {
   }));
 }
 
-function buildApprovalHistory(row) {
-  const ticketType = String(row.ticketType || row.ticket_type || "").trim().toUpperCase();
-  const skippedSteps = TICKET_TYPE_APPROVAL_SKIPPED_STEPS[ticketType] || [];
-  const allSteps = [1, 2, 3];
-
-  if (Array.isArray(row.approvalSteps) && row.approvalSteps.length > 0) {
-    return allSteps.map(step => {
-      if (skippedSteps.includes(step)) {
-        return {
-          step,
-          label: APPROVAL_STEP_LABELS[step] || `Approval ${step}`,
-          approver: "-",
-          status: "SKIPPED",
-          approvedAt: "-",
-          remark: "Not required for this request type",
-        };
-      }
-
-      const source =
-        row.approvalSteps.find(item => resolveApprovalStepNumber(item) === step) ||
-        row.approvalSteps[step - 1] ||
-        {};
-
-      return {
-        step,
-        label: APPROVAL_STEP_LABELS[step] || `Approval ${step}`,
-        approver: pickText(source.approver, source.owner, source.user, source.username),
-        status: normalizeApprovalStatus(source.status),
-        approvedAt: pickText(source.approvedAt, source.date, source.time, source.actionAt),
-        remark: pickText(source.remark, source.reason, source.note),
-      };
-    });
+function resolveApprovalSteps(row = {}) {
+  const rawSteps = row.approvalSteps ?? row.approval_steps;
+  if (!Array.isArray(rawSteps)) {
+    return [];
   }
 
-  return allSteps.map(step => {
-    if (skippedSteps.includes(step)) {
-      return {
-        step,
-        label: APPROVAL_STEP_LABELS[step] || `Approval ${step}`,
-        approver: "-",
-        status: "SKIPPED",
-        approvedAt: "-",
-        remark: "Not required for this request type",
-      };
-    }
+  return rawSteps
+    .map(normalizeApprovalStep)
+    .sort((a, b) => a.level - b.level);
+}
 
-    return {
-      step,
-      label: APPROVAL_STEP_LABELS[step] || `Approval ${step}`,
-      approver: pickText(
-        row[`approval${step}UserName`],
-        row[`approval${step}Username`],
-        row[`approval_${step}_user_name`],
-        row[`approval_${step}_username`],
-        row[`approval${step}UserId`],
-        row[`approval_${step}_user_id`]
-      ),
-      status: normalizeApprovalStatus(
-        pickText(row[`approval${step}Status`], row[`approval_${step}_status`], "WAITING")
-      ),
-      approvedAt: pickText(row[`approval${step}At`], row[`approval_${step}_at`]),
-      remark: pickText(row[`approval${step}Remark`], row[`approval_${step}_remark`]),
-    };
-  });
+function normalizeApprovalStep(step = {}, index = 0) {
+  const level = toInteger(firstNonEmpty(step.level, step.index, index + 1)) ?? index + 1;
+  const kind = normalizeStageKind(firstNonEmpty(step.kind, step.stage_kind)) || "MANUAL";
+  const fallbackLabel = kind === "MDM" ? "Master Data" : `Approval ${level}`;
+  const approverUserId = firstNonEmpty(
+    step.approverUserId,
+    step.approver_user_id
+  );
+
+  return {
+    level,
+    kind,
+    label: pickRaw(step.label, fallbackLabel),
+    approverUserId: approverUserId ?? null,
+    approverName: firstNonEmpty(step.approverName, step.approver_name) ?? null,
+    status: normalizeApprovalStatus(firstNonEmpty(step.status, "WAITING")),
+    claimedAt: firstNonEmpty(step.claimedAt, step.claimed_at) ?? null,
+    actedAt: firstNonEmpty(step.actedAt, step.acted_at) ?? null,
+    remark: firstNonEmpty(step.remark, step.reason, step.note) ?? null,
+  };
+}
+
+function buildApprovalHistory(approvalSteps = []) {
+  return approvalSteps.map(step => ({
+    level: step.level,
+    label: pickText(step.label),
+    kind: step.kind,
+    approver: pickText(step.approverName),
+    status: step.status,
+    approvedAt: pickText(step.actedAt),
+    remark: pickText(step.remark),
+  }));
+}
+
+function resolveCurrentStep(approvalSteps = [], currentStageLevel, currentStageKind) {
+  if (!Array.isArray(approvalSteps) || approvalSteps.length === 0) {
+    return null;
+  }
+
+  const level = toInteger(currentStageLevel);
+  if (level !== undefined) {
+    const byLevel = approvalSteps.find(step => step.level === level);
+    if (byLevel) {
+      return byLevel;
+    }
+  }
+
+  if (currentStageKind) {
+    const byKind = approvalSteps.find(
+      step => step.kind === currentStageKind && step.status === "WAITING"
+    );
+    if (byKind) {
+      return byKind;
+    }
+  }
+
+  return approvalSteps.find(step => step.status === "WAITING") || null;
 }
 
 function buildReworkSummary(approvalHistory, row) {
@@ -332,25 +341,40 @@ function buildReworkSummary(approvalHistory, row) {
   };
 }
 
-function resolveApprovalStepNumber(item = {}) {
-  const rawStep = item.step ?? item.index;
-  const parsedStep = Number.parseInt(rawStep, 10);
-
-  if (Number.isInteger(parsedStep) && parsedStep >= 1 && parsedStep <= 3) {
-    return parsedStep;
+function normalizeStageKind(value) {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  if (normalized === "MDM" || normalized === "MASTER_DATA" || normalized === "MASTERDATA") {
+    return "MDM";
   }
-
-  const title = String(item.title || item.label || "").trim().toLowerCase();
-
-  if (title.includes("master")) {
-    return 3;
+  if (normalized === "MANUAL") {
+    return "MANUAL";
   }
+  return normalized || null;
+}
 
-  if (title.includes("approval 2")) {
-    return 2;
+function firstNonEmpty(...values) {
+  return values.find(value => value !== undefined && value !== null && value !== "");
+}
+
+function pickRaw(...values) {
+  const value = firstNonEmpty(...values);
+  return value === undefined ? "" : value;
+}
+
+function toInteger(value) {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
   }
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) ? parsed : undefined;
+}
 
-  return 1;
+function toBoolean(value) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  const normalized = String(value ?? "").trim().toUpperCase();
+  return ["TRUE", "1", "YES", "Y"].includes(normalized);
 }
 
 function normalizeApprovalStatus(value) {

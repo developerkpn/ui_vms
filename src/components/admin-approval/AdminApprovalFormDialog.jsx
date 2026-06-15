@@ -31,6 +31,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useEffect, useMemo, useRef, useState } from "react";
+import useSessionStore from "src/store/useSessionStore";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
 import { buildCombinedLongTextHistory } from "src/helper/adminApprovalFieldHistory.js";
 import {
@@ -48,6 +49,23 @@ import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 
 function firstDefined(...values) {
   return values.find(value => value !== undefined && value !== null);
+}
+
+// MDM_MATERIAL membership is derived from the session store (role / groupid /
+// dept_id). The backend uses the "MDM_MATERIAL" group name; logins for that
+// group surface as MDM_MAT / MATERIAL on dept_id, so we match any of them.
+const MDM_MATERIAL_IDENTIFIERS = ["MDM_MATERIAL", "MDM_MAT", "MATERIAL"];
+
+function isMdmMaterialUser(session = {}) {
+  return [session.role, session.groupid, session.dept_id]
+    .map(value => String(value ?? "").trim().toUpperCase())
+    .some(value => MDM_MATERIAL_IDENTIFIERS.includes(value));
+}
+
+function identifiersMatch(left, right) {
+  if (left === undefined || left === null || left === "") return false;
+  if (right === undefined || right === null || right === "") return false;
+  return String(left).trim() === String(right).trim();
 }
 
 function cloneTemplatePayload(templatePayload) {
@@ -573,7 +591,14 @@ export default function AdminApprovalFormDialog({
   const [validationSnackbarOpen, setValidationSnackbarOpen] = useState(false);
   const [validationErrorCount, setValidationErrorCount] = useState(0);
   const [uomOptions, setUomOptions] = useState([]);
+  // Holds the freshly-claimed approval steps returned by the claim-mdm endpoint
+  // so the dialog reflects the grab without waiting for a parent refresh.
+  const [claimedSteps, setClaimedSteps] = useState(null);
+  const [grabbing, setGrabbing] = useState(false);
+  const [grabError, setGrabError] = useState("");
   const axiosPrivate = useAxiosPrivate();
+  const currentUserId = useSessionStore(state => state.user_id);
+  const isMdmUser = useSessionStore(isMdmMaterialUser);
 
   useEffect(() => {
     let active = true;
@@ -599,6 +624,9 @@ export default function AdminApprovalFormDialog({
       setHasInteracted(false);
       setValidationSnackbarOpen(false);
       setValidationErrorCount(0);
+      setClaimedSteps(null);
+      setGrabbing(false);
+      setGrabError("");
     }
   }, [open, row]);
 
@@ -606,6 +634,8 @@ export default function AdminApprovalFormDialog({
     setDraftValues(createApprovalDraft(detail));
     setClientFieldErrors({});
     setHasInteracted(false);
+    setClaimedSteps(null);
+    setGrabError("");
   }, [detail]);
 
   useEffect(() => {
@@ -628,8 +658,113 @@ export default function AdminApprovalFormDialog({
     const stages = detail.approvalHistory || [];
     return stages
       .filter(item => item.status !== "SKIPPED" && item.approver === "-")
-      .map(item => ({ label: item.label, step: item.step }));
+      .map(item => ({ label: item.label, level: item.level, kind: item.kind }));
   }, [detail.approvalHistory]);
+
+  // The MDM step as currently known: prefer the steps returned by a fresh grab,
+  // otherwise fall back to whatever buildApprovalDetail derived from the row.
+  const activeMdmStep = useMemo(() => {
+    if (Array.isArray(claimedSteps) && claimedSteps.length > 0) {
+      const byLevel =
+        detail.currentStageLevel != null
+          ? claimedSteps.find(
+              step =>
+                Number(step.level ?? step.index) === Number(detail.currentStageLevel)
+            )
+          : null;
+      const byKind = claimedSteps.find(
+        step =>
+          String(step.kind ?? step.stage_kind ?? "").toUpperCase() === "MDM" &&
+          String(step.status ?? "").toUpperCase() === "WAITING"
+      );
+      const fallback =
+        claimedSteps.find(
+          step => String(step.kind ?? step.stage_kind ?? "").toUpperCase() === "MDM"
+        ) || null;
+      const source = byLevel || byKind || fallback;
+      if (source) {
+        return {
+          approverUserId: firstDefined(
+            source.approverUserId,
+            source.approver_user_id,
+            null
+          ),
+        };
+      }
+    }
+    return detail.currentStep || null;
+  }, [claimedSteps, detail.currentStep, detail.currentStageLevel]);
+
+  // The active stage is the MDM (Master Data) claimable queue.
+  const isMdmStageActive =
+    detail.currentStageKind === "MDM" || detail.currentStep?.kind === "MDM";
+  const mdmApproverUserId = firstDefined(
+    activeMdmStep?.approverUserId,
+    activeMdmStep?.approver_user_id,
+    null
+  );
+  const isMdmUnclaimed =
+    isMdmStageActive &&
+    (mdmApproverUserId === null ||
+      mdmApproverUserId === undefined ||
+      String(mdmApproverUserId).trim() === "");
+  const isMdmClaimedByMe =
+    isMdmStageActive && identifiersMatch(mdmApproverUserId, currentUserId);
+  // Show "Grab/Claim" when the MDM queue is open to this MDM_MATERIAL user.
+  const canGrabMdm =
+    isMdmStageActive &&
+    isMdmUnclaimed &&
+    isMdmUser &&
+    canSubmitApprovalAction &&
+    !isMdmClaimedByMe;
+  // MDM approval actions are locked until the current user owns the claim.
+  const isMdmActionLocked = isMdmStageActive && !isMdmClaimedByMe;
+  const isMassRequest = Boolean(
+    detail.rawRow?.massRequestNo ||
+      detail.rawRow?.mass_request_no ||
+      row?.massRequestNo ||
+      row?.mass_request_no
+  );
+
+  const handleGrabMdm = async () => {
+    if (!detail.id || grabbing) {
+      return;
+    }
+    setGrabbing(true);
+    setGrabError("");
+    try {
+      const basePath = isMassRequest
+        ? `/material/requests/mass/${detail.id}/claim-mdm`
+        : `/material/requests/single/${detail.id}/claim-mdm`;
+      const response = await axiosPrivate.post(basePath);
+      const nextSteps =
+        response.data?.data?.approvalSteps ||
+        response.data?.data?.approval_steps ||
+        response.data?.approvalSteps ||
+        response.data?.approval_steps ||
+        (Array.isArray(response.data?.data) ? response.data.data : null);
+      if (Array.isArray(nextSteps)) {
+        setClaimedSteps(nextSteps);
+      } else {
+        // No steps echoed back: optimistically mark this user as the claimer.
+        setClaimedSteps([
+          {
+            level: detail.currentStageLevel,
+            kind: "MDM",
+            status: "WAITING",
+            approverUserId: currentUserId,
+          },
+        ]);
+      }
+    } catch (error) {
+      setGrabError(
+        error?.response?.data?.message ||
+          "Gagal claim Master Data step. Silakan coba lagi."
+      );
+    } finally {
+      setGrabbing(false);
+    }
+  };
 
   const displayFieldErrors = useMemo(
     () => ({
@@ -684,17 +819,11 @@ export default function AdminApprovalFormDialog({
     setFinalCodeSuffix("");
     setFinalCodeSuffixError("");
 
-    const isApproval3 = String(
-      row?.approvalStage ||
-        detail?.rawRow?.approvalStage ||
-        detail?.assignedTo ||
-        row?.assignedTo ||
-        ""
-    )
-      .trim()
-      .toUpperCase() === "APPROVAL 3";
+    // The Final-Code dialog gates the final (Master Data / MDM) stage.
+    const isFinalMdmStage =
+      detail.isFinalStage || detail.currentStageKind === "MDM";
 
-    if (isApproval3 && !isScopedChangeExtendRequest) {
+    if (isFinalMdmStage && !isScopedChangeExtendRequest) {
       setFinalCodeDialogOpen(true);
     } else {
       setRemarkDialogOpen(true);
@@ -766,16 +895,9 @@ export default function AdminApprovalFormDialog({
     setRemarkDialogOpen(true);
   };
 
-  const isApproval3Active = String(
-    row?.approvalStage ||
-      detail?.rawRow?.approvalStage ||
-      detail?.assignedTo ||
-      row?.assignedTo ||
-      ""
-  )
-    .trim()
-    .toUpperCase() === "APPROVAL 3";
-  const isApproval3Approve = currentAction === "Approve" && isApproval3Active && !isScopedChangeExtendRequest;
+  const isFinalStageActive = detail.isFinalStage || detail.currentStageKind === "MDM";
+  const isFinalStageApprove =
+    currentAction === "Approve" && isFinalStageActive && !isScopedChangeExtendRequest;
 
   const renderFieldHint = fieldKey => {
     const hintText = fieldHints[fieldKey];
@@ -857,7 +979,7 @@ export default function AdminApprovalFormDialog({
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 Saat approve, admin akan otomatis ter-assign ke stage yang belum ada assignee.
-                {unassignedStages.some(s => s.step === 3) && " Approval 3 akan otomatis ter-assign ke random user MDM_MATERIAL."}
+                {unassignedStages.some(s => s.kind === "MDM") && " Master Data stage masuk ke antrian MDM_MATERIAL dan harus di-claim (Grab) oleh salah satu user MDM_MATERIAL."}
               </Typography>
             </Alert>
           )}
@@ -902,7 +1024,7 @@ export default function AdminApprovalFormDialog({
               </Button>
               <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1 }}>
                 {detail.approvalHistory.map(item => (
-                  <ApprovalHistoryItem key={item.step} item={item} />
+                  <ApprovalHistoryItem key={item.level} item={item} />
                 ))}
               </Stack>
             </Paper>
@@ -1267,19 +1389,44 @@ export default function AdminApprovalFormDialog({
           gap: 1,
         }}
       >
-        <Button
-          variant="contained"
-          onClick={handleDialogClose}
-          disabled={submitting}
-          sx={{ bgcolor: "#546e7a", textTransform: "none" }}
-        >
-          Close
-        </Button>
+        <Stack spacing={0.75}>
+          <Button
+            variant="contained"
+            onClick={handleDialogClose}
+            disabled={submitting}
+            sx={{ bgcolor: "#546e7a", textTransform: "none", alignSelf: "flex-start" }}
+          >
+            Close
+          </Button>
+          {isMdmStageActive && canSubmitApprovalAction && !isMdmClaimedByMe && (
+            <Typography variant="caption" sx={{ color: "#c2410c", fontWeight: 700 }}>
+              {isMdmUnclaimed
+                ? "Master Data stage belum di-claim."
+                : "Master Data stage sudah di-claim oleh user MDM lain."}
+            </Typography>
+          )}
+          {grabError && (
+            <Typography variant="caption" color="error" sx={{ fontWeight: 700 }}>
+              {grabError}
+            </Typography>
+          )}
+        </Stack>
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+          {canGrabMdm && (
+            <Button
+              variant="contained"
+              startIcon={<CheckCircle />}
+              disabled={submitting || grabbing}
+              onClick={handleGrabMdm}
+              sx={{ bgcolor: "#0f766e", textTransform: "none", fontWeight: 800 }}
+            >
+              {grabbing ? "Grabbing..." : "Grab / Claim"}
+            </Button>
+          )}
           <Button
             variant="contained"
             startIcon={<CheckCircle />}
-            disabled={submitting || !canSubmitApprovalAction}
+            disabled={submitting || !canSubmitApprovalAction || isMdmActionLocked}
             onClick={handleApproveClick}
             sx={{ bgcolor: "#0b35d9", textTransform: "none", fontWeight: 800 }}
           >
@@ -1288,7 +1435,7 @@ export default function AdminApprovalFormDialog({
           <Button
             variant="contained"
             startIcon={<Replay />}
-            disabled={submitting || !canSubmitApprovalAction}
+            disabled={submitting || !canSubmitApprovalAction || isMdmActionLocked}
             onClick={handleReworkClick}
             sx={{ bgcolor: "#fb8c00", textTransform: "none", fontWeight: 800 }}
           >
@@ -1297,7 +1444,7 @@ export default function AdminApprovalFormDialog({
           <Button
             variant="contained"
             startIcon={<Cancel />}
-            disabled={submitting || !canSubmitApprovalAction}
+            disabled={submitting || !canSubmitApprovalAction || isMdmActionLocked}
             onClick={handleRejectClick}
             sx={{ bgcolor: "#c62828", textTransform: "none", fontWeight: 800 }}
           >
@@ -1519,11 +1666,11 @@ export default function AdminApprovalFormDialog({
                 isScopedChangeExtendRequest
                   ? {
                       remark: remarkText,
-                      ...(isApproval3Approve ? { finalCodeSuffix } : {}),
+                      ...(isFinalStageApprove ? { finalCodeSuffix } : {}),
                     }
                   : {
                       remark: remarkText,
-                      ...(isApproval3Approve ? { finalCodeSuffix } : {}),
+                      ...(isFinalStageApprove ? { finalCodeSuffix } : {}),
                       editedRequest: {
                         material_sub_group_id: draftValues.material_sub_group_id,
                         plant_code: draftValues.plant_code,

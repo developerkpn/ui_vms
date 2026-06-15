@@ -33,6 +33,7 @@ import {
   computeAssignedToDisplay,
   computeMassAssignedToDisplay,
   formatOptionalDateTime,
+  normalizeApprovalSteps,
 } from "src/helper/adminApprovalView.js";
 import {
   buildPlantOptions,
@@ -461,21 +462,13 @@ export default function RequestMaterials() {
             reworkByUsername: item.rework_by_username,
             reworkAt: formatOptionalDateTime(item.rework_at),
             reworkReason: item.rework_reason || "",
-            approval_1_user_id: item.approval_1_user_id,
-            approval_1_user_name: item.approval_1_user_name,
-            approval_1_status: item.approval_1_status,
-            approval_1_at: item.approval_1_at,
-            approval_1_remark: item.approval_1_remark,
-            approval_2_user_id: item.approval_2_user_id,
-            approval_2_user_name: item.approval_2_user_name,
-            approval_2_status: item.approval_2_status,
-            approval_2_at: item.approval_2_at,
-            approval_2_remark: item.approval_2_remark,
-            approval_3_user_id: item.approval_3_user_id,
-            approval_3_user_name: item.approval_3_user_name,
-            approval_3_status: item.approval_3_status,
-            approval_3_at: item.approval_3_at,
-            approval_3_remark: item.approval_3_remark,
+            // N-stage approval data: pass through so buildApprovalDetail renders
+            // every stage from approvalSteps instead of probing _1/_2/_3 fields.
+            approvalSteps: normalizeApprovalSteps(item),
+            currentStageLabel: item.currentStageLabel ?? item.current_stage_label,
+            currentStageKind: item.currentStageKind ?? item.current_stage_kind,
+            isFinalStage: item.isFinalStage ?? item.is_final_stage,
+            totalStages: item.totalStages ?? item.total_stages,
           }))
         : [];
 
@@ -494,34 +487,32 @@ export default function RequestMaterials() {
       const response = await axiosPrivate.get("/material/requests/mass");
       const massRequests = Array.isArray(response.data?.data)
         ? response.data.data.map(item => {
-            // Detect reworks from preserved remarks (not status, which is reset on revision)
-            const reworkApproval1 = String(item.first_item_approval_1_remark || "").trim() !== "";
-            const reworkApproval2 = String(item.first_item_approval_2_remark || "").trim() !== "";
-            const reworkApproval3 = String(item.first_item_approval_3_remark || "").trim() !== "";
-            // Build rework entry per approval stage that has a remark
+            const approvalSteps = normalizeApprovalSteps(item);
+            // Detect reworks from preserved remarks (not status, which is reset on
+            // revision). Iterate the N approval steps when present; otherwise fall
+            // back to the legacy first_item_approval_1/2/3_* fields.
             const reworks = [];
-            if (reworkApproval1) {
-              reworks.push({
-                stage: "Approval 1",
-                by_username: item.first_item_approval_1_user_name,
-                at: formatOptionalDateTime(item.first_item_approval_1_at),
-                reason: item.first_item_approval_1_remark,
+            if (approvalSteps.length > 0) {
+              approvalSteps.forEach(step => {
+                if (String(step.remark || "").trim() !== "") {
+                  reworks.push({
+                    stage: step.label,
+                    by_username: step.approverName,
+                    at: formatOptionalDateTime(step.actedAt ?? step.claimedAt),
+                    reason: step.remark,
+                  });
+                }
               });
-            }
-            if (reworkApproval2) {
-              reworks.push({
-                stage: "Approval 2",
-                by_username: item.first_item_approval_2_user_name,
-                at: formatOptionalDateTime(item.first_item_approval_2_at),
-                reason: item.first_item_approval_2_remark,
-              });
-            }
-            if (reworkApproval3) {
-              reworks.push({
-                stage: "Approval 3",
-                by_username: item.first_item_approval_3_user_name,
-                at: formatOptionalDateTime(item.first_item_approval_3_at),
-                reason: item.first_item_approval_3_remark,
+            } else {
+              [1, 2, 3].forEach(level => {
+                if (String(item[`first_item_approval_${level}_remark`] || "").trim() !== "") {
+                  reworks.push({
+                    stage: `Approval ${level}`,
+                    by_username: item[`first_item_approval_${level}_user_name`],
+                    at: formatOptionalDateTime(item[`first_item_approval_${level}_at`]),
+                    reason: item[`first_item_approval_${level}_remark`],
+                  });
+                }
               });
             }
             // Build legacy rework metadata for buildReworkSummary (latest rework)
@@ -540,7 +531,14 @@ export default function RequestMaterials() {
               assignedTo: computeMassAssignedToDisplay(item),
               massRequestReason: item.mass_request_reason,
               itemCount: item.item_count,
-              // Approval chain fields for buildApprovalDetail
+              // N-stage approval data: pass through so buildApprovalDetail renders
+              // every stage from approvalSteps instead of probing _1/_2/_3 fields.
+              approvalSteps,
+              currentStageLabel: item.currentStageLabel ?? item.current_stage_label,
+              currentStageKind: item.currentStageKind ?? item.current_stage_kind,
+              isFinalStage: item.isFinalStage ?? item.is_final_stage,
+              totalStages: item.totalStages ?? item.total_stages,
+              // Legacy approval chain fields kept as a fallback for buildApprovalDetail.
               approval_1_status: item.first_item_approval_1_status,
               approval_1_user_name: item.first_item_approval_1_user_name,
               approval_1_at: formatOptionalDateTime(item.first_item_approval_1_at),
