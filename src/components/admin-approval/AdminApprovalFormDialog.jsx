@@ -31,21 +31,91 @@ import {
   Typography,
 } from "@mui/material";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { buildApprovalDetail } from "src/helper/adminApprovalDetail.mjs";
-import { createApprovalDraft } from "src/helper/adminApprovalDraft.mjs";
-import { buildCombinedLongTextHistory } from "src/helper/adminApprovalFieldHistory.mjs";
+import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
+import { buildCombinedLongTextHistory } from "src/helper/adminApprovalFieldHistory.js";
 import {
   buildApprovalFieldHints,
   buildApprovalSpecificationFields,
   normalizeApprovalInputValue,
   validateApprovalDraft,
-} from "src/helper/adminApprovalValidation.mjs";
+} from "src/helper/adminApprovalValidation.js";
 import {
   buildApprovalSubGroupOptions,
   findSubGroupOptionById,
   formatSubGroupOptionLabel,
-} from "src/helper/adminApprovalSubGroup.mjs";
+} from "src/helper/adminApprovalSubGroup.js";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
+
+function firstDefined(...values) {
+  return values.find(value => value !== undefined && value !== null);
+}
+
+function cloneTemplatePayload(templatePayload) {
+  if (!templatePayload || typeof templatePayload !== "object" || Array.isArray(templatePayload)) {
+    return {};
+  }
+
+  return {
+    ...templatePayload,
+    requestFields:
+      templatePayload.requestFields &&
+      typeof templatePayload.requestFields === "object" &&
+      !Array.isArray(templatePayload.requestFields)
+        ? { ...templatePayload.requestFields }
+        : templatePayload.requestFields,
+    templateValues:
+      templatePayload.templateValues &&
+      typeof templatePayload.templateValues === "object" &&
+      !Array.isArray(templatePayload.templateValues)
+        ? { ...templatePayload.templateValues }
+        : templatePayload.templateValues,
+  };
+}
+
+function createApprovalDraft(detail = {}) {
+  const raw = detail.rawRow || {};
+  const requestFields = raw.requestFields ?? raw.request_fields ?? {};
+
+  return {
+    material_sub_group_id: firstDefined(
+      raw.material_sub_group_id,
+      raw.materialSubGroupId,
+      raw.sub_material_group_id,
+      null
+    ),
+    plant_code: firstDefined(
+      raw.plant_code,
+      raw.plantCode,
+      raw.plant,
+      requestFields.plant,
+      null
+    ),
+    sloc_code: firstDefined(
+      raw.sloc_code,
+      raw.slocCode,
+      raw.storage_location,
+      raw.storageLocation,
+      requestFields.storage_location,
+      requestFields.storageLocation,
+      null
+    ),
+    material_description:
+      firstDefined(
+        raw.material_description,
+        raw.materialDescription,
+        detail.basicInfo?.materialDescription,
+        ""
+      ) || "",
+    base_uom:
+      firstDefined(raw.base_uom, raw.baseUom, raw.uom, detail.basicInfo?.baseUom, "") || "",
+    long_text_1: firstDefined(raw.long_text_1, raw.longText1, "") || "",
+    long_text_2: firstDefined(raw.long_text_2, raw.longText2, "") || "",
+    long_text_3: firstDefined(raw.long_text_3, raw.longText3, "") || "",
+    template_payload: cloneTemplatePayload(
+      firstDefined(raw.template_payload, raw.templatePayload, {})
+    ),
+  };
+}
 
 const approvalStatusColors = {
   APPROVED: { bgcolor: "#e8f5e9", color: "#1b5e20" },

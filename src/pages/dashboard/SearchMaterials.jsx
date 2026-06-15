@@ -46,7 +46,7 @@ import {
   buildPlantLabelMap,
   buildStorageOptionsForPlant,
   extractChangeTemplateValues,
-} from "src/helper/materialChangeExtendRequest.mjs";
+} from "src/helper/materialChangeExtendRequest.js";
 import TableSorting from "src/components/table/TableSorting";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import attachmentPlaceholder from "src/images/material-attachment-placeholder.svg";

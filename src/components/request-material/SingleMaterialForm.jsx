@@ -26,24 +26,136 @@ import {
 import { Delete, InfoOutlined } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
-import {
-  createDynamicFormState,
-  applyMaterialGroupSchema,
-  resetForMaterialGroupChange,
-} from "./materialRequestSchema.js";
 import { validateSpecField, getValidationHint } from "./specFieldValidation.js";
 import {
   MAX_ATTACHMENTS,
   getAttachmentExtension,
   getAttachmentValidationError,
   normalizeAttachmentSelection,
-} from "./attachmentValidation.mjs";
+} from "./attachmentValidation.js";
 import {
   mapRequesterServerErrors,
   validateRequesterDraft,
   validateRequesterField,
-} from "./singleMaterialFormValidation.mjs";
+} from "./singleMaterialFormValidation.js";
 
+
+const DEFAULT_STATE = {
+  materialGroup: "",
+  subgroup: "",
+  schema: null,
+  visibleSections: [],
+  subgroupOptions: [],
+  requestFieldValues: {},
+  templateFieldValues: {},
+};
+
+const STATIC_REQUEST_FIELD_KEYS = [];
+
+const isVisibleField = field => !field?.isHidden;
+
+const toFieldDefaultValue = field => {
+  if (field?.defaultValue === null || field?.defaultValue === undefined) {
+    return "";
+  }
+
+  return field.defaultValue;
+};
+
+const isTemplateField = field => field?.kind === "template_field";
+
+const createSubgroupOptionLabel = subgroup => {
+  const code = String(subgroup?.code || "").trim();
+  const name = String(subgroup?.name || "").trim();
+
+  if (code && name) {
+    return `${code} - ${name}`;
+  }
+
+  return code || name;
+};
+
+const createSubgroupOptionValue = subgroup =>
+  subgroup?.id ?? subgroup?.value ?? subgroup?.code ?? "";
+
+const normalizeSections = sections =>
+  (Array.isArray(sections) ? sections : [])
+    .map(section => {
+      const visibleFields = (Array.isArray(section?.fields) ? section.fields : []).filter(
+        isVisibleField
+      );
+
+      return {
+        ...section,
+        fields: visibleFields,
+      };
+    })
+    .filter(section => section.fields.length > 0);
+
+const buildFieldValues = sections => {
+  const requestFieldValues = {};
+  const templateFieldValues = {};
+
+  for (const section of sections) {
+    for (const field of section.fields) {
+      const target = isTemplateField(field) ? templateFieldValues : requestFieldValues;
+      target[field.fieldKey] = toFieldDefaultValue(field);
+    }
+  }
+
+  return {
+    requestFieldValues,
+    templateFieldValues,
+  };
+};
+
+const pickStaticRequestFieldValues = currentState =>
+  STATIC_REQUEST_FIELD_KEYS.reduce((values, fieldKey) => {
+    const value = currentState?.requestFieldValues?.[fieldKey];
+    if (value !== undefined) {
+      values[fieldKey] = value;
+    }
+
+    return values;
+  }, {});
+
+const createDynamicFormState = overrides => ({
+  ...DEFAULT_STATE,
+  ...(overrides || {}),
+});
+
+const applyMaterialGroupSchema = (currentState, schemaPayload) => {
+  const visibleSections = normalizeSections(schemaPayload?.sections);
+  const { requestFieldValues, templateFieldValues } = buildFieldValues(visibleSections);
+  const subgroups = Array.isArray(schemaPayload?.subgroups) ? schemaPayload.subgroups : [];
+
+  return {
+    ...createDynamicFormState(currentState),
+    materialGroup:
+      schemaPayload?.materialGroup?.code ??
+      currentState?.materialGroup ??
+      DEFAULT_STATE.materialGroup,
+    schema: schemaPayload || null,
+    visibleSections,
+    subgroupOptions: subgroups.map(subgroup => ({
+      value: createSubgroupOptionValue(subgroup),
+      label: createSubgroupOptionLabel(subgroup),
+      data: subgroup,
+    })),
+    requestFieldValues: {
+      ...requestFieldValues,
+      ...pickStaticRequestFieldValues(currentState),
+    },
+    templateFieldValues,
+  };
+};
+
+const resetForMaterialGroupChange = currentState => ({
+  ...createDynamicFormState(currentState),
+  subgroup: "",
+  templateFieldValues: {},
+  requestFieldValues: {},
+});
 
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp"];
 const isImageFile = fileName => {

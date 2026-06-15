@@ -41,15 +41,15 @@ import {
   isMassRowFilled,
   mapMassRequestServerErrors,
   validateMassRequestBatch,
-} from "./massMaterialFormValidation.mjs";
+} from "./massMaterialFormValidation.js";
 import {
   buildMassExcelAoa,
   parseMassExcelToRows,
-} from "./massMaterialExcel.mjs";
+} from "./massMaterialExcel.js";
 import {
   ALLOWED_ATTACHMENT_EXTENSIONS,
   normalizeAttachmentSelection,
-} from "./attachmentValidation.mjs";
+} from "./attachmentValidation.js";
 
 // Column widths (in characters) for the exported worksheet, aligned to
 // MASS_EXCEL_HEADER_ROW: [No, Plant, Sloc, Material Group, Sub Mat Group,

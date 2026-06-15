@@ -339,15 +339,39 @@ export function computeAssignedToDisplay(row = {}) {
   return rawAssignedTo || "-";
 }
 
+const JAKARTA_TZ = "Asia/Jakarta";
+
+// Render an absolute instant as "YYYY-MM-DD HH:MM" wall-clock time in WIB.
+function formatWibWallClock(date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: JAKARTA_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const get = type => parts.find(part => part.type === type)?.value ?? "00";
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}`;
+}
+
 export function formatDateTime(value) {
   if (!value) {
     return "-";
   }
 
+  // Timestamps are stored as UTC in the DB; only the display is converted to WIB.
+  // A bare "YYYY-MM-DD HH:MM" string with no timezone marker is already WIB
+  // wall-clock time from the backend (TO_CHAR) — show it as-is so it is not
+  // double-shifted. Anything carrying timezone info (trailing "Z" or a ±offset)
+  // or a Date object is an absolute instant and is converted to WIB.
   if (typeof value === "string") {
-    const isoLikeMatch = value.match(/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}):(\d{2})/);
-    if (isoLikeMatch) {
-      return `${isoLikeMatch[1]} ${isoLikeMatch[2]}:${isoLikeMatch[3]}`;
+    const trimmed = value.trim();
+    const hasTimezone = /(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(trimmed);
+    const bareMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}):(\d{2})/);
+    if (bareMatch && !hasTimezone) {
+      return `${bareMatch[1]} ${bareMatch[2]}:${bareMatch[3]}`;
     }
   }
 
@@ -356,13 +380,7 @@ export function formatDateTime(value) {
     return String(value);
   }
 
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
+  return formatWibWallClock(date);
 }
 
 // Like formatDateTime, but preserves null/undefined instead of falling back to "-".

@@ -8,7 +8,7 @@
 // and cannot live in a spreadsheet, so imported rows always start with no
 // attachments and the user must add them before submitting.
 
-import { MASS_MAX_ROWS, MASS_MIN_ROWS, MASS_TEXT_FIELDS } from "./massMaterialFormValidation.mjs";
+import { MASS_MAX_ROWS, MASS_MIN_ROWS, MASS_TEXT_FIELDS } from "./massMaterialFormValidation.js";
 
 // Human-friendly column headers used when exporting. These intentionally match
 // the on-screen column labels so an exported file reads the same as the table.

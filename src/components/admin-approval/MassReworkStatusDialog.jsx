@@ -9,7 +9,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useMemo } from "react";
-import { buildMassReworkSummary } from "src/helper/massApprovalDetail.mjs";
+import { buildMassReworkSummary } from "src/helper/massApprovalDetail.js";
 
 export default function MassReworkStatusDialog({ open, row, onClose }) {
   const reworkSummary = useMemo(

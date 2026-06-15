@@ -61,16 +61,40 @@ export function mergeAdministratorMasterRow(previousRow = {}, responseData = {})
       previousRow.requesterUsername,
       "-"
     ),
+    requester_fullname: pickDefinedValue(
+      responseData.requester_fullname,
+      responseData.requesterFullname,
+      previousRow.requesterFullname,
+      ""
+    ),
+    requester_email: pickDefinedValue(
+      responseData.requester_email,
+      responseData.requesterEmail,
+      previousRow.requesterEmail,
+      ""
+    ),
     approval_1_user_id: pickDefinedValue(
       responseData.approval_1_user_id,
       responseData.approval1UserId,
       previousRow.approval1UserId,
       ""
     ),
+    approval_1_user_name: pickDefinedValue(
+      responseData.approval_1_user_name,
+      responseData.approval1UserName,
+      previousRow.approval1UserName,
+      ""
+    ),
     approval_2_user_id: pickDefinedValue(
       responseData.approval_2_user_id,
       responseData.approval2UserId,
       previousRow.approval2UserId,
+      ""
+    ),
+    approval_2_user_name: pickDefinedValue(
+      responseData.approval_2_user_name,
+      responseData.approval2UserName,
+      previousRow.approval2UserName,
       ""
     ),
     approval_3_user_id: pickDefinedValue(
@@ -135,6 +159,7 @@ function buildApproverOption(row = {}) {
     pickValue(row.roleGroupName, row.role_group_name, row.userGroupName, row.user_group_name, "")
   );
   const role = String(pickValue(row.role, row.role_name, row.roleName, row.userRole, "")).trim().toUpperCase();
+  const email = String(pickValue(row.email, row.user_email, row.emailAddress, "")).trim();
   return {
     id,
     value: userId,
@@ -143,6 +168,7 @@ function buildApproverOption(row = {}) {
     username: userId,
     fullName,
     fullname: fullName,
+    email,
     roleGroupName,
     userGroupName: roleGroupName,
     role,
@@ -154,8 +180,12 @@ function normalizeAdministratorMasterRow(row = {}) {
     id: String(pickDefinedValue(row.requester_user_id, row.requesterUserId, "")),
     requesterUserId: String(pickDefinedValue(row.requester_user_id, row.requesterUserId, "")),
     requesterUsername: String(pickDefinedValue(row.requester_username, row.requesterUsername, "-")),
+    requesterFullname: String(pickDefinedValue(row.requester_fullname, row.requesterFullname, "")),
+    requesterEmail: String(pickDefinedValue(row.requester_email, row.requesterEmail, "")),
     approval1UserId: String(pickDefinedValue(row.approval_1_user_id, row.approval1UserId, "")),
+    approval1UserName: String(pickDefinedValue(row.approval_1_user_name, row.approval1UserName, "")),
     approval2UserId: String(pickDefinedValue(row.approval_2_user_id, row.approval2UserId, "")),
+    approval2UserName: String(pickDefinedValue(row.approval_2_user_name, row.approval2UserName, "")),
     approval3UserId: String(pickDefinedValue(row.approval_3_user_id, row.approval3UserId, "")),
     approval3UserName: String(pickDefinedValue(row.approval_3_user_name, row.approval3UserName, "")),
     approval3Type: String(pickDefinedValue(row.approval_3_type, row.approval3Type, "SYSTEM")),

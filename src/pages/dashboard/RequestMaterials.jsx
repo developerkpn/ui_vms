@@ -28,17 +28,17 @@ import {
 } from "@mui/material";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { buildApprovalDetail } from "src/helper/adminApprovalDetail.mjs";
+import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
 import {
   computeAssignedToDisplay,
   computeMassAssignedToDisplay,
   formatOptionalDateTime,
-} from "src/helper/adminApprovalView.mjs";
+} from "src/helper/adminApprovalView.js";
 import {
   buildPlantOptions,
   buildPlantLabelMap,
   buildStorageOptionsForPlant,
-} from "src/helper/materialChangeExtendRequest.mjs";
+} from "src/helper/materialChangeExtendRequest.js";
 import MassReworkForm from "src/components/request-material/MassReworkForm";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 import PageHeader from "src/components/common/PageHeader";

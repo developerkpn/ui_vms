@@ -1,7 +1,7 @@
 import {
   buildApprovalFieldHistory,
   buildTemplatePayloadFieldKey,
-} from "./adminApprovalFieldHistory.mjs";
+} from "./adminApprovalFieldHistory.js";
 
 const SPEC_FIELD_LABELS = {
   part_number: "Part Number",

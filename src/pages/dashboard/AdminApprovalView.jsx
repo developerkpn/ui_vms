@@ -34,10 +34,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import AdminApprovalFormDialog from "src/components/admin-approval/AdminApprovalFormDialog";
 import MassApprovalFormDialog from "src/components/admin-approval/MassApprovalFormDialog";
 import MassReworkStatusDialog from "src/components/admin-approval/MassReworkStatusDialog";
-import { buildApprovalDetail } from "src/helper/adminApprovalDetail.mjs";
+import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
-import { buildApprovalSubGroupsRequestPath } from "src/helper/adminApprovalSubGroup.mjs";
-import { mapApprovalServerErrors } from "src/helper/adminApprovalValidation.mjs";
+import { buildApprovalSubGroupsRequestPath } from "src/helper/adminApprovalSubGroup.js";
+import { mapApprovalServerErrors } from "src/helper/adminApprovalValidation.js";
 import {
   APPROVAL_GROUP_OPTIONS,
   APPROVAL_STATUS_FILTER_OPTIONS,
@@ -53,7 +53,7 @@ import {
   paginateMassApprovalRows,
   sortMassApprovalRows,
   summarizeMassApprovalGroups,
-} from "src/helper/adminApprovalView.mjs";
+} from "src/helper/adminApprovalView.js";
 import PageHeader from "src/components/common/PageHeader";
 import PageTablePaper, { PAGE_TABLE_HEADER_SX } from "src/components/common/PageTablePaper";
 import PageTabs from "src/components/common/PageTabs";
