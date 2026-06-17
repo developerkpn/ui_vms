@@ -176,6 +176,9 @@ function ChainEditorDialog({
 }) {
   // Draft is an ordered list of selection slots: { approverUserId, label, username }.
   const [draft, setDraft] = useState([]);
+  // Only the slot the user is actively searching should show the loading spinner —
+  // the others are independent and unrelated to this search.
+  const [searchingIndex, setSearchingIndex] = useState(null);
 
   useEffect(() => {
     if (!open || !row) return;
@@ -223,7 +226,10 @@ function ChainEditorDialog({
       previous.map((slot, slotIndex) =>
         slotIndex === index
           ? {
-              approverUserId: option?.value || option?.id || "",
+              // option.id is the user_id (uuid); option.value is the username.
+              // The chain must store the uuid so it joins mst_user and the
+              // snapshotted approval steps match the approver at approve time.
+              approverUserId: option?.id || option?.value || "",
               label: option?.label || "",
               username: option?.username || "",
             }
@@ -267,10 +273,16 @@ function ChainEditorDialog({
                   valueId={slot.approverUserId}
                   placeholder={`Pilih Approval ${index + 1}`}
                   saving={saving}
-                  loading={approverLoading}
+                  loading={approverLoading && searchingIndex === index}
                   onChange={option => handleSlotChange(index, option)}
-                  onInputChange={onApproverInput}
-                  onOpen={onApproverOpen}
+                  onInputChange={value => {
+                    setSearchingIndex(index);
+                    onApproverInput(value);
+                  }}
+                  onOpen={() => {
+                    setSearchingIndex(index);
+                    onApproverOpen();
+                  }}
                 />
               </Box>
               <Tooltip title={draft.length <= 1 ? "At least one manual approver is required" : "Remove"}>
