@@ -1049,6 +1049,12 @@ export default function AdminApprovalView() {
           setApprovalDialogServerErrors({});
         }}
         onAction={handleApprovalAction}
+        onGrabbed={() => {
+          Promise.all([fetchApprovalRows(), fetchMassApprovalRows()]).catch(
+            refreshError =>
+              console.error("Failed to refresh after MDM grab:", refreshError)
+          );
+        }}
         submitting={submittingAction}
       />
 

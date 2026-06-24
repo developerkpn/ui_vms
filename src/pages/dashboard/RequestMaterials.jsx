@@ -32,6 +32,7 @@ import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
 import {
   computeAssignedToDisplay,
   computeMassAssignedToDisplay,
+  formatDateTime,
   formatOptionalDateTime,
   normalizeApprovalSteps,
 } from "src/helper/adminApprovalView.js";
@@ -455,7 +456,7 @@ export default function RequestMaterials() {
             changeExtendReason: item.change_extend_reason || "",
             status: item.status,
             createdBy: item.created_by,
-            createdAt: item.created_at,
+            createdAt: formatDateTime(item.created_at),
             assignedTo: computeAssignedToDisplay(item),
             reworkStage: item.rework_stage,
             reworkByUserId: item.rework_by_user_id,
@@ -527,7 +528,7 @@ export default function RequestMaterials() {
               uom: item.first_item_uom,
               status: item.first_item_status,
               createdBy: item.created_by_username || item.created_by,
-              createdAt: item.created_at,
+              createdAt: formatDateTime(item.created_at),
               assignedTo: computeMassAssignedToDisplay(item),
               massRequestReason: item.mass_request_reason,
               itemCount: item.item_count,

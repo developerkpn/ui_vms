@@ -520,6 +520,7 @@ export default function AdminApprovalFormDialog({
   row,
   onClose,
   onAction,
+  onGrabbed,
   submitting = false,
   subGroups = [],
   formSchema = null,
@@ -656,9 +657,17 @@ export default function AdminApprovalFormDialog({
 
   const unassignedStages = useMemo(() => {
     const stages = detail.approvalHistory || [];
+    // Master Data (MDM) is a claimable queue, not an assignable stage — it is
+    // expected to have no assignee until an MDM_MATERIAL user grabs it, so it is
+    // not an "unassigned approver" the admin needs to be warned about.
     return stages
-      .filter(item => item.status !== "SKIPPED" && item.approver === "-")
-      .map(item => ({ label: item.label, level: item.level, kind: item.kind }));
+      .filter(
+        item =>
+          item.status !== "SKIPPED" &&
+          item.approver === "-" &&
+          item.kind !== "MDM"
+      )
+      .map(item => item.label);
   }, [detail.approvalHistory]);
 
   // The MDM step as currently known: prefer the steps returned by a fresh grab,
@@ -756,6 +765,9 @@ export default function AdminApprovalFormDialog({
           },
         ]);
       }
+      // Notify the parent so the main inbox table reflects the claim — the
+      // request should no longer show as "unclaimed" to this (or any) MDM user.
+      onGrabbed?.();
     } catch (error) {
       setGrabError(
         error?.response?.data?.message ||
@@ -975,11 +987,10 @@ export default function AdminApprovalFormDialog({
           {unassignedStages.length > 0 && canSubmitApprovalAction && (
             <Alert severity="info" variant="outlined" sx={{ mb: 0 }}>
               <Typography variant="body2" sx={{ fontWeight: 800 }}>
-                Approver belum assigned: {unassignedStages.map(s => s.label).join(", ")}
+                Approver belum assigned: {unassignedStages.join(", ")}
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 Saat approve, admin akan otomatis ter-assign ke stage yang belum ada assignee.
-                {unassignedStages.some(s => s.kind === "MDM") && " Master Data stage masuk ke antrian MDM_MATERIAL dan harus di-claim (Grab) oleh salah satu user MDM_MATERIAL."}
               </Typography>
             </Alert>
           )}

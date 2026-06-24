@@ -2,6 +2,7 @@ import {
   buildApprovalFieldHistory,
   buildTemplatePayloadFieldKey,
 } from "./adminApprovalFieldHistory.js";
+import { formatDateTime } from "./adminApprovalView.js";
 
 const SPEC_FIELD_LABELS = {
   part_number: "Part Number",
@@ -82,7 +83,7 @@ export function buildApprovalDetail(row = {}) {
     currentStep,
     assignedTo: pickText(row.assignedTo, row.assigned_to),
     createdBy: pickText(row.createdBy, row.created_by),
-    createdAt: pickText(row.createdAt, row.created_at),
+    createdAt: formatDateTime(firstNonEmpty(row.createdAt, row.created_at)),
     basicInfo: {
       materialGroup: formatCodeName(
         pickText(row.materialGroupCode, row.material_group_code),
@@ -268,7 +269,7 @@ function buildApprovalHistory(approvalSteps = []) {
     kind: step.kind,
     approver: pickText(step.approverName),
     status: step.status,
-    approvedAt: pickText(step.actedAt),
+    approvedAt: formatDateTime(step.actedAt),
     remark: pickText(step.remark),
   }));
 }
@@ -306,7 +307,7 @@ function buildReworkSummary(approvalHistory, row) {
     row.reworkByUserId,
     row.rework_by_user_id
   );
-  const reworkAt = pickText(row.reworkAt, row.rework_at);
+  const reworkAt = formatDateTime(firstNonEmpty(row.reworkAt, row.rework_at));
   const reworkReason = pickText(row.reworkReason, row.rework_reason);
 
   if (reworkLabel !== "-" || reworkApprover !== "-" || reworkAt !== "-" || reworkReason !== "-") {

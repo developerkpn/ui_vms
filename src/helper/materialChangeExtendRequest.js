@@ -126,7 +126,7 @@ export function buildChangeRequestPayload({ material = {}, draft = {} }) {
     change_extend_reason: readText(draft.reason),
     requestFields: {
       material_description: readText(draft.materialName),
-      base_uom: readText(draft.baseUom),
+      base_unit_of_measure: readText(draft.baseUom),
     },
     templateValues: normalizeTemplateValues(draft.templateValues),
   };
@@ -141,7 +141,7 @@ export function buildExtendRequestPayload({ material = {}, draft = {} }) {
     change_extend_reason: readText(draft.reason),
     requestFields: {
       material_description: readText(material.name, material.material_description),
-      base_uom: readText(material.unit_of_measurement, material.base_uom, material.baseUom),
+      base_unit_of_measure: readText(material.unit_of_measurement, material.base_uom, material.baseUom),
       plant: readText(draft.plantCode),
       storage_location: readText(draft.storageLocation),
     },

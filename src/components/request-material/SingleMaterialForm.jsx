@@ -783,13 +783,28 @@ const SingleMaterialForm = ({
           borderRadius: 0,
           border: "1px solid",
           borderColor: "divider",
+          width: "100%",
           maxWidth: 1000,
           mx: "auto",
           mb: 4,
         }}
       >
-        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-          <CircularProgress size={28} />
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 2,
+            minHeight: 320,
+            px: 3,
+            py: 8,
+          }}
+        >
+          <CircularProgress size={36} />
+          <Typography variant="body2" color="text.secondary">
+            Loading request data…
+          </Typography>
         </Box>
       </Card>
     );

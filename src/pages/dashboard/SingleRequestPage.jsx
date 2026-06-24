@@ -20,7 +20,8 @@ import SingleMaterialForm from "../../components/request-material/SingleMaterial
 import MassMaterialForm from "../../components/request-material/MassMaterialForm";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 
-const DEFAULT_MATERIAL_TYPE = "SPARC - Non Trade Material";
+const DEFAULT_MATERIAL_TYPE = "SPAR - Non Trade Material";
+const INDUSTRY_SECTOR = "C - Chemical Industry";
 const PREFERENCE_KEY = "material_request_preferences";
 
 const parseTemplatePayload = payload => {
@@ -259,6 +260,17 @@ export default function SingleRequestPage({ mode = "single" }) {
     ) ||
     null;
 
+  // Sales Organization is auto-filled from the selected plant's company (one
+  // sales org per company). Read-only / derived, not chosen by the requester.
+  const selectedSalesOrgLocation = formData.plant
+    ? allLocations.find(l => l.plant_code === formData.plant && l.sales_org_code)
+    : null;
+  const selectedSalesOrg = selectedSalesOrgLocation
+    ? selectedSalesOrgLocation.sales_org_description
+      ? `${selectedSalesOrgLocation.sales_org_code} - ${selectedSalesOrgLocation.sales_org_description}`
+      : selectedSalesOrgLocation.sales_org_code
+    : "";
+
   // 3. Handler Perubahan
 
   const handlePlantChange = (_, selectedPlant) => {
@@ -435,6 +447,26 @@ export default function SingleRequestPage({ mode = "single" }) {
                   size="small"
                   value={formData.materialType}
                   InputProps={{ readOnly: true }}
+                />
+
+                {/* Industry Sector (single fixed value) */}
+                <TextField
+                  label="Industry Sector"
+                  fullWidth
+                  size="small"
+                  value={INDUSTRY_SECTOR}
+                  InputProps={{ readOnly: true }}
+                />
+
+                {/* Sales Organization (auto-filled from the selected plant's company) */}
+                <TextField
+                  label="Sales Organization"
+                  fullWidth
+                  size="small"
+                  value={selectedSalesOrg}
+                  placeholder="Auto-filled from Plant"
+                  InputProps={{ readOnly: true }}
+                  InputLabelProps={{ shrink: true }}
                 />
 
                 {isSingleCreateMode && (
