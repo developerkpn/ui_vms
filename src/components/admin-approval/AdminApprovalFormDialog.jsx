@@ -33,7 +33,11 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSessionStore from "src/store/useSessionStore";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
-import { buildCombinedLongTextHistory } from "src/helper/adminApprovalFieldHistory.js";
+import {
+  combineMaterialDescription,
+  splitMaterialDescription,
+  MATERIAL_DESCRIPTION_MAX_LENGTH,
+} from "src/helper/materialDescription.js";
 import {
   buildApprovalFieldHints,
   buildApprovalSpecificationFields,
@@ -94,7 +98,7 @@ function createApprovalDraft(detail = {}) {
   const raw = detail.rawRow || {};
   const requestFields = raw.requestFields ?? raw.request_fields ?? {};
 
-  return {
+  const draft = {
     material_sub_group_id: firstDefined(
       raw.material_sub_group_id,
       raw.materialSubGroupId,
@@ -117,22 +121,30 @@ function createApprovalDraft(detail = {}) {
       requestFields.storageLocation,
       null
     ),
-    material_description:
-      firstDefined(
-        raw.material_description,
-        raw.materialDescription,
-        detail.basicInfo?.materialDescription,
-        ""
-      ) || "",
     base_uom:
       firstDefined(raw.base_uom, raw.baseUom, raw.uom, detail.basicInfo?.baseUom, "") || "",
-    long_text_1: firstDefined(raw.long_text_1, raw.longText1, "") || "",
-    long_text_2: firstDefined(raw.long_text_2, raw.longText2, "") || "",
-    long_text_3: firstDefined(raw.long_text_3, raw.longText3, "") || "",
     template_payload: cloneTemplatePayload(
       firstDefined(raw.template_payload, raw.templatePayload, {})
     ),
   };
+
+  // material_description + long_text_1..3 are persisted as four 40-char SAP
+  // columns; the approver edits one combined box. The columns stay canonical
+  // (save payload / field history depend on them) and the box derives its value
+  // from them via combineMaterialDescription — split/combine are exact inverses
+  // so no separate combined draft field is needed.
+  draft.material_description =
+    firstDefined(
+      raw.material_description,
+      raw.materialDescription,
+      detail.basicInfo?.materialDescription,
+      ""
+    ) || "";
+  draft.long_text_1 = firstDefined(raw.long_text_1, raw.longText1, "") || "";
+  draft.long_text_2 = firstDefined(raw.long_text_2, raw.longText2, "") || "";
+  draft.long_text_3 = firstDefined(raw.long_text_3, raw.longText3, "") || "";
+
+  return draft;
 }
 
 const approvalStatusColors = {
@@ -165,23 +177,6 @@ const shouldShowFieldHistoryIcon = sections =>
 
 function renderDefaultHistoryValue(value) {
   return <Typography variant="body2">{value || "-"}</Typography>;
-}
-
-function renderLongTextHistoryValue(value) {
-  const lines = Array.isArray(value) ? value : [value || "-"];
-
-  return (
-    <Stack spacing={0.75}>
-      {lines.map((lineValue, index) => (
-        <Box key={`long-text-history-${index}`}>
-          <Typography variant="caption" sx={{ fontWeight: 800, color: "text.secondary" }}>
-            Long Text {index + 1}
-          </Typography>
-          <Typography variant="body2">{lineValue || "-"}</Typography>
-        </Box>
-      ))}
-    </Stack>
-  );
 }
 
 function FieldHistoryLabel({ label, sections, renderSectionValue = renderDefaultHistoryValue }) {
@@ -293,39 +288,6 @@ function ReadOnlyField({ label, value, multiline = false, rows = 1 }) {
           },
         }}
       />
-    </Box>
-  );
-}
-
-function ReadOnlyLongTextFields({ label, values = [] }) {
-  const lines = [0, 1, 2].map(index => values[index] || "-");
-
-  return (
-    <Box>
-      <Typography variant="caption" sx={{ display: "block", mb: 0.75, fontWeight: 800 }}>
-        {label}
-      </Typography>
-      <Stack spacing={1}>
-        {lines.map((line, index) => (
-          <TextField
-            key={`${label}-${index + 1}`}
-            fullWidth
-            size="small"
-            value={line}
-            InputProps={{ readOnly: true }}
-            sx={{
-              "& .MuiInputBase-root": {
-                bgcolor: "#fbfcfe",
-                color: "text.primary",
-              },
-              "& .MuiOutlinedInput-notchedOutline": {
-                borderColor: "#cfd8dc",
-                borderStyle: "dashed",
-              },
-            }}
-          />
-        ))}
-      </Stack>
     </Box>
   );
 }
@@ -564,10 +526,19 @@ export default function AdminApprovalFormDialog({
       }),
     [detail.specificationFields, formSchema]
   );
-  const longTextHistorySections = useMemo(
-    () => buildCombinedLongTextHistory({ currentRow: detail.rawRow }),
-    [detail.rawRow]
-  );
+  // The four description columns are now one combined box, so fold the
+  // long_text_1/2/3 change history into the material_description popover —
+  // otherwise approver edits that landed past the first 40 chars would have no
+  // visible audit trail. Sorted newest-first by approval time.
+  const materialDescriptionHistory = useMemo(() => {
+    const fieldHistory = detail.fieldHistory || {};
+    return [
+      ...(fieldHistory.material_description || []),
+      ...(fieldHistory.long_text_1 || []),
+      ...(fieldHistory.long_text_2 || []),
+      ...(fieldHistory.long_text_3 || []),
+    ].sort((a, b) => String(b.approvedAt || "").localeCompare(String(a.approvedAt || "")));
+  }, [detail.fieldHistory]);
   const isScopedChangeExtendRequest = isChangeExtendRequest(row);
 
   const [draftValues, setDraftValues] = useState(() => createApprovalDraft(detail));
@@ -1085,25 +1056,32 @@ export default function AdminApprovalFormDialog({
                   )}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12}>
                 <FieldHistoryLabel
                   label="Material Description *"
-                  sections={detail.fieldHistory?.material_description || []}
+                  sections={materialDescriptionHistory}
                 />
                 <Box sx={{ display: "flex", alignItems: "flex-end", gap: 1 }}>
                   <TextField
                     fullWidth
+                    multiline
+                    minRows={2}
                     size="small"
-                    value={draftValues.material_description}
+                    value={combineMaterialDescription(draftValues)}
                     onChange={event =>
                       updateDraftValues(current => ({
                         ...current,
-                        material_description: event.target.value,
+                        ...splitMaterialDescription(event.target.value),
                       }))
                     }
-                    inputProps={{ maxLength: 40 }}
+                    inputProps={{ maxLength: MATERIAL_DESCRIPTION_MAX_LENGTH }}
                     error={Boolean(displayFieldErrors.material_description?.error)}
-                    helperText={displayFieldErrors.material_description?.message || ""}
+                    helperText={
+                      displayFieldErrors.material_description?.message ||
+                      `Split across 4 SAP columns of 40 chars (${
+                        combineMaterialDescription(draftValues).length
+                      }/${MATERIAL_DESCRIPTION_MAX_LENGTH})`
+                    }
                   />
                   {renderFieldHint("material_description")}
                 </Box>
@@ -1182,33 +1160,6 @@ export default function AdminApprovalFormDialog({
                   />
                   {renderFieldHint("sloc_code")}
                 </Box>
-              </Grid>
-              <Grid item xs={12}>
-                <FieldHistoryLabel
-                  label="Long Text"
-                  sections={longTextHistorySections}
-                  renderSectionValue={renderLongTextHistoryValue}
-                />
-                <Stack spacing={1}>
-                  {["long_text_1", "long_text_2", "long_text_3"].map(key => (
-                    <TextField
-                      key={key}
-                      fullWidth
-                      size="small"
-                      value={draftValues[key] || ""}
-                      onChange={event =>
-                        updateDraftValues(current => ({
-                          ...current,
-                          [key]: event.target.value,
-                        }))
-                      }
-                      inputProps={{ maxLength: 40 }}
-                      error={Boolean(displayFieldErrors[key]?.error)}
-                      helperText={displayFieldErrors[key]?.message || ""}
-                      sx={{ "& .MuiOutlinedInput-notchedOutline": { borderStyle: "dashed" } }}
-                    />
-                  ))}
-                </Stack>
               </Grid>
                 </Grid>
               </Box>

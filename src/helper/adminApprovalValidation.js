@@ -2,6 +2,11 @@ import {
   getValidationHint,
   validateSpecField,
 } from "../components/request-material/specFieldValidation.js";
+import {
+  combineMaterialDescription,
+  MATERIAL_DESCRIPTION_COLUMN_LENGTH,
+  MATERIAL_DESCRIPTION_MAX_LENGTH,
+} from "./materialDescription.js";
 
 const REQUEST_FIELD_UI_KEY_MAP = {
   base_unit_of_measure: "base_uom",
@@ -22,8 +27,6 @@ const APPROVAL_EDITABLE_REQUEST_FIELD_KEYS = new Set([
   "sloc_code",
 ]);
 
-const MATERIAL_DESCRIPTION_MAX_LENGTH = 40;
-const LONG_TEXT_MAX_LENGTH = 40;
 
 function toTrimmedString(value) {
   if (value === undefined || value === null) {
@@ -157,8 +160,14 @@ export function validateApprovalDraft({
     addError("material_sub_group_id", "Sub material group is required");
   }
 
+  // Validate the combined Material Description (what the approver sees in the
+  // single box), not column 0 alone — the four SAP columns are a positional
+  // partition, so a value whose first 40 chars are whitespace would otherwise
+  // false-fail "required" while the box clearly shows text. The per-column
+  // (<=40) widths are already guaranteed by splitMaterialDescription and the
+  // server-side clamp, so no per-column UI check is needed here.
   const materialDescription = toTrimmedString(
-    draftValues?.material_description
+    combineMaterialDescription(draftValues)
   );
   if (!materialDescription.trim()) {
     addError("material_description", "Material Description wajib diisi");
@@ -172,16 +181,6 @@ export function validateApprovalDraft({
   if (!toTrimmedString(draftValues?.base_uom).trim()) {
     addError("base_uom", "Base UoM wajib diisi");
   }
-
-  ["long_text_1", "long_text_2", "long_text_3"].forEach(fieldKey => {
-    const value = toTrimmedString(draftValues?.[fieldKey]);
-    if (value.length > LONG_TEXT_MAX_LENGTH) {
-      addError(
-        fieldKey,
-        `Long Text maksimal ${LONG_TEXT_MAX_LENGTH} karakter`
-      );
-    }
-  });
 
   requestRuleFields.forEach(field => {
     const uiFieldKey = toUiFieldKey(field.fieldKey);
@@ -254,8 +253,7 @@ export function buildApprovalFieldHints(formSchema = {}) {
   });
 
   if (!hints.material_description) {
-    hints.material_description =
-      "Wajib diisi, maksimal 40 karakter.";
+    hints.material_description = `Wajib diisi, maksimal ${MATERIAL_DESCRIPTION_MAX_LENGTH} karakter (dibagi ke 4 kolom SAP @${MATERIAL_DESCRIPTION_COLUMN_LENGTH}).`;
   }
 
   return hints;
