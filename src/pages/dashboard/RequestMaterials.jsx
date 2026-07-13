@@ -24,11 +24,13 @@ import {
   Pagination,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
+import { getSapStatusChip, getStagedMaterialCode, isSapError, pickSapFields } from "src/helper/sapStatus.js";
 import {
   computeAssignedToDisplay,
   computeMassAssignedToDisplay,
@@ -93,6 +95,49 @@ function StatusPill({ status }) {
       }}
     />
   );
+}
+
+// Once a request is approved and pushed, the SAP staging status is the
+// meaningful one to show; otherwise fall back to the approval status.
+function SapAwareStatus({ row }) {
+  const sapChip = getSapStatusChip(row?.sapPushStatus);
+  if (!sapChip) {
+    return <StatusPill status={row?.status} />;
+  }
+
+  const chip = (
+    <Chip
+      label={sapChip.label}
+      size="small"
+      sx={{ fontWeight: 700, bgcolor: sapChip.bgcolor, color: sapChip.color }}
+    />
+  );
+
+  if (isSapError(row?.sapPushStatus) && row?.sapErrorMsg) {
+    // Surface the SAP write-back message (ERRORMSG_POST) inline, with the full
+    // text on hover in case it is truncated.
+    return (
+      <Tooltip title={row.sapErrorMsg} arrow placement="top">
+        <Stack spacing={0.5} alignItems="flex-start" sx={{ maxWidth: 220 }}>
+          {chip}
+          <Typography
+            variant="caption"
+            sx={{
+              color: "#dc2626",
+              fontWeight: 600,
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
+            {row.sapErrorMsg}
+          </Typography>
+        </Stack>
+      </Tooltip>
+    );
+  }
+  return chip;
 }
 
 function TicketTypePill({ value }) {
@@ -455,6 +500,7 @@ export default function RequestMaterials() {
             slocCode: item.sloc_code,
             changeExtendReason: item.change_extend_reason || "",
             status: item.status,
+            ...pickSapFields(item),
             createdBy: item.created_by,
             createdAt: formatDateTime(item.created_at),
             assignedTo: computeAssignedToDisplay(item),
@@ -474,9 +520,11 @@ export default function RequestMaterials() {
         : [];
 
       setRequests(prev => [...singleRequests, ...prev.filter(item => item.mode === "mass")]);
+      return true;
     } catch (error) {
       console.error("Failed to fetch single requests:", error);
       openSnackbar("Failed to load single requests. Showing fallback data.", "warning");
+      return false;
     } finally {
       setRequestsLoading(false);
     }
@@ -731,6 +779,38 @@ export default function RequestMaterials() {
     navigate(`/dashboard/materials/request/single/${detail.id}/rework`);
   };
 
+  // SAP rejected the request: send it back to the MDM stage as a rework, then
+  // open the normal revise flow (Create form or Change/Extend dialog) so the
+  // requester can fix the data. MDM re-approval re-stages it to SAP (FLAG='I').
+  const handleResubmitToSap = async () => {
+    handleMenuClose();
+    if (selectedRequest?.mode !== "single" || !selectedRequest?.id) {
+      return;
+    }
+
+    const target = selectedRequest;
+    try {
+      await axiosPrivate.post(
+        `/material/requests/single/${target.id}/sap-resubmit`
+      );
+      const refreshed = await fetchSingleRequests();
+      if (!refreshed) {
+        openSnackbar(
+          "Resubmit started, but the list failed to refresh. Please reload before revising.",
+          "warning"
+        );
+        return;
+      }
+      // target now sits in Rework against the MDM stage — reuse the revise flow.
+      handleReviseRequest(target);
+    } catch (error) {
+      openSnackbar(
+        error?.response?.data?.message || "Failed to start SAP resubmit.",
+        "error"
+      );
+    }
+  };
+
   const handleScopedReworkSubmit = async payload => {
     if (!selectedRequest?.id) {
       return;
@@ -867,6 +947,7 @@ export default function RequestMaterials() {
                   <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>Action</TableCell>
                   <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>Ticket Number</TableCell>
                   <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>Ticket Type</TableCell>
+                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>Material Code</TableCell>
                   <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, minWidth: 280 }}>
                     {activeTab === "mass" ? "Mass Request Reason" : "Material Description"}
                   </TableCell>
@@ -880,7 +961,7 @@ export default function RequestMaterials() {
               <TableBody>
                 {requestsLoading && (
                   <TableRow>
-                    <TableCell colSpan={9} align="center">
+                    <TableCell colSpan={10} align="center">
                       Loading requests...
                     </TableCell>
                   </TableRow>
@@ -915,12 +996,15 @@ export default function RequestMaterials() {
                       <TableCell>
                         <TicketTypePill value={row.ticketType} />
                       </TableCell>
+                      <TableCell sx={{ whiteSpace: "nowrap", fontWeight: 600 }}>
+                        {getStagedMaterialCode(row) || "-"}
+                      </TableCell>
                       <TableCell sx={{ fontWeight: 500 }}>
                         {activeTab === "mass" ? row.massRequestReason : row.materialDescription}
                       </TableCell>
                       <TableCell sx={{ whiteSpace: "nowrap" }}>{row.uom}</TableCell>
                       <TableCell>
-                        <StatusPill status={row.status} />
+                        <SapAwareStatus row={row} />
                       </TableCell>
                       <TableCell sx={{ whiteSpace: "nowrap" }}>{row.createdBy}</TableCell>
                       <TableCell sx={{ whiteSpace: "nowrap" }}>{row.createdAt}</TableCell>
@@ -989,6 +1073,19 @@ export default function RequestMaterials() {
         >
           View Rework
         </MenuItem>
+        {isSapError(selectedRequest?.sapPushStatus) &&
+          selectedRequest?.mode === "single" && (
+            <Divider />
+          )}
+        {isSapError(selectedRequest?.sapPushStatus) &&
+          selectedRequest?.mode === "single" && (
+            <MenuItem
+              onClick={handleResubmitToSap}
+              sx={{ color: "#dc2626", fontWeight: 700 }}
+            >
+              Resubmit to SAP
+            </MenuItem>
+          )}
         <Divider />
         <MenuItem onClick={handleMenuClose}>Copy Request</MenuItem>
       </Menu>

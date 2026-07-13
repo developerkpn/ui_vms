@@ -1,3 +1,5 @@
+import { getSapStatusChip, pickSapFields } from "./sapStatus.js";
+
 export const APPROVAL_GROUP_OPTIONS = [
   { value: "none", label: "Group by" },
   { value: "status", label: "Status" },
@@ -6,11 +8,30 @@ export const APPROVAL_GROUP_OPTIONS = [
 ];
 
 export const APPROVAL_STATUS_FILTER_OPTIONS = [
+  { value: "All", label: "All" },
   { value: "Submit", label: "Submit" },
   { value: "Rework", label: "Rework" },
   { value: "Cancel", label: "Cancel" },
   { value: "Done", label: "Done" },
+  { value: "Waiting SAP", label: "Waiting SAP" },
+  { value: "SAP Error", label: "SAP Error" },
 ];
+
+export function isAllStatusFilter(statusFilter) {
+  return String(statusFilter || "").trim().toUpperCase() === "ALL";
+}
+
+// The status shown to the user (and therefore what to filter on): once a request
+// is pushed, the SAP staging state — "Waiting SAP" / "Done" (created in SAP) /
+// "SAP Error" — replaces the bare approval "Done", matching the table chip. This
+// is why filtering "Done" no longer sweeps in waiting/errored requests.
+export function getEffectiveApprovalStatusLabel(row) {
+  const sapChip = getSapStatusChip(row?.sapPushStatus);
+  if (sapChip) {
+    return sapChip.label;
+  }
+  return normalizeApprovalStatusForFilter(row?.status);
+}
 
 export function normalizeApprovalStatusForFilter(value) {
   const normalized = String(value || "")
@@ -32,9 +53,11 @@ export function normalizeApprovalStatusForFilter(value) {
   return "Submit";
 }
 
-export function filterApprovalRowsByStatus(rows = [], statusFilter = "Submit") {
-  const normalizedFilter = normalizeApprovalStatusForFilter(statusFilter);
-  return rows.filter(row => normalizeApprovalStatusForFilter(row.status) === normalizedFilter);
+export function filterApprovalRowsByStatus(rows = [], statusFilter = "All") {
+  if (isAllStatusFilter(statusFilter)) {
+    return rows;
+  }
+  return rows.filter(row => getEffectiveApprovalStatusLabel(row) === statusFilter);
 }
 
 export function paginateApprovalRows(rows = [], page = 0, rowsPerPage = 10) {
@@ -141,6 +164,7 @@ export function normalizeApprovalRows(rows = []) {
       materialDescription: stringOrFallback(row.material_description, row.materialDescription, "-"),
       uom: stringOrFallback(row.uom, row.base_uom, row.baseUom, "-"),
       status: normalizeApprovalStatusForFilter(row.status || "Submit"),
+      ...pickSapFields(row),
       createdBy: stringOrFallback(row.created_by, row.createdBy, "-"),
       createdAt: formatDateTime(row.created_at || row.createdAt),
       approvalStage: resolveApprovalStage(row),
@@ -634,9 +658,13 @@ export function normalizeMassApprovalRows(rows = []) {
   });
 }
 
-export function filterMassApprovalRowsByStatus(rows = [], statusFilter = "Submit") {
-  const filter = normalizeApprovalStatusForFilter(statusFilter);
-  return rows.filter(row => row.status === filter);
+export function filterMassApprovalRowsByStatus(rows = [], statusFilter = "All") {
+  if (isAllStatusFilter(statusFilter)) {
+    return rows;
+  }
+  // Mass requests are never pushed to SAP, so this resolves to the approval
+  // status; the SAP-only filter values simply match nothing here.
+  return rows.filter(row => getEffectiveApprovalStatusLabel(row) === statusFilter);
 }
 
 export function filterMassApprovalRows(rows = [], query = "") {

@@ -878,6 +878,18 @@ export default function AdminApprovalFormDialog({
     setRemarkDialogOpen(true);
   };
 
+  // Server-side final-code rejection (e.g. the assembled material code already
+  // exists in SAP master data or another request): reopen the running-number
+  // dialog with the server message on the input so MDM can pick another suffix.
+  useEffect(() => {
+    const serverError = serverValidationErrors?.finalCodeSuffix;
+    if (serverError?.message) {
+      setRemarkDialogOpen(false);
+      setFinalCodeSuffixError(serverError.message);
+      setFinalCodeDialogOpen(true);
+    }
+  }, [serverValidationErrors]);
+
   const isFinalStageActive = detail.isFinalStage || detail.currentStageKind === "MDM";
   const isFinalStageApprove =
     currentAction === "Approve" && isFinalStageActive && !isScopedChangeExtendRequest;
@@ -1534,7 +1546,7 @@ export default function AdminApprovalFormDialog({
                       }}
                     />
                     <Typography variant="body2" sx={{ mt: 1, fontWeight: 700, color: "text.secondary" }}>
-                      Final Code
+                      Running Number
                     </Typography>
                     {finalCodeSuffixError && (
                       <Typography variant="caption" color="error" sx={{ display: "block", mt: 0.5 }}>

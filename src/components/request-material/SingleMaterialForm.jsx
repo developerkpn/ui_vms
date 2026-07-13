@@ -15,6 +15,7 @@ import {
   FormHelperText,
   Grid,
   IconButton,
+  InputAdornment,
   Stack,
   TextField,
   Typography,
@@ -27,6 +28,7 @@ import { Delete, InfoOutlined } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 import { validateSpecField, getValidationHint } from "./specFieldValidation.js";
+import { formatIdrInput, parseIdrInput } from "../../helper/idrFormat.js";
 import {
   MAX_ATTACHMENTS,
   getAttachmentExtension,
@@ -50,7 +52,7 @@ const DEFAULT_STATE = {
   templateFieldValues: {},
 };
 
-const STATIC_REQUEST_FIELD_KEYS = [];
+const STATIC_REQUEST_FIELD_KEYS = ["moving_avg_price"];
 
 const isVisibleField = field => !field?.isHidden;
 
@@ -215,6 +217,7 @@ const getPersistentRequestFields = (requestFieldValues, formData) => {
   const plant = requestFieldValues?.plant || formData?.plant || "";
   const storageLocation = requestFieldValues?.storage_location || formData?.storageLocation || "";
   const materialType = requestFieldValues?.material_type || formData?.materialType || "";
+  const movingAvgPrice = requestFieldValues?.moving_avg_price || "";
 
   if (plant) {
     fields.plant = plant;
@@ -224,6 +227,9 @@ const getPersistentRequestFields = (requestFieldValues, formData) => {
   }
   if (materialType) {
     fields.material_type = materialType;
+  }
+  if (movingAvgPrice) {
+    fields.moving_avg_price = movingAvgPrice;
   }
 
   return fields;
@@ -284,6 +290,12 @@ const buildReworkFormState = ({ row, schemaPayload, formData }) => {
         row?.base_uom ||
         row?.baseUom ||
         getRequestValue(requestSources, "base_unit_of_measure", "base_uom"),
+      moving_avg_price: getRequestValue(
+        requestSources,
+        "moving_avg_price",
+        "movingAvgPrice",
+        "MOVING_AVG_PRICE"
+      ),
       long_text_1:
         row?.long_text_1 || row?.longText1 || getRequestValue(requestSources, "long_text_1"),
       long_text_2:
@@ -997,6 +1009,35 @@ const SingleMaterialForm = ({
                       helperText={fieldErrors.base_unit_of_measure?.message || ""}
                     />
                   )}
+                />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <Typography variant="caption" sx={{ fontWeight: 700, mb: 1, display: "block" }}>
+                  Moving Avg Price
+                </Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  // State keeps the plain numeric string ("1500000.5") so
+                  // validation and the SAP payload are untouched; only the
+                  // rendered input shows the rupiah form ("1.500.000,5").
+                  value={formatIdrInput(formState.requestFieldValues.moving_avg_price || "")}
+                  onChange={e => {
+                    const next = parseIdrInput(e.target.value);
+                    // Numbers only (optional single decimal). Ignore any
+                    // keystroke that would make it non-numeric.
+                    if (next === "" || /^\d*\.?\d*$/.test(next)) {
+                      handleRequestFieldChange("moving_avg_price", next);
+                    }
+                  }}
+                  placeholder="Input moving avg price"
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start">Rp</InputAdornment>,
+                  }}
+                  inputProps={{ maxLength: 50, inputMode: "decimal" }}
+                  error={Boolean(fieldErrors.moving_avg_price?.error)}
+                  helperText={fieldErrors.moving_avg_price?.message || ""}
                 />
               </Grid>
             </Grid>

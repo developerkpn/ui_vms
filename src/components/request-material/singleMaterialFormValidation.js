@@ -9,6 +9,8 @@ const SERVER_FIELD_KEY_MAP = {
   materialSubGroupId: "subgroup",
   sub_material_group_id: "subgroup",
   base_uom: "base_unit_of_measure",
+  MOVING_AVG_PRICE: "moving_avg_price",
+  movingAvgPrice: "moving_avg_price",
 };
 
 function toStringValue(value) {
@@ -60,6 +62,13 @@ export function validateRequesterField(fieldKey = "", rawValue = "") {
         return toFieldError("Base UoM wajib diisi.");
       }
       break;
+    case "moving_avg_price":
+      // Optional, but when filled it must be numeric (no DB constraint; the
+      // value is pushed straight to SAP moving price).
+      if (trimmedValue && !/^\d+(\.\d+)?$/.test(trimmedValue)) {
+        return toFieldError("Moving Avg Price harus berupa angka.");
+      }
+      break;
     default:
       break;
   }
@@ -76,6 +85,7 @@ export function validateRequesterDraft({ formState = {} } = {}) {
     ["materialGroup", formState?.materialGroup],
     ["subgroup", formState?.subgroup],
     ["base_unit_of_measure", requestFieldValues.base_unit_of_measure],
+    ["moving_avg_price", requestFieldValues.moving_avg_price],
   ].forEach(([fieldKey, value]) => {
     const result = validateRequesterField(fieldKey, value);
     if (result.error) {

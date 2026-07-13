@@ -28,6 +28,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -35,6 +36,7 @@ import AdminApprovalFormDialog from "src/components/admin-approval/AdminApproval
 import MassApprovalFormDialog from "src/components/admin-approval/MassApprovalFormDialog";
 import MassReworkStatusDialog from "src/components/admin-approval/MassReworkStatusDialog";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
+import { getSapStatusChip, getStagedMaterialCode, isSapError } from "src/helper/sapStatus.js";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import { buildApprovalSubGroupsRequestPath } from "src/helper/adminApprovalSubGroup.js";
 import { mapApprovalServerErrors } from "src/helper/adminApprovalValidation.js";
@@ -83,6 +85,56 @@ function StatusBadge({ value }) {
       }}
     />
   );
+}
+
+// Show the SAP staging status (waiting / created / error) once a request has
+// been pushed; otherwise fall back to the approval status.
+function SapAwareStatusBadge({ row }) {
+  const sapChip = getSapStatusChip(row?.sapPushStatus);
+  if (!sapChip) {
+    return <StatusBadge value={row?.status} />;
+  }
+
+  const chip = (
+    <Chip
+      label={sapChip.label}
+      size="small"
+      sx={{
+        minWidth: 96,
+        height: 32,
+        borderRadius: 1,
+        fontWeight: 800,
+        bgcolor: sapChip.bgcolor,
+        color: "common.white",
+      }}
+    />
+  );
+
+  if (isSapError(row?.sapPushStatus) && row?.sapErrorMsg) {
+    // Surface the SAP write-back message (ERRORMSG_POST) inline, with the full
+    // text on hover in case it is truncated.
+    return (
+      <Tooltip title={row.sapErrorMsg} arrow placement="top">
+        <Stack spacing={0.5} alignItems="center" sx={{ maxWidth: 220, mx: "auto" }}>
+          {chip}
+          <Typography
+            variant="caption"
+            sx={{
+              color: "#dc2626",
+              fontWeight: 600,
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
+            {row.sapErrorMsg}
+          </Typography>
+        </Stack>
+      </Tooltip>
+    );
+  }
+  return chip;
 }
 
 function TicketTypeBadge({ value }) {
@@ -262,7 +314,7 @@ export default function AdminApprovalView() {
   const [approvalRows, setApprovalRows] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [groupBy, setGroupBy] = useState("none");
-  const [statusFilter, setStatusFilter] = useState("Submit");
+  const [statusFilter, setStatusFilter] = useState("All");
   const [page, setPage] = useState(0);
   const [rowsPerPage] = useState(10);
   const [loading, setLoading] = useState(false);
@@ -787,6 +839,9 @@ export default function AdminApprovalView() {
                     </TableCell>
                     <TableCell sx={PAGE_TABLE_HEADER_SX}>Ticket Number</TableCell>
                     <TableCell sx={PAGE_TABLE_HEADER_SX}>Ticket Type</TableCell>
+                    <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
+                      Material Code
+                    </TableCell>
                     <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, minWidth: 280 }}>
                       Material Description
                     </TableCell>
@@ -804,7 +859,7 @@ export default function AdminApprovalView() {
                 <TableBody>
                   {loading && (
                     <TableRow>
-                      <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
+                      <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
                         Loading approval items...
                       </TableCell>
                     </TableRow>
@@ -857,6 +912,9 @@ export default function AdminApprovalView() {
                         <TableCell>
                           <TicketTypeBadge value={row.ticketType} />
                         </TableCell>
+                        <TableCell sx={{ whiteSpace: "nowrap", fontWeight: 700 }}>
+                          {getStagedMaterialCode(row) || "-"}
+                        </TableCell>
                         <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>
                           {row.materialDescription}
                         </TableCell>
@@ -864,7 +922,7 @@ export default function AdminApprovalView() {
                           {row.uom}
                         </TableCell>
                         <TableCell align="center">
-                          <StatusBadge value={row.status} />
+                          <SapAwareStatusBadge row={row} />
                         </TableCell>
                         <TableCell sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
                           {row.createdBy}
@@ -880,9 +938,9 @@ export default function AdminApprovalView() {
 
                   {!loading && visibleRows.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={9} align="center" sx={{ py: 5 }}>
+                      <TableCell colSpan={10} align="center" sx={{ py: 5 }}>
                         <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                          No {statusFilter} item found
+                          No {statusFilter === "All" ? "" : `${statusFilter} `}item found
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                           Coba ubah filter status, keyword pencarian, atau cek assignment approval.
@@ -988,7 +1046,7 @@ export default function AdminApprovalView() {
                           </Typography>
                         </TableCell>
                         <TableCell align="center">
-                          <StatusBadge value={row.status} />
+                          <SapAwareStatusBadge row={row} />
                         </TableCell>
                         <TableCell sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
                           {row.createdBy}
@@ -1006,7 +1064,7 @@ export default function AdminApprovalView() {
                     <TableRow>
                       <TableCell colSpan={8} align="center" sx={{ py: 5 }}>
                         <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                          No {statusFilter} mass request found
+                          No {statusFilter === "All" ? "" : `${statusFilter} `}mass request found
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                           Coba ubah filter status, keyword pencarian, atau cek assignment approval.
