@@ -278,7 +278,7 @@ function CoupaForm() {
         ispkp: data.tax_payment.is_pkp ?? false,
         is_new_npwp: data.tax_payment.is_new_npwp ?? false,
         npwp: data.tax_payment.npwp ? data.tax_payment.npwp : "",
-        paymthd: data.tax_payment.pay_mthd.toLowerCase() ?? "",
+        paymthd: data.tax_payment.pay_mthd ? data.tax_payment.pay_mthd.toLowerCase() : "",
         payterm: data.tax_payment.pay_term_code ? data.tax_payment.pay_term_code : "I30",
         ppn_type: data.tax_payment.ppn_code ?? "",
         company: selectedCompany ? selectedCompany.comp_id : "",
@@ -673,7 +673,7 @@ function CoupaForm() {
       ven_banks: ven_bank,
     };
 
-    console.log(jsonSend);
+    // console.log(jsonSend);
     try {
       setLoading(true);
       let submit;

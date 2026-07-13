@@ -55,6 +55,8 @@ const ListMasterBank = lazy(() => import("src/pages/dashboard/ListMasterBank"));
 const TicketInvalid = lazy(() => import("src/pages/TicketInvalid"));
 const ResetPassword = lazy(() => import("src/pages/ResetPassword"));
 const ListCoupa = lazy(() => import("src/pages/coupa/ListPage"));
+const HistoryCoupa = lazy(() => import("src/pages/coupa/HistoryPage"));
+const HistoryDetail = lazy(() => import("src/pages/coupa/DetailVendor"));
 
 export const routes = createBrowserRouter([
   {
@@ -135,6 +137,14 @@ export const routes = createBrowserRouter([
       {
         path: "coupa",
         element: <ListCoupa />,
+      },
+      {
+        path: "coupa/history",
+        element: <HistoryCoupa />,
+      },
+      {
+        path: "coupa/history/:id",
+        element: <HistoryDetail />,
       },
       {
         path: "vendor",
