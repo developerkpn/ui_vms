@@ -2,6 +2,7 @@ const ALLOWED_ATTACHMENT_EXTENSIONS = ["pdf", "doc", "docx", "png", "jpg", "jpeg
 
 const MIN_ATTACHMENTS = 1;
 const MAX_ATTACHMENTS = 3;
+const MAX_ATTACHMENT_SIZE_MB = 5;
 
 const getAttachmentExtension = fileName => {
   const normalizedName = String(fileName || "")
@@ -73,6 +74,7 @@ export {
   ALLOWED_ATTACHMENT_EXTENSIONS,
   MIN_ATTACHMENTS,
   MAX_ATTACHMENTS,
+  MAX_ATTACHMENT_SIZE_MB,
   getAttachmentExtension,
   isAllowedAttachmentFile,
   normalizeAttachmentSelection,
