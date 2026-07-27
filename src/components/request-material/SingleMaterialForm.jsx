@@ -1127,7 +1127,7 @@ const SingleMaterialForm = ({
             )}
 
             {attachmentError && (
-              <Typography variant="caption" color="error" sx={{ display: "block", mb: 2 }}>
+              <Typography variant="subtitle2" component="p" color="error" sx={{ mb: 2 }}>
                 {attachmentError}
               </Typography>
             )}
