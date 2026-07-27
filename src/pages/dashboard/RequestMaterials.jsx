@@ -839,7 +839,8 @@ export default function RequestMaterials() {
         normalizeSearchValue(item.ticketType).includes(query) ||
         normalizeSearchValue(item.materialDescription).includes(query) ||
         normalizeSearchValue(item.status).includes(query) ||
-        normalizeSearchValue(item.assignedTo).includes(query);
+        normalizeSearchValue(item.assignedTo).includes(query) ||
+        normalizeSearchValue(getStagedMaterialCode(item)).includes(query);
 
       return matchesTab && matchesSearch;
     });
