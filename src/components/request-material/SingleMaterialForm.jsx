@@ -31,6 +31,7 @@ import { validateSpecField, getValidationHint } from "./specFieldValidation.js";
 import { formatIdrInput, parseIdrInput } from "../../helper/idrFormat.js";
 import {
   MAX_ATTACHMENTS,
+  MAX_ATTACHMENT_SIZE_MB,
   getAttachmentExtension,
   getAttachmentValidationError,
   normalizeAttachmentSelection,
@@ -1095,6 +1096,9 @@ const SingleMaterialForm = ({
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
                   minimal 1 attachment, maksimal {MAX_ATTACHMENTS} attachments
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
+                  maximal size per attachment: {MAX_ATTACHMENT_SIZE_MB} MB
                 </Typography>
 
                 <Box sx={{ display: "flex", gap: 2, mb: 4 }}>
