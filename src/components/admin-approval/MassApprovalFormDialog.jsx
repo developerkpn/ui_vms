@@ -25,6 +25,7 @@ import {
 } from "@mui/material";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { buildMassApprovalDetail } from "src/helper/massApprovalDetail.js";
+import useSessionStore from "src/store/useSessionStore";
 
 const EDITABLE_FIELD_META = [
   { key: "plantCode", label: "Plant", dbKey: "plant_code", required: true },
@@ -74,7 +75,29 @@ export default function MassApprovalFormDialog({
   }, [open]);
 
   const normalizedStatus = String(detail.status || "").trim().toUpperCase();
-  const canAct = normalizedStatus === "SUBMIT";
+  const currentUserId = useSessionStore(state => state.user_id);
+  const currentUsername = useSessionStore(state => state.username);
+  // It is this user's turn only when they are the ACTIVE step's assigned
+  // approver (or MDM claimer). ADMIN keeps its backend-side override. Everyone
+  // else — including approvers who already acted — gets a view-only dialog.
+  const activeStep = useMemo(() => {
+    const steps = Array.isArray(row?.approvalSteps) ? row.approvalSteps : [];
+    return (
+      steps.find(
+        step => step.status !== "APPROVED" && step.status !== "REJECTED"
+      ) || null
+    );
+  }, [row]);
+  const isAdminOverride =
+    String(currentUsername || "").trim().toUpperCase() === "ADMIN";
+  const isMyTurn =
+    activeStep != null &&
+    activeStep.approverUserId != null &&
+    String(activeStep.approverUserId).trim() !== "" &&
+    String(activeStep.approverUserId).trim() ===
+      String(currentUserId ?? "").trim();
+  const canAct =
+    normalizedStatus === "SUBMIT" && (isAdminOverride || isMyTurn);
 
   // Resolve a field's display value: draft overrides original item value
   const resolveField = useCallback(
@@ -89,6 +112,9 @@ export default function MassApprovalFormDialog({
   );
 
   const updateDraft = (itemNo, fieldKey, value) => {
+    if (!canAct) {
+      return;
+    }
     // Clear error for this field
     setFieldErrors(prev => {
       const errKey = `${itemNo}::${fieldKey}`;

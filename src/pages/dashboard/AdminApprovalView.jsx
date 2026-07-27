@@ -24,14 +24,15 @@ import {
   Table,
   TableBody,
   TableCell,
-
   TableHead,
   TableRow,
+  TableSortLabel,
   TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
 import { useEffect, useMemo, useRef, useState } from "react";
+import useSessionStore from "src/store/useSessionStore";
 import AdminApprovalFormDialog from "src/components/admin-approval/AdminApprovalFormDialog";
 import MassApprovalFormDialog from "src/components/admin-approval/MassApprovalFormDialog";
 import MassReworkStatusDialog from "src/components/admin-approval/MassReworkStatusDialog";
@@ -41,20 +42,16 @@ import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import { buildApprovalSubGroupsRequestPath } from "src/helper/adminApprovalSubGroup.js";
 import { mapApprovalServerErrors } from "src/helper/adminApprovalValidation.js";
 import {
-  APPROVAL_GROUP_OPTIONS,
   APPROVAL_STATUS_FILTER_OPTIONS,
   filterApprovalRows,
   filterApprovalRowsByStatus,
+  isMdmMaterialUser,
   normalizeApprovalRows,
   normalizeMassApprovalRows,
   paginateApprovalRows,
-  sortApprovalRows,
-  summarizeApprovalGroups,
   filterMassApprovalRows,
   filterMassApprovalRowsByStatus,
   paginateMassApprovalRows,
-  sortMassApprovalRows,
-  summarizeMassApprovalGroups,
 } from "src/helper/adminApprovalView.js";
 import PageHeader from "src/components/common/PageHeader";
 import PageTablePaper, { PAGE_TABLE_HEADER_SX } from "src/components/common/PageTablePaper";
@@ -257,63 +254,22 @@ function ReworkStatusDialog({ open, row, onClose }) {
 const isChangeExtendRequest = row =>
   ["CHANGE", "EXTEND"].includes(String(row?.ticketType || row?.ticket_type || "").toUpperCase());
 
-// The current stage is an unclaimed Master Data (MDM) step that any MDM_MATERIAL
-// user may grab. The backend inbox already scopes these to MDM users.
-const isUnclaimedMdmStage = row => {
-  const kind = String(row?.currentStageKind || row?.current_stage_kind || "").toUpperCase();
-  if (kind !== "MDM") {
-    return false;
-  }
-  const steps = Array.isArray(row?.approvalSteps) ? row.approvalSteps : [];
-  const activeStep = steps.find(
-    step => step.status !== "APPROVED" && step.status !== "REJECTED"
-  );
-  return Boolean(activeStep) && !activeStep.approverUserId;
-};
-
-// Subtle "current stage" cell content for the inbox: shows the stage label and a
-// "to grab" hint for an unclaimed Master Data step.
+// "Assigned To" cell content for the inbox: just the current assignee.
 function AssignedToCell({ row }) {
-  const stageLabel = row.currentStageLabel || row.approvalStage;
-  const mdmToGrab = isUnclaimedMdmStage(row);
-
   return (
-    <Stack spacing={0.25}>
-      <Typography variant="body2" sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
-        {mdmToGrab ? "Master Data" : row.assignedTo}
-      </Typography>
-      {mdmToGrab ? (
-        <Chip
-          label="Master Data — to grab"
-          size="small"
-          sx={{
-            height: 20,
-            fontSize: "0.7rem",
-            fontWeight: 700,
-            bgcolor: "#fff7ed",
-            color: "#b45309",
-            border: "1px solid #fcd34d",
-          }}
-        />
-      ) : (
-        stageLabel &&
-        stageLabel !== "-" &&
-        stageLabel !== "Completed" && (
-          <Typography variant="caption" sx={{ color: "text.disabled", whiteSpace: "nowrap" }}>
-            {stageLabel}
-          </Typography>
-        )
-      )}
-    </Stack>
+    <Typography variant="body2" sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
+      {row.assignedTo}
+    </Typography>
   );
 }
 
 export default function AdminApprovalView() {
   const axiosPrivate = useAxiosPrivate();
+  const isMdmUser = useSessionStore(isMdmMaterialUser);
   const refreshWarningTimeoutRef = useRef(null);
   const [approvalRows, setApprovalRows] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [groupBy, setGroupBy] = useState("none");
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [statusFilter, setStatusFilter] = useState("All");
   const [page, setPage] = useState(0);
   const [rowsPerPage] = useState(10);
@@ -462,11 +418,25 @@ export default function AdminApprovalView() {
     };
   }, [approvalDialogRow, axiosPrivate]);
 
+  const sortRowsByConfig = (rows, config) => {
+    if (!config.key) {
+      return rows;
+    }
+    const direction = config.direction === "desc" ? -1 : 1;
+    const getSortValue = row =>
+      config.key === "materialCode" ? getStagedMaterialCode(row) : row[config.key];
+    return [...rows].sort(
+      (left, right) =>
+        String(getSortValue(left) || "").localeCompare(String(getSortValue(right) || "")) *
+        direction
+    );
+  };
+
   const visibleRows = useMemo(() => {
     const statusRows = filterApprovalRowsByStatus(approvalRows, statusFilter);
     const searchRows = filterApprovalRows(statusRows, searchQuery);
-    return sortApprovalRows(searchRows, groupBy);
-  }, [approvalRows, groupBy, searchQuery, statusFilter]);
+    return sortRowsByConfig(searchRows, sortConfig);
+  }, [approvalRows, sortConfig, searchQuery, statusFilter]);
 
   const pagedRows = useMemo(
     () => paginateApprovalRows(visibleRows, page, rowsPerPage),
@@ -477,27 +447,27 @@ export default function AdminApprovalView() {
     setStatusFilter(event.target.value);
     setPage(0);
   };
-  const groupedSummary = useMemo(
-    () => summarizeApprovalGroups(visibleRows, groupBy),
-    [groupBy, visibleRows]
-  );
+
+  const handleSort = key => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === "asc" ? "desc" : "asc",
+    }));
+    setPage(0);
+  };
 
   // Mass tab derived rows
   const massVisibleRows = useMemo(() => {
     const statusRows = filterMassApprovalRowsByStatus(massApprovalRows, statusFilter);
     const searchRows = filterMassApprovalRows(statusRows, searchQuery);
-    return sortMassApprovalRows(searchRows, groupBy);
-  }, [massApprovalRows, statusFilter, searchQuery, groupBy]);
+    return sortRowsByConfig(searchRows, sortConfig);
+  }, [massApprovalRows, statusFilter, searchQuery, sortConfig]);
 
   const massPagedRows = useMemo(
     () => paginateMassApprovalRows(massVisibleRows, page, rowsPerPage),
     [page, rowsPerPage, massVisibleRows]
   );
 
-  const massGroupedSummary = useMemo(
-    () => summarizeMassApprovalGroups(massVisibleRows, groupBy),
-    [groupBy, massVisibleRows]
-  );
   const handleMenuOpen = (event, row) => {
     setActiveRow(row);
     setMenuAnchorEl(event.currentTarget);
@@ -533,6 +503,34 @@ export default function AdminApprovalView() {
       setMassReworkDialogRow(row);
     } else {
       setReworkDialogRow(row || null);
+    }
+  };
+
+  // SAP rejected the pushed request: reopen the Master Data step in place so
+  // this MDM user can edit the data in the approval dialog and re-approve —
+  // re-approval re-stages the row to SAP as freshly submitted. Server-side
+  // this is gated to an active MDM_MATERIAL user (or ADMIN) only.
+  const handleMdmSapResubmit = async (row = activeRow) => {
+    handleMenuClose();
+    if (!row?.id || row?.massRequestNo) {
+      return;
+    }
+
+    try {
+      setSubmittingAction(true);
+      await axiosPrivate.post(`/material/requests/single/${row.id}/sap-resubmit`);
+      await fetchApprovalRows();
+      openSnackbar(
+        "Request dibuka kembali di tahap Master Data. Silakan edit lalu approve ulang untuk resubmit ke SAP.",
+        "success"
+      );
+    } catch (error) {
+      openSnackbar(
+        error?.response?.data?.message || "Gagal memulai resubmit ke SAP.",
+        "error"
+      );
+    } finally {
+      setSubmittingAction(false);
     }
   };
 
@@ -758,29 +756,6 @@ export default function AdminApprovalView() {
         <TextField
           select
           size="small"
-          label="Group by"
-          value={groupBy}
-          onChange={event => setGroupBy(event.target.value)}
-          SelectProps={{ native: true }}
-          sx={{
-            width: { xs: "100%", md: 220 },
-            bgcolor: "background.paper",
-            "& .MuiOutlinedInput-root": {
-              borderRadius: "7px",
-              minHeight: 50,
-            },
-          }}
-        >
-          {APPROVAL_GROUP_OPTIONS.map(option => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </TextField>
-
-        <TextField
-          select
-          size="small"
           label="Status"
           value={statusFilter}
           onChange={handleStatusFilterChange}
@@ -802,32 +777,6 @@ export default function AdminApprovalView() {
         </TextField>
       </Stack>
 
-      {groupedSummary.length > 0 && activeTab === "single" && (
-        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
-          {groupedSummary.map(item => (
-            <Chip
-              key={item.key}
-              label={`${item.key}: ${item.count}`}
-              size="small"
-              sx={{ bgcolor: "background.paper", fontWeight: 700 }}
-            />
-          ))}
-        </Stack>
-      )}
-
-      {massGroupedSummary.length > 0 && activeTab === "mass" && (
-        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
-          {massGroupedSummary.map(item => (
-            <Chip
-              key={item.key}
-              label={`${item.key}: ${item.count}`}
-              size="small"
-              sx={{ bgcolor: "background.paper", fontWeight: 700 }}
-            />
-          ))}
-        </Stack>
-      )}
-
       {/* Single tab table */}
       {activeTab === "single" && (
         <PageTablePaper>
@@ -837,23 +786,89 @@ export default function AdminApprovalView() {
                     <TableCell align="center" sx={PAGE_TABLE_HEADER_SX}>
                       Action
                     </TableCell>
-                    <TableCell sx={PAGE_TABLE_HEADER_SX}>Ticket Number</TableCell>
-                    <TableCell sx={PAGE_TABLE_HEADER_SX}>Ticket Type</TableCell>
+                    <TableCell sx={PAGE_TABLE_HEADER_SX}>
+                      <TableSortLabel
+                        active={sortConfig.key === "ticketNumber"}
+                        direction={sortConfig.key === "ticketNumber" ? sortConfig.direction : "asc"}
+                        onClick={() => handleSort("ticketNumber")}
+                      >
+                        Ticket Number
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sx={PAGE_TABLE_HEADER_SX}>
+                      <TableSortLabel
+                        active={sortConfig.key === "ticketType"}
+                        direction={sortConfig.key === "ticketType" ? sortConfig.direction : "asc"}
+                        onClick={() => handleSort("ticketType")}
+                      >
+                        Ticket Type
+                      </TableSortLabel>
+                    </TableCell>
                     <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
-                      Material Code
+                      <TableSortLabel
+                        active={sortConfig.key === "materialCode"}
+                        direction={sortConfig.key === "materialCode" ? sortConfig.direction : "asc"}
+                        onClick={() => handleSort("materialCode")}
+                      >
+                        Material Code
+                      </TableSortLabel>
                     </TableCell>
                     <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, minWidth: 280 }}>
-                      Material Description
+                      <TableSortLabel
+                        active={sortConfig.key === "materialDescription"}
+                        direction={
+                          sortConfig.key === "materialDescription" ? sortConfig.direction : "asc"
+                        }
+                        onClick={() => handleSort("materialDescription")}
+                      >
+                        Material Description
+                      </TableSortLabel>
                     </TableCell>
                     <TableCell align="center" sx={PAGE_TABLE_HEADER_SX}>
-                      UOM
+                      <TableSortLabel
+                        active={sortConfig.key === "uom"}
+                        direction={sortConfig.key === "uom" ? sortConfig.direction : "asc"}
+                        onClick={() => handleSort("uom")}
+                      >
+                        UOM
+                      </TableSortLabel>
                     </TableCell>
                     <TableCell align="center" sx={PAGE_TABLE_HEADER_SX}>
-                      Status
+                      <TableSortLabel
+                        active={sortConfig.key === "status"}
+                        direction={sortConfig.key === "status" ? sortConfig.direction : "asc"}
+                        onClick={() => handleSort("status")}
+                      >
+                        Status
+                      </TableSortLabel>
                     </TableCell>
-                    <TableCell sx={PAGE_TABLE_HEADER_SX}>Created by</TableCell>
-                    <TableCell sx={PAGE_TABLE_HEADER_SX}>Created at</TableCell>
-                    <TableCell sx={PAGE_TABLE_HEADER_SX}>Assigned to</TableCell>
+                    <TableCell sx={PAGE_TABLE_HEADER_SX}>
+                      <TableSortLabel
+                        active={sortConfig.key === "createdBy"}
+                        direction={sortConfig.key === "createdBy" ? sortConfig.direction : "asc"}
+                        onClick={() => handleSort("createdBy")}
+                      >
+                        Created by
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sx={PAGE_TABLE_HEADER_SX}>
+                      <TableSortLabel
+                        active={sortConfig.key === "createdAt"}
+                        direction={sortConfig.key === "createdAt" ? sortConfig.direction : "asc"}
+                        onClick={() => handleSort("createdAt")}
+                      >
+                        Created at
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sx={PAGE_TABLE_HEADER_SX}>
+                      <TableSortLabel
+                        active={sortConfig.key === "assignedTo"}
+                        direction={sortConfig.key === "assignedTo" ? sortConfig.direction : "asc"}
+                        onClick={() => handleSort("assignedTo")}
+                      >
+                        Assigned to
+                      </TableSortLabel>
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -962,17 +977,71 @@ export default function AdminApprovalView() {
                     <TableCell align="center" sx={PAGE_TABLE_HEADER_SX}>
                       Action
                     </TableCell>
-                    <TableCell sx={PAGE_TABLE_HEADER_SX}>Ticket Number</TableCell>
-                    <TableCell sx={PAGE_TABLE_HEADER_SX}>Ticket Type</TableCell>
+                    <TableCell sx={PAGE_TABLE_HEADER_SX}>
+                      <TableSortLabel
+                        active={sortConfig.key === "massRequestNo"}
+                        direction={sortConfig.key === "massRequestNo" ? sortConfig.direction : "asc"}
+                        onClick={() => handleSort("massRequestNo")}
+                      >
+                        Ticket Number
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sx={PAGE_TABLE_HEADER_SX}>
+                      <TableSortLabel
+                        active={sortConfig.key === "ticketType"}
+                        direction={sortConfig.key === "ticketType" ? sortConfig.direction : "asc"}
+                        onClick={() => handleSort("ticketType")}
+                      >
+                        Ticket Type
+                      </TableSortLabel>
+                    </TableCell>
                     <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, minWidth: 280 }}>
-                      Mass Request Reason
+                      <TableSortLabel
+                        active={sortConfig.key === "massRequestReason"}
+                        direction={
+                          sortConfig.key === "massRequestReason" ? sortConfig.direction : "asc"
+                        }
+                        onClick={() => handleSort("massRequestReason")}
+                      >
+                        Mass Request Reason
+                      </TableSortLabel>
                     </TableCell>
                     <TableCell align="center" sx={PAGE_TABLE_HEADER_SX}>
-                      Status
+                      <TableSortLabel
+                        active={sortConfig.key === "status"}
+                        direction={sortConfig.key === "status" ? sortConfig.direction : "asc"}
+                        onClick={() => handleSort("status")}
+                      >
+                        Status
+                      </TableSortLabel>
                     </TableCell>
-                    <TableCell sx={PAGE_TABLE_HEADER_SX}>Created by</TableCell>
-                    <TableCell sx={PAGE_TABLE_HEADER_SX}>Created at</TableCell>
-                    <TableCell sx={PAGE_TABLE_HEADER_SX}>Assigned to</TableCell>
+                    <TableCell sx={PAGE_TABLE_HEADER_SX}>
+                      <TableSortLabel
+                        active={sortConfig.key === "createdBy"}
+                        direction={sortConfig.key === "createdBy" ? sortConfig.direction : "asc"}
+                        onClick={() => handleSort("createdBy")}
+                      >
+                        Created by
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sx={PAGE_TABLE_HEADER_SX}>
+                      <TableSortLabel
+                        active={sortConfig.key === "createdAt"}
+                        direction={sortConfig.key === "createdAt" ? sortConfig.direction : "asc"}
+                        onClick={() => handleSort("createdAt")}
+                      >
+                        Created at
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sx={PAGE_TABLE_HEADER_SX}>
+                      <TableSortLabel
+                        active={sortConfig.key === "assignedTo"}
+                        direction={sortConfig.key === "assignedTo" ? sortConfig.direction : "asc"}
+                        onClick={() => handleSort("assignedTo")}
+                      >
+                        Assigned to
+                      </TableSortLabel>
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1093,6 +1162,18 @@ export default function AdminApprovalView() {
         <MenuItem onClick={() => handleOpenApproval()}>View Approval</MenuItem>
         <Divider />
         <MenuItem onClick={() => handleOpenRework()}>View Rework</MenuItem>
+        {isMdmUser && isSapError(activeRow?.sapPushStatus) && !activeRow?.massRequestNo && (
+          <Divider />
+        )}
+        {isMdmUser && isSapError(activeRow?.sapPushStatus) && !activeRow?.massRequestNo && (
+          <MenuItem
+            onClick={() => handleMdmSapResubmit()}
+            disabled={submittingAction}
+            sx={{ color: "#dc2626", fontWeight: 700 }}
+          >
+            Resubmit to SAP
+          </MenuItem>
+        )}
       </Menu>
 
       <AdminApprovalFormDialog

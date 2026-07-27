@@ -52,11 +52,6 @@ export function validateRequesterField(fieldKey = "", rawValue = "") {
         return toFieldError("Material group wajib dipilih.");
       }
       break;
-    case "subgroup":
-      if (!trimmedValue) {
-        return toFieldError("Sub material group wajib dipilih.");
-      }
-      break;
     case "base_unit_of_measure":
       if (!trimmedValue) {
         return toFieldError("Base UoM wajib diisi.");
@@ -66,7 +61,7 @@ export function validateRequesterField(fieldKey = "", rawValue = "") {
       // Optional, but when filled it must be numeric (no DB constraint; the
       // value is pushed straight to SAP moving price).
       if (trimmedValue && !/^\d+(\.\d+)?$/.test(trimmedValue)) {
-        return toFieldError("Moving Avg Price harus berupa angka.");
+        return toFieldError("Price harus berupa angka.");
       }
       break;
     default:

@@ -9,18 +9,17 @@ import {
   DialogActions,
   DialogContent,
   Divider,
-  FormControl,
   IconButton,
   Menu,
   MenuItem,
   Paper,
-  Select,
   Snackbar,
   Stack,
   Table,
   TableBody,
   TableCell,
   TableHead,
+  TableSortLabel,
   Pagination,
   TableRow,
   TextField,
@@ -44,6 +43,7 @@ import {
   buildStorageOptionsForPlant,
 } from "src/helper/materialChangeExtendRequest.js";
 import MassReworkForm from "src/components/request-material/MassReworkForm";
+import SingleMaterialForm from "src/components/request-material/SingleMaterialForm";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 import PageHeader from "src/components/common/PageHeader";
 import PageTablePaper, { PAGE_TABLE_HEADER_SX } from "src/components/common/PageTablePaper";
@@ -59,12 +59,10 @@ const APPROVAL_STATUS_BADGES = {
   "-": { label: "-", bgcolor: "#eceff3", color: "#546e7a" },
 };
 
-const GROUP_OPTIONS = [
-  { value: "none", label: "Group By" },
-  { value: "status", label: "Status" },
-  { value: "ticketType", label: "Ticket Type" },
-  { value: "assignedTo", label: "Assigned To" },
-];
+// Stable reference: SingleMaterialForm's load-existing-request effect depends
+// on prefetchedGroups, so a fresh [] literal on every render (the component's
+// own default parameter) would refire it in an infinite loop.
+const EMPTY_MATERIAL_GROUPS = [];
 
 const isChangeExtendRequest = row =>
   ["CHANGE", "EXTEND"].includes(String(row?.ticketType || row?.ticket_type || "").toUpperCase());
@@ -314,6 +312,144 @@ function RequestActionDialog({ open, mode, request, onClose, onReviseRequest }) 
   );
 }
 
+function DetailInfoRow({ label, value }) {
+  return (
+    <Stack direction="row" spacing={2} alignItems="flex-start">
+      <Typography
+        variant="body2"
+        sx={{ width: 180, flexShrink: 0, fontWeight: 700, color: "text.secondary" }}
+      >
+        {label}
+      </Typography>
+      <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: "pre-wrap" }}>
+        {value || "-"}
+      </Typography>
+    </Stack>
+  );
+}
+
+// Read-only detail modal opened from the ticket-number link: shows what was
+// requested (basic info, specification, long text, attachments) without any
+// edit/delete/approval actions.
+// Single requests reuse the actual request form (SingleMaterialForm) in
+// mode="view" so the modal looks exactly like the form the requester filled
+// out, just with every input disabled and no Save action. Mass requests don't
+// have an equivalent single-page form (MassMaterialForm is an Excel-style
+// grid with no load-existing-data path), so they keep an items table.
+function RequestDetailDialog({ open, request, onClose, massItems, massItemsLoading }) {
+  const detail = useMemo(() => buildApprovalDetail(request || {}), [request]);
+  const isMass = request?.mode === "mass";
+
+  if (!isMass) {
+    return (
+      <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+        <DialogContent sx={{ p: { xs: 1, sm: 2 } }}>
+          <SingleMaterialForm
+            mode="view"
+            requestId={request?.id}
+            ticketNumber={request?.ticketNumber}
+            prefetchedGroups={EMPTY_MATERIAL_GROUPS}
+            onBack={onClose}
+          />
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <Box
+        sx={{
+          px: { xs: 2, sm: 3 },
+          py: 2,
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 2,
+        }}
+      >
+        <Box>
+          <Typography variant="overline" sx={{ fontWeight: 800, color: "text.secondary" }}>
+            Request Detail
+          </Typography>
+          <Typography variant="h5" sx={{ fontWeight: 900, color: "#455a64", lineHeight: 1.1 }}>
+            {detail.ticketNumber}
+          </Typography>
+          <Stack direction="row" spacing={1} sx={{ mt: 1 }} alignItems="center">
+            <TicketTypePill value={detail.ticketType} />
+            <StatusPill status={detail.status} />
+          </Stack>
+        </Box>
+
+        <IconButton onClick={onClose} aria-label="Close request detail dialog">
+          <Close />
+        </IconButton>
+      </Box>
+
+      <DialogContent dividers sx={{ px: { xs: 2, sm: 3 }, py: 2.5 }}>
+        <Stack spacing={2}>
+          <DetailInfoRow label="Mass Request Reason" value={request?.massRequestReason} />
+          <DetailInfoRow label="Created by" value={detail.createdBy} />
+          <DetailInfoRow label="Created at" value={detail.createdAt} />
+
+          <Typography variant="subtitle2" sx={{ fontWeight: 800, mt: 1 }}>
+            Items
+          </Typography>
+          {massItemsLoading ? (
+            <Typography variant="body2" color="text.secondary">
+              Loading items...
+            </Typography>
+          ) : (
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 800 }}>No</TableCell>
+                  <TableCell sx={{ fontWeight: 800 }}>Ticket</TableCell>
+                  <TableCell sx={{ fontWeight: 800 }}>Material Description</TableCell>
+                  <TableCell sx={{ fontWeight: 800 }}>UoM</TableCell>
+                  <TableCell sx={{ fontWeight: 800 }}>Plant</TableCell>
+                  <TableCell sx={{ fontWeight: 800 }}>Sloc</TableCell>
+                  <TableCell sx={{ fontWeight: 800 }}>PO Text</TableCell>
+                  <TableCell sx={{ fontWeight: 800 }}>Status</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {(massItems || []).map((item, index) => (
+                  <TableRow key={item.id ?? index}>
+                    <TableCell>{item.item_no ?? index + 1}</TableCell>
+                    <TableCell sx={{ whiteSpace: "nowrap" }}>{item.request_no || "-"}</TableCell>
+                    <TableCell>{item.material_description || "-"}</TableCell>
+                    <TableCell>{item.uom || item.base_uom || "-"}</TableCell>
+                    <TableCell>{item.plant_code || "-"}</TableCell>
+                    <TableCell>{item.sloc_code || "-"}</TableCell>
+                    <TableCell>{item.po_text || "-"}</TableCell>
+                    <TableCell>
+                      <StatusPill status={item.status || "-"} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {(massItems || []).length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={8} align="center">
+                      No items found
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </Stack>
+      </DialogContent>
+
+      <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 2 }}>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 function ChangeExtendReworkForm({
   row,
   locations = [],
@@ -460,7 +596,7 @@ export default function RequestMaterials() {
   const [requests, setRequests] = useState([]);
   const [activeTab, setActiveTab] = useState("single");
   const [searchQuery, setSearchQuery] = useState("");
-  const [groupBy, setGroupBy] = useState("none");
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
   const [activeRequestId, setActiveRequestId] = useState(null);
   const [actionDialogMode, setActionDialogMode] = useState(null);
@@ -468,6 +604,9 @@ export default function RequestMaterials() {
   const [reviseChangeExtendOpen, setReviseChangeExtendOpen] = useState(false);
   const [initialLocations, setInitialLocations] = useState([]);
   const [reviseMassOpen, setReviseMassOpen] = useState(false);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [detailMassItems, setDetailMassItems] = useState([]);
+  const [detailMassItemsLoading, setDetailMassItemsLoading] = useState(false);
   const [massReworkItems, setMassReworkItems] = useState([]);
   const [massReworkSubmitting, setMassReworkSubmitting] = useState(false);
   const [requestsLoading, setRequestsLoading] = useState(false);
@@ -500,6 +639,16 @@ export default function RequestMaterials() {
             slocCode: item.sloc_code,
             changeExtendReason: item.change_extend_reason || "",
             status: item.status,
+            // Full detail payload for the read-only ticket-number detail modal.
+            materialGroupCode: item.material_group_code,
+            materialGroupName: item.material_group_name,
+            subMaterialGroupCode: item.material_sub_group_code,
+            subMaterialGroupName: item.material_sub_group_name,
+            longText1: item.long_text_1,
+            longText2: item.long_text_2,
+            longText3: item.long_text_3,
+            templatePayload: item.template_payload,
+            attachments: item.attachments,
             ...pickSapFields(item),
             createdBy: item.created_by,
             createdAt: formatDateTime(item.created_at),
@@ -695,35 +844,36 @@ export default function RequestMaterials() {
       return matchesTab && matchesSearch;
     });
 
-    if (groupBy === "none") {
+    if (!sortConfig.key) {
       return nextRows;
     }
 
-    return [...nextRows].sort((left, right) => {
-      const leftValue = String(left[groupBy] || "").toLowerCase();
-      const rightValue = String(right[groupBy] || "").toLowerCase();
-      return leftValue.localeCompare(rightValue);
-    });
-  }, [activeTab, groupBy, requests, searchQuery]);
+    const getSortValue = item =>
+      sortConfig.key === "description"
+        ? activeTab === "mass"
+          ? item.massRequestReason
+          : item.materialDescription
+        : sortConfig.key === "materialCode"
+          ? getStagedMaterialCode(item)
+          : item[sortConfig.key];
+
+    const direction = sortConfig.direction === "desc" ? -1 : 1;
+    return [...nextRows].sort(
+      (left, right) =>
+        String(getSortValue(left) || "").localeCompare(String(getSortValue(right) || "")) *
+        direction
+    );
+  }, [activeTab, sortConfig, requests, searchQuery]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRequests.length / rowsPerPage));
 
-  const groupedSummary = useMemo(() => {
-    if (groupBy === "none") {
-      return [];
-    }
-
-    return filteredRequests.reduce((acc, item) => {
-      const key = item[groupBy] || "Unassigned";
-      const existing = acc.find(entry => entry.key === key);
-      if (existing) {
-        existing.count += 1;
-      } else {
-        acc.push({ key, count: 1 });
-      }
-      return acc;
-    }, []);
-  }, [filteredRequests, groupBy]);
+  const handleSort = key => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === "asc" ? "desc" : "asc",
+    }));
+    setPage(0);
+  };
 
   function openSnackbar(message, severity = "success") {
     setSnackbar({ open: true, message, severity });
@@ -741,6 +891,36 @@ export default function RequestMaterials() {
   const handleOpenActionDialog = mode => {
     setActionDialogMode(mode);
     handleMenuClose();
+  };
+
+  // Ticket-number click: open the read-only detail modal (no edit/delete).
+  // Mass rows lazy-load their items; single rows already carry the full detail.
+  const handleOpenDetail = async row => {
+    setActiveRequestId(row.requestKey);
+    setDetailDialogOpen(true);
+
+    if (row.mode !== "mass") {
+      return;
+    }
+
+    try {
+      setDetailMassItemsLoading(true);
+      const response = await axiosPrivate.get(`/material/requests/mass/${row.id}/items`);
+      setDetailMassItems(response.data?.data ?? []);
+    } catch (error) {
+      setDetailMassItems([]);
+      openSnackbar(
+        error?.response?.data?.message || "Failed to load mass request items.",
+        "error"
+      );
+    } finally {
+      setDetailMassItemsLoading(false);
+    }
+  };
+
+  const handleCloseDetail = () => {
+    setDetailDialogOpen(false);
+    setDetailMassItems([]);
   };
 
   const handleCreateRequest = () => {
@@ -777,38 +957,6 @@ export default function RequestMaterials() {
     }
 
     navigate(`/dashboard/materials/request/single/${detail.id}/rework`);
-  };
-
-  // SAP rejected the request: send it back to the MDM stage as a rework, then
-  // open the normal revise flow (Create form or Change/Extend dialog) so the
-  // requester can fix the data. MDM re-approval re-stages it to SAP (FLAG='I').
-  const handleResubmitToSap = async () => {
-    handleMenuClose();
-    if (selectedRequest?.mode !== "single" || !selectedRequest?.id) {
-      return;
-    }
-
-    const target = selectedRequest;
-    try {
-      await axiosPrivate.post(
-        `/material/requests/single/${target.id}/sap-resubmit`
-      );
-      const refreshed = await fetchSingleRequests();
-      if (!refreshed) {
-        openSnackbar(
-          "Resubmit started, but the list failed to refresh. Please reload before revising.",
-          "warning"
-        );
-        return;
-      }
-      // target now sits in Rework against the MDM stage — reuse the revise flow.
-      handleReviseRequest(target);
-    } catch (error) {
-      openSnackbar(
-        error?.response?.data?.message || "Failed to start SAP resubmit.",
-        "error"
-      );
-    }
   };
 
   const handleScopedReworkSubmit = async payload => {
@@ -889,29 +1037,13 @@ export default function RequestMaterials() {
           <Box
             sx={{
               display: "flex",
-              justifyContent: "space-between",
+              justifyContent: "flex-end",
               alignItems: { xs: "stretch", md: "center" },
               flexDirection: { xs: "column", md: "row" },
               gap: 1.5,
               mb: 2.5,
             }}
           >
-            <FormControl size="small" sx={{ minWidth: 190 }}>
-              <Select
-                value={groupBy}
-                onChange={event => {
-                  setGroupBy(event.target.value);
-                  setPage(0);
-                }}
-              >
-                {GROUP_OPTIONS.map(option => (
-                  <MenuItem key={option.value} value={option.value}>
-                    {option.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
             <Box
               sx={{
                 display: "flex",
@@ -927,35 +1059,92 @@ export default function RequestMaterials() {
             </Box>
           </Box>
 
-          {groupedSummary.length > 0 && (
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 2 }}>
-              {groupedSummary.map(item => (
-                <Chip
-                  key={item.key}
-                  label={`${item.key}: ${item.count}`}
-                  variant="outlined"
-                  sx={{ borderRadius: 2 }}
-                />
-              ))}
-            </Box>
-          )}
-
           <PageTablePaper>
             <Table size="small" sx={{ minWidth: 980 }}>
               <TableHead>
                 <TableRow>
                   <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>Action</TableCell>
-                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>Ticket Number</TableCell>
-                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>Ticket Type</TableCell>
-                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>Material Code</TableCell>
-                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, minWidth: 280 }}>
-                    {activeTab === "mass" ? "Mass Request Reason" : "Material Description"}
+                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
+                    <TableSortLabel
+                      active={sortConfig.key === "ticketNumber"}
+                      direction={sortConfig.key === "ticketNumber" ? sortConfig.direction : "asc"}
+                      onClick={() => handleSort("ticketNumber")}
+                    >
+                      Ticket Number
+                    </TableSortLabel>
                   </TableCell>
-                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>UOM</TableCell>
-                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>Status</TableCell>
-                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>Created by</TableCell>
-                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>Created at</TableCell>
-                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>Assigned to</TableCell>
+                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
+                    <TableSortLabel
+                      active={sortConfig.key === "ticketType"}
+                      direction={sortConfig.key === "ticketType" ? sortConfig.direction : "asc"}
+                      onClick={() => handleSort("ticketType")}
+                    >
+                      Ticket Type
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
+                    <TableSortLabel
+                      active={sortConfig.key === "materialCode"}
+                      direction={sortConfig.key === "materialCode" ? sortConfig.direction : "asc"}
+                      onClick={() => handleSort("materialCode")}
+                    >
+                      Material Code
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, minWidth: 280 }}>
+                    <TableSortLabel
+                      active={sortConfig.key === "description"}
+                      direction={sortConfig.key === "description" ? sortConfig.direction : "asc"}
+                      onClick={() => handleSort("description")}
+                    >
+                      {activeTab === "mass" ? "Mass Request Reason" : "Material Description"}
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
+                    <TableSortLabel
+                      active={sortConfig.key === "uom"}
+                      direction={sortConfig.key === "uom" ? sortConfig.direction : "asc"}
+                      onClick={() => handleSort("uom")}
+                    >
+                      UOM
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
+                    <TableSortLabel
+                      active={sortConfig.key === "status"}
+                      direction={sortConfig.key === "status" ? sortConfig.direction : "asc"}
+                      onClick={() => handleSort("status")}
+                    >
+                      Status
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
+                    <TableSortLabel
+                      active={sortConfig.key === "createdBy"}
+                      direction={sortConfig.key === "createdBy" ? sortConfig.direction : "asc"}
+                      onClick={() => handleSort("createdBy")}
+                    >
+                      Created by
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
+                    <TableSortLabel
+                      active={sortConfig.key === "createdAt"}
+                      direction={sortConfig.key === "createdAt" ? sortConfig.direction : "asc"}
+                      onClick={() => handleSort("createdAt")}
+                    >
+                      Created at
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
+                    <TableSortLabel
+                      active={sortConfig.key === "assignedTo"}
+                      direction={sortConfig.key === "assignedTo" ? sortConfig.direction : "asc"}
+                      onClick={() => handleSort("assignedTo")}
+                    >
+                      Assigned to
+                    </TableSortLabel>
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -987,7 +1176,7 @@ export default function RequestMaterials() {
                         <Button
                           variant="text"
                           size="small"
-                          onClick={() => setActiveRequestId(row.requestKey)}
+                          onClick={() => handleOpenDetail(row)}
                           sx={{ px: 0, minWidth: 0, textTransform: "none", fontWeight: 600 }}
                         >
                           {row.ticketNumber}
@@ -1073,22 +1262,17 @@ export default function RequestMaterials() {
         >
           View Rework
         </MenuItem>
-        {isSapError(selectedRequest?.sapPushStatus) &&
-          selectedRequest?.mode === "single" && (
-            <Divider />
-          )}
-        {isSapError(selectedRequest?.sapPushStatus) &&
-          selectedRequest?.mode === "single" && (
-            <MenuItem
-              onClick={handleResubmitToSap}
-              sx={{ color: "#dc2626", fontWeight: 700 }}
-            >
-              Resubmit to SAP
-            </MenuItem>
-          )}
         <Divider />
         <MenuItem onClick={handleMenuClose}>Copy Request</MenuItem>
       </Menu>
+
+      <RequestDetailDialog
+        open={detailDialogOpen && Boolean(selectedRequest)}
+        request={selectedRequest}
+        onClose={handleCloseDetail}
+        massItems={detailMassItems}
+        massItemsLoading={detailMassItemsLoading}
+      />
 
       <RequestActionDialog
         open={Boolean(actionDialogMode) && Boolean(selectedRequest)}

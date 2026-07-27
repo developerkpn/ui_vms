@@ -4,7 +4,6 @@ import {
 } from "../components/request-material/specFieldValidation.js";
 import {
   combineMaterialDescription,
-  MATERIAL_DESCRIPTION_COLUMN_LENGTH,
   MATERIAL_DESCRIPTION_MAX_LENGTH,
 } from "./materialDescription.js";
 
@@ -156,15 +155,11 @@ export function validateApprovalDraft({
     };
   };
 
-  if (!draftValues?.material_sub_group_id) {
-    addError("material_sub_group_id", "Sub material group is required");
-  }
-
   // Validate the combined Material Description (what the approver sees in the
   // single box), not column 0 alone — the four SAP columns are a positional
   // partition, so a value whose first 40 chars are whitespace would otherwise
   // false-fail "required" while the box clearly shows text. The per-column
-  // (<=40) widths are already guaranteed by splitMaterialDescription and the
+  // widths are already guaranteed by splitMaterialDescription and the
   // server-side clamp, so no per-column UI check is needed here.
   const materialDescription = toTrimmedString(
     combineMaterialDescription(draftValues)
@@ -253,7 +248,7 @@ export function buildApprovalFieldHints(formSchema = {}) {
   });
 
   if (!hints.material_description) {
-    hints.material_description = `Wajib diisi, maksimal ${MATERIAL_DESCRIPTION_MAX_LENGTH} karakter (dibagi ke 4 kolom SAP @${MATERIAL_DESCRIPTION_COLUMN_LENGTH}).`;
+    hints.material_description = `Wajib diisi, maksimal ${MATERIAL_DESCRIPTION_MAX_LENGTH} karakter (dibagi ke 4 kolom SAP: 40 + 3×70).`;
   }
 
   return hints;

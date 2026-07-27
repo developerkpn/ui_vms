@@ -1,11 +1,15 @@
 import { getSapStatusChip, pickSapFields } from "./sapStatus.js";
 
-export const APPROVAL_GROUP_OPTIONS = [
-  { value: "none", label: "Group by" },
-  { value: "status", label: "Status" },
-  { value: "ticketType", label: "Ticket Type" },
-  { value: "assignedTo", label: "Assigned To" },
-];
+// MDM_MATERIAL membership is derived from the session store (role / groupid /
+// dept_id). The backend uses the "MDM_MATERIAL" group name; logins for that
+// group surface as MDM_MAT / MATERIAL on dept_id, so we match any of them.
+const MDM_MATERIAL_IDENTIFIERS = ["MDM_MATERIAL", "MDM_MAT", "MATERIAL"];
+
+export function isMdmMaterialUser(session = {}) {
+  return [session.role, session.groupid, session.dept_id]
+    .map(value => String(value ?? "").trim().toUpperCase())
+    .some(value => MDM_MATERIAL_IDENTIFIERS.includes(value));
+}
 
 export const APPROVAL_STATUS_FILTER_OPTIONS = [
   { value: "All", label: "All" },
@@ -324,30 +328,6 @@ export function filterApprovalRows(rows = [], query = "") {
   );
 }
 
-export function summarizeApprovalGroups(rows = [], groupBy = "none") {
-  if (!groupBy || groupBy === "none") {
-    return [];
-  }
-
-  const counts = rows.reduce((acc, row) => {
-    const key = row[groupBy] || "Unassigned";
-    acc.set(key, (acc.get(key) || 0) + 1);
-    return acc;
-  }, new Map());
-
-  return Array.from(counts.entries()).map(([key, count]) => ({ key, count }));
-}
-
-export function sortApprovalRows(rows = [], groupBy = "none") {
-  if (!groupBy || groupBy === "none") {
-    return rows;
-  }
-
-  return [...rows].sort((left, right) =>
-    String(left[groupBy] || "").localeCompare(String(right[groupBy] || ""))
-  );
-}
-
 function resolveApprovalStage(row = {}) {
   const normalizedStatus = String(row.status || "")
     .trim()
@@ -449,10 +429,11 @@ export function computeAssignedToDisplay(row = {}) {
       step => step.status !== "APPROVED" && step.status !== "REJECTED"
     );
 
-    // An unclaimed Master Data (MDM) step is a grab queue: nobody is assigned yet.
+    // An unclaimed Master Data (MDM) step is a grab queue: nobody is assigned
+    // yet, so show the stage name itself as the assignee.
     if (activeStep) {
       if (activeStep.kind === "MDM" && !activeStep.approverUserId) {
-        return "Master Data — to grab";
+        return "Master Data";
       }
       if (activeStep.approverName) {
         return activeStep.approverName;
@@ -689,42 +670,6 @@ export function paginateMassApprovalRows(rows = [], page = 0, rowsPerPage = 10) 
   return rows.slice(start, start + rowsPerPage);
 }
 
-export function sortMassApprovalRows(rows = [], groupBy = "none") {
-  return [...rows].sort((a, b) => {
-    const dateA = new Date(a.createdAt || 0).getTime();
-    const dateB = new Date(b.createdAt || 0).getTime();
-    return dateB - dateA;
-  });
-}
-
-export function summarizeMassApprovalGroups(rows = [], groupBy = "none") {
-  if (groupBy === "none" || !Array.isArray(rows) || rows.length === 0) {
-    return { "": rows };
-  }
-
-  const groups = {};
-
-  rows.forEach(row => {
-    let key;
-
-    if (groupBy === "status") {
-      key = row.status || "Submit";
-    } else if (groupBy === "assignedTo") {
-      key = row.assignedTo || "-";
-    } else {
-      key = "General";
-    }
-
-    if (!groups[key]) {
-      groups[key] = [];
-    }
-
-    groups[key].push(row);
-  });
-
-  return groups;
-}
-
 export function resolveMassApprovalStage(row = {}) {
   const normalizedStatus = String(row.first_item_status || row.status || "")
     .trim()
@@ -804,7 +749,7 @@ export function computeMassAssignedToDisplay(row = {}) {
     );
     if (activeStep) {
       if (activeStep.kind === "MDM" && !activeStep.approverUserId) {
-        return "Master Data — to grab";
+        return "Master Data";
       }
       if (activeStep.approverName) {
         return activeStep.approverName;

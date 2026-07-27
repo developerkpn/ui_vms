@@ -48,7 +48,10 @@ const DEFAULT_STATE = {
   schema: null,
   visibleSections: [],
   subgroupOptions: [],
-  requestFieldValues: {},
+  // Price defaults to Rp 1 (not 0/blank) on a fresh Create form; it's a
+  // persistent request field (STATIC_REQUEST_FIELD_KEYS) so it survives
+  // material group changes, and the requester can still edit or clear it.
+  requestFieldValues: { moving_avg_price: "1" },
   templateFieldValues: {},
 };
 
@@ -318,10 +321,15 @@ const SingleMaterialForm = ({
   schemaCache = {},
   mode = "create",
   requestId = "",
+  ticketNumber = "",
 }) => {
   const navigate = useNavigate();
   const axiosPrivate = useAxiosPrivate();
   const isReworkMode = mode === "rework";
+  // Read-only: same layout as the request form, loads an existing request like
+  // rework, but every input is disabled and there is no Save action.
+  const isViewMode = mode === "view";
+  const isExistingRequestMode = isReworkMode || isViewMode;
   const [materialGroups, setMaterialGroups] = useState([]);
   const [formState, setFormState] = useState(() => createDynamicFormState());
   const [submitError, setSubmitError] = useState("");
@@ -335,7 +343,6 @@ const SingleMaterialForm = ({
   const activeMaterialGroupRef = useRef("");
 
   const [attachments, setAttachments] = useState([]);
-  const [selectedFiles, setSelectedFiles] = useState([]);
   const [attachmentError, setAttachmentError] = useState("");
 
   const compactDropdownMenuProps = {
@@ -376,7 +383,7 @@ const SingleMaterialForm = ({
   }, [axiosPrivate, prefetchedGroups]);
 
   useEffect(() => {
-    if (!isReworkMode || !requestId) {
+    if (!isExistingRequestMode || !requestId) {
       return undefined;
     }
 
@@ -441,7 +448,7 @@ const SingleMaterialForm = ({
     return () => {
       active = false;
     };
-  }, [axiosPrivate, formData, isReworkMode, prefetchedGroups, requestId]);
+  }, [axiosPrivate, formData, isExistingRequestMode, prefetchedGroups, requestId]);
 
   const [uomOptions, setUomOptions] = useState([]);
 
@@ -573,21 +580,14 @@ const SingleMaterialForm = ({
 
   const handleFileChange = event => {
     const files = Array.from(event.target.files || []);
-    setSelectedFiles(files);
-    setAttachmentError("");
     setSubmitError("");
-  };
 
-  const handleUploadAttachments = () => {
-    const result = normalizeAttachmentSelection(selectedFiles, attachments);
+    const result = normalizeAttachmentSelection(files, attachments);
     setAttachments(result.files);
     setAttachmentError(result.error || "");
 
-    if (!result.error) {
-      setSelectedFiles([]);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
   };
 
@@ -747,6 +747,7 @@ const SingleMaterialForm = ({
           <TextField
             fullWidth
             size="small"
+            disabled={isViewMode}
             value={value}
             onChange={handleChange}
             onBlur={handleBlur}
@@ -844,9 +845,16 @@ const SingleMaterialForm = ({
           alignItems: "center",
         }}
       >
-        <Typography variant="h6" sx={{ fontWeight: 700, color: "#455a64" }}>
-          Form Material
-        </Typography>
+        <Box>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: "#455a64" }}>
+            {isViewMode ? "Request Detail" : "Form Material"}
+          </Typography>
+          {isViewMode && ticketNumber && (
+            <Typography variant="caption" color="text.secondary">
+              {ticketNumber}
+            </Typography>
+          )}
+        </Box>
       </Box>
 
       <CardContent sx={{ p: 4 }}>
@@ -878,6 +886,7 @@ const SingleMaterialForm = ({
                   select
                   value={formState.materialGroup}
                   onChange={handleGroupChange}
+                  disabled={isViewMode}
                   error={Boolean(fieldErrors.materialGroup?.error)}
                   helperText={fieldErrors.materialGroup?.message || ""}
                   SelectProps={{
@@ -898,13 +907,13 @@ const SingleMaterialForm = ({
 
               <Grid item xs={12} md={6}>
                 <Typography variant="caption" sx={{ fontWeight: 700, mb: 1, display: "block" }}>
-                  Sub Material Group <span style={{ color: "red" }}>*</span>
+                  Sub Material Group
                 </Typography>
                 <FormControl fullWidth error={Boolean(fieldErrors.subgroup?.error)}>
                   <Select
                     value={formState.subgroup}
                     onChange={handleSubgroupChange}
-                    disabled={!formState.materialGroup}
+                    disabled={isViewMode || !formState.materialGroup}
                     displayEmpty
                     MenuProps={compactDropdownMenuProps}
                     size="small"
@@ -996,6 +1005,7 @@ const SingleMaterialForm = ({
                 <Autocomplete
                   fullWidth
                   size="small"
+                  disabled={isViewMode}
                   options={uomOptions}
                   value={selectedUomOption}
                   onChange={(_, val) => handleRequestFieldChange("base_unit_of_measure", val?.uom_code || "")}
@@ -1014,11 +1024,12 @@ const SingleMaterialForm = ({
 
               <Grid item xs={12} md={6}>
                 <Typography variant="caption" sx={{ fontWeight: 700, mb: 1, display: "block" }}>
-                  Moving Avg Price
+                  Price
                 </Typography>
                 <TextField
                   fullWidth
                   size="small"
+                  disabled={isViewMode}
                   // State keeps the plain numeric string ("1500000.5") so
                   // validation and the SAP payload are untouched; only the
                   // rendered input shows the rupiah form ("1.500.000,5").
@@ -1031,7 +1042,7 @@ const SingleMaterialForm = ({
                       handleRequestFieldChange("moving_avg_price", next);
                     }
                   }}
-                  placeholder="Input moving avg price"
+                  placeholder="Input price"
                   InputProps={{
                     startAdornment: <InputAdornment position="start">Rp</InputAdornment>,
                   }}
@@ -1075,47 +1086,41 @@ const SingleMaterialForm = ({
           <Grid item xs={12}>
             <Divider sx={{ mb: 4 }} />
             <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 0.5 }}>
-              Attachment <span style={{ color: "red" }}>*</span>
+              Attachment {!isViewMode && <span style={{ color: "red" }}>*</span>}
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
-              supported formats: PDF, DOC, DOCX, PNG, JPG, JPEG
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
-              minimal 1 attachment, maksimal {MAX_ATTACHMENTS} attachments
-            </Typography>
+            {!isViewMode && (
+              <>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
+                  supported formats: PDF, DOC, DOCX, PNG, JPG, JPEG
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
+                  minimal 1 attachment, maksimal {MAX_ATTACHMENTS} attachments
+                </Typography>
 
-            <Box sx={{ display: "flex", gap: 2, mb: 4 }}>
-              <Button
-                variant="outlined"
-                onClick={handleBrowseClick}
-                sx={{ textTransform: "none", borderColor: "#1976d2", color: "#1976d2", px: 3 }}
-              >
-                Browsing File
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                hidden
-                accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
-                onChange={handleFileChange}
-              />
-              <Button
-                variant="contained"
-                disableElevation
-                onClick={handleUploadAttachments}
-                disabled={selectedFiles.length === 0 || attachments.length >= MAX_ATTACHMENTS}
-                sx={{ textTransform: "none", bgcolor: "#1976d2", px: 4 }}
-              >
-                Upload
-              </Button>
-            </Box>
+                <Box sx={{ display: "flex", gap: 2, mb: 4 }}>
+                  <Button
+                    variant="outlined"
+                    onClick={handleBrowseClick}
+                    disabled={attachments.length >= MAX_ATTACHMENTS}
+                    sx={{ textTransform: "none", borderColor: "#1976d2", color: "#1976d2", px: 3 }}
+                  >
+                    Browsing File
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    hidden
+                    accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                    onChange={handleFileChange}
+                  />
+                </Box>
 
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
-              {selectedFiles.length > 0
-                ? `${selectedFiles.length} file dipilih`
-                : `${attachments.length}/${MAX_ATTACHMENTS} attachment terpasang`}
-            </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
+                  {`${attachments.length}/${MAX_ATTACHMENTS} attachment terpasang`}
+                </Typography>
+              </>
+            )}
 
             {attachmentError && (
               <Typography variant="caption" color="error" sx={{ display: "block", mb: 2 }}>
@@ -1144,6 +1149,11 @@ const SingleMaterialForm = ({
                   }}
                 >
                   <Box
+                    component="a"
+                    href={getAttachmentPreviewSrc(file)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={`Preview ${getAttachmentName(file)}`}
                     sx={{
                       width: 44,
                       height: 44,
@@ -1155,6 +1165,7 @@ const SingleMaterialForm = ({
                       overflow: "hidden",
                       position: "relative",
                       flexShrink: 0,
+                      cursor: "pointer",
                     }}
                   >
                     {isImageFile(getAttachmentName(file)) && (
@@ -1190,24 +1201,35 @@ const SingleMaterialForm = ({
                   <Box sx={{ flex: 1, overflow: "hidden", minWidth: 0 }}>
                     <Typography
                       variant="body2"
+                      component="a"
+                      href={getAttachmentPreviewSrc(file)}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       sx={{
+                        display: "block",
                         fontWeight: 600,
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
+                        color: "inherit",
+                        textDecoration: "none",
+                        cursor: "pointer",
+                        "&:hover": { textDecoration: "underline", color: "primary.main" },
                       }}
                     >
                       {getAttachmentName(file)}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>
                       {isExistingAttachment(file)
                         ? "Existing file"
                         : formatAttachmentSize(file.size)}
                     </Typography>
                   </Box>
-                  <IconButton size="small" color="error" onClick={() => handleRemoveAttachment(i)} sx={{ flexShrink: 0 }}>
-                    <Delete />
-                  </IconButton>
+                  {!isViewMode && (
+                    <IconButton size="small" color="error" onClick={() => handleRemoveAttachment(i)} sx={{ flexShrink: 0 }}>
+                      <Delete />
+                    </IconButton>
+                  )}
                 </Box>
               ))}
             </Stack>
@@ -1237,15 +1259,17 @@ const SingleMaterialForm = ({
         >
           Close
         </Button>
-        <Button
-          variant="contained"
-          disableElevation
-          onClick={handleSave}
-          disabled={submitting || (isReworkMode && !requestId)}
-          sx={{ bgcolor: "#1976d2", textTransform: "none", minWidth: 100 }}
-        >
-          {submitting ? "Saving..." : isReworkMode ? "Save Revision" : "Save"}
-        </Button>
+        {!isViewMode && (
+          <Button
+            variant="contained"
+            disableElevation
+            onClick={handleSave}
+            disabled={submitting || (isReworkMode && !requestId)}
+            sx={{ bgcolor: "#1976d2", textTransform: "none", minWidth: 100 }}
+          >
+            {submitting ? "Saving..." : isReworkMode ? "Save Revision" : "Save"}
+          </Button>
+        )}
       </Box>
 
       <Dialog

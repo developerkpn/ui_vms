@@ -53,56 +53,31 @@ export function validateSpecField(value, field) {
       return { error: false, message: "" };
     }
 
-    case "CAPITAL_NO_SPECIAL_CHARS": {
-      // Uppercase letters A-Z, digits 0-9, and spaces only
-      if (!/^[A-Z0-9 ]*$/.test(value)) {
-        return {
-          error: true,
-          message: "Hanya huruf kapital (A-Z), angka (0-9), dan spasi yang diperbolehkan",
-        };
-      }
-      return { error: false, message: "" };
-    }
-
-    case "ALPHANUMERIC_CAPITAL": {
-      // Uppercase letters A-Z, digits 0-9, and spaces
-      if (!/^[A-Z0-9 ]*$/.test(value)) {
-        return {
-          error: true,
-          message: "Hanya huruf kapital (A-Z) dan angka (0-9) yang diperbolehkan",
-        };
-      }
-      return { error: false, message: "" };
-    }
-
+    // Special characters are allowed in every spec input: the CAPITAL_* rules
+    // only reject lowercase letters and NUMERIC_ONLY only rejects letters
+    // (mirrors backend materialService TEMPLATE_VALIDATORS).
+    case "CAPITAL_NO_SPECIAL_CHARS":
+    case "ALPHANUMERIC_CAPITAL":
     case "CAPITAL_ONLY": {
-      // Uppercase letters A-Z and spaces only
-      if (!/^[A-Z ]*$/.test(value)) {
+      if (!/^[^a-z]*$/.test(value)) {
         return {
           error: true,
-          message: "Hanya huruf kapital (A-Z) yang diperbolehkan",
+          message: "Gunakan huruf kapital (huruf kecil tidak diperbolehkan)",
         };
       }
       return { error: false, message: "" };
     }
 
     case "MIXED_ALPHA_NUM_UNIT": {
-      // Letters, digits, and common unit characters: / . - , " ' ( ) spaces
-      if (!/^[A-Za-z0-9 /.\-,'"()]+$/.test(value)) {
-        return {
-          error: true,
-          message: "Hanya huruf, angka, dan satuan ukuran yang diperbolehkan",
-        };
-      }
       return { error: false, message: "" };
     }
 
     case "NUMERIC_ONLY": {
-      // Digits and decimal point only
-      if (!/^[0-9.]*$/.test(value)) {
+      // Digits and special characters; letters are not allowed
+      if (!/^[^A-Za-z]*$/.test(value)) {
         return {
           error: true,
-          message: "Hanya angka yang diperbolehkan",
+          message: "Hanya angka dan karakter khusus yang diperbolehkan",
         };
       }
       return { error: false, message: "" };
@@ -141,15 +116,13 @@ export function getValidationHint(field) {
       return `Diawali "${prefixes.join('" atau "')}"`;
     }
     case "CAPITAL_NO_SPECIAL_CHARS":
-      return "Huruf kapital, tanpa tanda baca khusus";
     case "ALPHANUMERIC_CAPITAL":
-      return "Huruf kapital dan angka";
     case "CAPITAL_ONLY":
-      return "Huruf kapital";
+      return "Huruf kapital, karakter khusus diperbolehkan";
     case "MIXED_ALPHA_NUM_UNIT":
-      return "Angka dan satuan ukuran";
+      return "Bebas (huruf, angka, karakter khusus)";
     case "NUMERIC_ONLY":
-      return "Angka";
+      return "Angka dan karakter khusus";
     case "NONE":
       return "Tidak ada ketentuan input";
     default:

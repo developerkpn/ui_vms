@@ -33,6 +33,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSessionStore from "src/store/useSessionStore";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
+import { isMdmMaterialUser } from "src/helper/adminApprovalView.js";
 import {
   combineMaterialDescription,
   splitMaterialDescription,
@@ -53,17 +54,6 @@ import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 
 function firstDefined(...values) {
   return values.find(value => value !== undefined && value !== null);
-}
-
-// MDM_MATERIAL membership is derived from the session store (role / groupid /
-// dept_id). The backend uses the "MDM_MATERIAL" group name; logins for that
-// group surface as MDM_MAT / MATERIAL on dept_id, so we match any of them.
-const MDM_MATERIAL_IDENTIFIERS = ["MDM_MATERIAL", "MDM_MAT", "MATERIAL"];
-
-function isMdmMaterialUser(session = {}) {
-  return [session.role, session.groupid, session.dept_id]
-    .map(value => String(value ?? "").trim().toUpperCase())
-    .some(value => MDM_MATERIAL_IDENTIFIERS.includes(value));
 }
 
 function identifiersMatch(left, right) {
@@ -128,11 +118,13 @@ function createApprovalDraft(detail = {}) {
     ),
   };
 
-  // material_description + long_text_1..3 are persisted as four 40-char SAP
+  // material_description + long_text_1..3 are persisted as four fixed-width SAP
   // columns; the approver edits one combined box. The columns stay canonical
-  // (save payload / field history depend on them) and the box derives its value
-  // from them via combineMaterialDescription — split/combine are exact inverses
-  // so no separate combined draft field is needed.
+  // (save payload / field history depend on them) — split/combine are exact
+  // inverses. The box's raw *displayed* text (which may contain a Shift+Enter
+  // newline for readability) is tracked separately in the component as
+  // descriptionDisplayText; it never itself gets persisted, only its
+  // space-collapsed form via splitMaterialDescription.
   draft.material_description =
     firstDefined(
       raw.material_description,
@@ -542,6 +534,14 @@ export default function AdminApprovalFormDialog({
   const isScopedChangeExtendRequest = isChangeExtendRequest(row);
 
   const [draftValues, setDraftValues] = useState(() => createApprovalDraft(detail));
+  // Raw text shown in the Material Description box — may contain a Shift+Enter
+  // newline the approver typed for readability. Kept separate from
+  // draftValues so a newline is purely visual: it's collapsed to a space (via
+  // splitMaterialDescription) before ever reaching draftValues/the save
+  // payload, so it changes nothing about what gets submitted.
+  const [descriptionDisplayText, setDescriptionDisplayText] = useState(() =>
+    combineMaterialDescription(createApprovalDraft(detail))
+  );
   const [remarkDialogOpen, setRemarkDialogOpen] = useState(false);
   const [finalCodeDialogOpen, setFinalCodeDialogOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -570,6 +570,7 @@ export default function AdminApprovalFormDialog({
   const [grabError, setGrabError] = useState("");
   const axiosPrivate = useAxiosPrivate();
   const currentUserId = useSessionStore(state => state.user_id);
+  const currentUsername = useSessionStore(state => state.username);
   const isMdmUser = useSessionStore(isMdmMaterialUser);
 
   useEffect(() => {
@@ -603,7 +604,9 @@ export default function AdminApprovalFormDialog({
   }, [open, row]);
 
   useEffect(() => {
-    setDraftValues(createApprovalDraft(detail));
+    const nextDraft = createApprovalDraft(detail);
+    setDraftValues(nextDraft);
+    setDescriptionDisplayText(combineMaterialDescription(nextDraft));
     setClientFieldErrors({});
     setHasInteracted(false);
     setClaimedSteps(null);
@@ -690,15 +693,38 @@ export default function AdminApprovalFormDialog({
       String(mdmApproverUserId).trim() === "");
   const isMdmClaimedByMe =
     isMdmStageActive && identifiersMatch(mdmApproverUserId, currentUserId);
+  // Separation of duties: whoever already acted as approver on an earlier
+  // (non-MDM) step of this request must not grab its Master Data step. The
+  // backend enforces the same rule; this only hides the button.
+  const hasApprovedEarlierStep = useMemo(() => {
+    const steps = Array.isArray(detail.approvalSteps) ? detail.approvalSteps : [];
+    return steps.some(
+      step =>
+        String(step.kind ?? "").toUpperCase() !== "MDM" &&
+        identifiersMatch(step.approverUserId, currentUserId)
+    );
+  }, [detail.approvalSteps, currentUserId]);
   // Show "Grab/Claim" when the MDM queue is open to this MDM_MATERIAL user.
   const canGrabMdm =
     isMdmStageActive &&
     isMdmUnclaimed &&
     isMdmUser &&
+    !hasApprovedEarlierStep &&
     canSubmitApprovalAction &&
     !isMdmClaimedByMe;
-  // MDM approval actions are locked until the current user owns the claim.
-  const isMdmActionLocked = isMdmStageActive && !isMdmClaimedByMe;
+  // It is this user's turn only when they are the ACTIVE step's assigned
+  // approver (manual stage) or its claimer (MDM stage). ADMIN keeps its
+  // backend-side override. Everyone else — including approvers who already
+  // acted on an earlier stage — gets a view-only dialog.
+  const isAdminOverride =
+    String(currentUsername || "").trim().toUpperCase() === "ADMIN";
+  const isMyManualTurn =
+    Boolean(detail.currentStep) &&
+    String(detail.currentStep.kind || "").toUpperCase() !== "MDM" &&
+    identifiersMatch(detail.currentStep.approverUserId, currentUserId);
+  const canActNow =
+    canSubmitApprovalAction &&
+    (isAdminOverride || isMyManualTurn || (isMdmStageActive && isMdmClaimedByMe));
   const isMassRequest = Boolean(
     detail.rawRow?.massRequestNo ||
       detail.rawRow?.mass_request_no ||
@@ -758,6 +784,9 @@ export default function AdminApprovalFormDialog({
   );
 
   const updateDraftValues = updater => {
+    if (!canActNow) {
+      return;
+    }
     setHasInteracted(true);
     onClearServerValidationErrors?.();
     setDraftValues(current => updater(current));
@@ -869,8 +898,8 @@ export default function AdminApprovalFormDialog({
   };
 
   const handleFinalCodeNext = () => {
-    if (!/^\d{3}$/.test(String(finalCodeSuffix || "").trim())) {
-      setFinalCodeSuffixError("Final code suffix must be 3 digits.");
+    if (!/^[A-Z0-9]{3}$/.test(String(finalCodeSuffix || "").trim())) {
+      setFinalCodeSuffixError("Final code suffix must be 3 letters or digits.");
       return;
     }
     setFinalCodeDialogOpen(false);
@@ -1039,12 +1068,13 @@ export default function AdminApprovalFormDialog({
               </Grid>
               <Grid item xs={12} md={6}>
                 <FieldHistoryLabel
-                  label="Sub Material Group *"
+                  label="Sub Material Group"
                   sections={detail.fieldHistory?.material_sub_group_id || []}
                 />
                 <Autocomplete
                   fullWidth
                   size="small"
+                  disabled={!canActNow}
                   value={findSubGroupOptionById(subGroupOptions, draftValues.material_sub_group_id, row)}
                   options={subGroupOptions}
                   isOptionEqualToValue={(option, value) =>
@@ -1079,14 +1109,23 @@ export default function AdminApprovalFormDialog({
                     multiline
                     minRows={2}
                     size="small"
-                    value={combineMaterialDescription(draftValues)}
-                    onChange={event =>
+                    disabled={!canActNow}
+                    // Shift+Enter is allowed for a visual line break only — the
+                    // displayed text (with the newline) is local state; the
+                    // newline is collapsed to a space before it ever reaches
+                    // draftValues, so it changes nothing about what's saved.
+                    value={descriptionDisplayText}
+                    onChange={event => {
+                      if (!canActNow) {
+                        return;
+                      }
+                      const raw = event.target.value;
+                      setDescriptionDisplayText(raw);
                       updateDraftValues(current => ({
                         ...current,
-                        ...splitMaterialDescription(event.target.value),
-                      }))
-                    }
-                    inputProps={{ maxLength: MATERIAL_DESCRIPTION_MAX_LENGTH }}
+                        ...splitMaterialDescription(raw),
+                      }));
+                    }}
                     error={Boolean(displayFieldErrors.material_description?.error)}
                     helperText={
                       displayFieldErrors.material_description?.message ||
@@ -1107,6 +1146,7 @@ export default function AdminApprovalFormDialog({
                   <Autocomplete
                     fullWidth
                     size="small"
+                    disabled={!canActNow}
                     options={uomOptions}
                     value={selectedUomOption}
                     onChange={(_, val) =>
@@ -1138,6 +1178,7 @@ export default function AdminApprovalFormDialog({
                   <TextField
                     fullWidth
                     size="small"
+                    disabled={!canActNow}
                     value={draftValues.plant_code || ""}
                     onChange={event =>
                       updateDraftValues(current => ({
@@ -1160,6 +1201,7 @@ export default function AdminApprovalFormDialog({
                   <TextField
                     fullWidth
                     size="small"
+                    disabled={!canActNow}
                     value={draftValues.sloc_code || ""}
                     onChange={event =>
                       updateDraftValues(current => ({
@@ -1198,6 +1240,7 @@ export default function AdminApprovalFormDialog({
                             <TextField
                               fullWidth
                               size="small"
+                              disabled={!canActNow}
                               value={fieldValue || ""}
                               onChange={event =>
                                 updateDraftValues(current => ({
@@ -1372,13 +1415,17 @@ export default function AdminApprovalFormDialog({
           >
             Close
           </Button>
-          {isMdmStageActive && canSubmitApprovalAction && !isMdmClaimedByMe && (
-            <Typography variant="caption" sx={{ color: "#c2410c", fontWeight: 700 }}>
-              {isMdmUnclaimed
-                ? "Master Data stage belum di-claim."
-                : "Master Data stage sudah di-claim oleh user MDM lain."}
-            </Typography>
-          )}
+          {isMdmStageActive &&
+            canSubmitApprovalAction &&
+            !isMdmClaimedByMe &&
+            isMdmUser &&
+            !hasApprovedEarlierStep && (
+              <Typography variant="caption" sx={{ color: "#c2410c", fontWeight: 700 }}>
+                {isMdmUnclaimed
+                  ? "Master Data stage belum di-claim."
+                  : "Master Data stage sudah di-claim oleh user MDM lain."}
+              </Typography>
+            )}
           {grabError && (
             <Typography variant="caption" color="error" sx={{ fontWeight: 700 }}>
               {grabError}
@@ -1400,7 +1447,7 @@ export default function AdminApprovalFormDialog({
           <Button
             variant="contained"
             startIcon={<CheckCircle />}
-            disabled={submitting || !canSubmitApprovalAction || isMdmActionLocked}
+            disabled={submitting || !canActNow}
             onClick={handleApproveClick}
             sx={{ bgcolor: "#0b35d9", textTransform: "none", fontWeight: 800 }}
           >
@@ -1409,7 +1456,7 @@ export default function AdminApprovalFormDialog({
           <Button
             variant="contained"
             startIcon={<Replay />}
-            disabled={submitting || !canSubmitApprovalAction || isMdmActionLocked}
+            disabled={submitting || !canActNow}
             onClick={handleReworkClick}
             sx={{ bgcolor: "#fb8c00", textTransform: "none", fontWeight: 800 }}
           >
@@ -1418,7 +1465,7 @@ export default function AdminApprovalFormDialog({
           <Button
             variant="contained"
             startIcon={<Cancel />}
-            disabled={submitting || !canSubmitApprovalAction || isMdmActionLocked}
+            disabled={submitting || !canActNow}
             onClick={handleRejectClick}
             sx={{ bgcolor: "#c62828", textTransform: "none", fontWeight: 800 }}
           >
@@ -1512,8 +1559,7 @@ export default function AdminApprovalFormDialog({
                       placeholder="000"
                       inputProps={{
                         maxLength: 3,
-                        inputMode: "numeric",
-                        pattern: "[0-9]*",
+                        pattern: "[A-Za-z0-9]*",
                         style: { textAlign: "center" },
                       }}
                       sx={{
@@ -1539,7 +1585,12 @@ export default function AdminApprovalFormDialog({
                         "& .MuiOutlinedInput-notchedOutline": { border: "none" },
                       }}
                       onChange={event => {
-                        setFinalCodeSuffix(event.target.value.replace(/\D/g, "").slice(0, 3));
+                        setFinalCodeSuffix(
+                          event.target.value
+                            .toUpperCase()
+                            .replace(/[^A-Z0-9]/g, "")
+                            .slice(0, 3)
+                        );
                         if (finalCodeSuffixError) {
                           setFinalCodeSuffixError("");
                         }

@@ -13,7 +13,7 @@ export default defineConfig(() => {
       emptyOutDir: true,
     },
     server: {
-      port: 3000,
+      port: Number(process.env.VITE_PORT) || 3000,
       strictPort: true,
       open: "",
     },
