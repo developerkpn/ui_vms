@@ -82,3 +82,61 @@ Desain implementasi:
 - Kedua dropdown memiliki tinggi menu yang lebih pendek dibanding kondisi saat ini
 - Scroll pada menu tetap berfungsi
 - Logic form yang ada tetap berjalan tanpa perubahan perilaku data
+
+---
+
+## Amendment — 2026-07-28 (Ticket IBE-003)
+
+Ticket IBE-003 meminta `Material Group` dan `Sub Material Group` mengikuti perilaku
+field `Base UoM`, yaitu bisa dicari dengan mengetik. Permintaan ini membalik sebagian
+keputusan di atas. Bagian di atas tidak dihapus supaya konteks keputusan 2026-05-07
+tetap terbaca; yang berlaku sekarang adalah amendment ini.
+
+**Reversal 1 — Non-Goal "Tidak mengganti field menjadi `Autocomplete`"**
+
+Sudah tidak berlaku. Kedua field sekarang memakai MUI `Autocomplete` lewat komponen
+baru `src/components/common/SearchableSelect.jsx`, sama seperti `Base UoM`.
+`TextField select` dan `Select` tidak lagi dipakai untuk dua field ini.
+
+**Reversal 2 — Non-Goal "Tidak menambahkan fitur pencarian/typing"**
+
+Sudah tidak berlaku, dan inilah inti IBE-003. Kedua field sekarang bisa difilter
+dengan mengetik. Konsekuensinya kedua field jadi clearable (ada tombol clear khas
+`Autocomplete`), persis seperti `Base UoM`. Meng-clear `Material Group` mereset
+schema, subgroup, dan field specification — jalur yang sama dengan memilih group lain.
+
+**Reversal 3 — `compactDropdownMenuProps` dihapus**
+
+Chosen Approach di atas menambahkan `compactDropdownMenuProps` (`anchorOrigin`,
+`transformOrigin`, `variant: "menu"`, `PaperProps.sx.maxHeight: 260`) di
+`SingleMaterialForm.jsx`. Konstanta itu khusus `Menu` milik `Select` dan tidak
+berlaku di `Autocomplete`, jadi sudah dihapus karena kedua pemakainya hilang.
+
+Kebutuhan asli 2026-05-07 — daftar tampil di bawah field dan tidak terlalu tinggi —
+tetap terpenuhi: `Autocomplete` memang selalu menempel di bawah field, dan listbox
+default MUI dibatasi `40vh` lalu scroll. Bedanya tinggi maksimum bukan lagi 260px
+melekat, tapi mengikuti default `Autocomplete` supaya konsisten dengan `Base UoM`.
+
+**Tambahan yang bukan reversal — urutan kategori Sub Material Group**
+
+Pengelompokan brand untuk material group `901*` tetap ada, pindah dari
+`ListSubheader` ke `groupBy` milik `Autocomplete`. Karena `groupBy` bikin header baru
+setiap kali nilai group berubah saat menyusuri daftar, options wajib diurutkan per
+kategori lebih dulu. Urutan kategori sekarang tetap
+(`Acuator (Brand)` → `Solenoid Valve (Brand)` → `Other`), sebelumnya mengikuti
+kategori mana yang kebetulan muncul pertama di response API.
+
+**Files Affected (IBE-003)**
+
+- Add: `src/components/common/SearchableSelect.jsx`
+- Modify: `src/components/request-material/SingleMaterialForm.jsx`
+- Modify: `src/pages/dashboard/SingleMaterialForm.rework.test.cjs`
+
+**Acceptance Criteria (IBE-003)**
+
+- `Material Group` bisa dicari dengan mengetik
+- `Sub Material Group` bisa dicari dengan mengetik
+- Kedua field tampil dan berperilaku sama dengan `Base UoM`
+- Pengelompokan brand pada material group `901*` tetap muncul dengan header
+- Value yang sudah tersimpan tetap ter-preselect di mode rework dan view
+- Payload submit dan validasi tidak berubah
