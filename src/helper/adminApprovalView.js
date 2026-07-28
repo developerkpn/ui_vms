@@ -173,6 +173,7 @@ export function normalizeApprovalRows(rows = []) {
       createdAt: formatDateTime(row.created_at || row.createdAt),
       approvalStage: resolveApprovalStage(row),
       assignedTo: computeAssignedToDisplay(row),
+      assignmentCaption: computeAssignmentCaption(row),
       // Pass the N-stage data straight through for downstream consumers.
       approvalSteps,
     };
@@ -483,6 +484,87 @@ export function computeAssignedToDisplay(row = {}) {
   return rawAssignedTo || "-";
 }
 
+// Caption shown under the status pill while a request is still in the approval
+// flow. The "Assigned To" column already carries this information, but it
+// collapses two different states into one name: an unclaimed Master Data (MDM)
+// step is a grab queue nobody owns yet, while any other name is a step waiting
+// on that person to act. Spelling it out saves scrolling to the far right of
+// the table to infer it.
+//
+// Returns { kind, text } or null when there is nothing to wait for.
+//   GRAB       - MDM queue, not yet claimed by an MDM_MATERIAL user
+//   APPROVAL   - a named owner has to approve (a manual stage's approver, or
+//                the MDM user who already grabbed the step)
+//   UNASSIGNED - the stage has no approver assigned; the approval dialog flags
+//                this same state with a warning icon.
+function buildAssignmentCaption(activeStep, stage, assignedToDisplay) {
+  if (activeStep) {
+    // Mirrors computeAssignedToDisplay: an MDM step with no approver_user_id is
+    // the grab queue, and shows as "Master Data" rather than a person.
+    if (activeStep.kind === "MDM" && !activeStep.approverUserId) {
+      return { kind: "GRAB", text: "Waiting grab by Master Data" };
+    }
+    if (activeStep.approverName) {
+      return { kind: "APPROVAL", text: `Waiting approval from ${activeStep.approverName}` };
+    }
+    return {
+      kind: "UNASSIGNED",
+      text: `Waiting approver assignment on ${activeStep.label || stage}`,
+    };
+  }
+
+  // Legacy rows carry no approval_steps, only the flat approval_{n}_* fields, so
+  // the assignee name computed from them is all there is to go on.
+  if (assignedToDisplay && assignedToDisplay !== "-") {
+    if (assignedToDisplay === "Master Data") {
+      return { kind: "GRAB", text: "Waiting grab by Master Data" };
+    }
+    return { kind: "APPROVAL", text: `Waiting approval from ${assignedToDisplay}` };
+  }
+
+  return { kind: "UNASSIGNED", text: `Waiting approver assignment on ${stage}` };
+}
+
+function findActiveStep(steps = []) {
+  return steps.find(step => step.status !== "APPROVED" && step.status !== "REJECTED");
+}
+
+export function computeAssignmentCaption(row = {}) {
+  const stage = resolveApprovalStage(row);
+  if (stage === "Completed" || stage === "Cancelled") {
+    return null;
+  }
+
+  // Assigned back to the requester (rework): the pill already says Rework, and
+  // the requester is not waiting on anyone else.
+  if (String(row.assigned_to || row.assignedTo || "").trim() === "Requester") {
+    return null;
+  }
+
+  return buildAssignmentCaption(
+    findActiveStep(normalizeApprovalSteps(row)),
+    stage,
+    computeAssignedToDisplay(row)
+  );
+}
+
+export function computeMassAssignmentCaption(row = {}) {
+  const stage = resolveMassApprovalStage(row);
+  if (stage === "Completed" || stage === "Cancelled") {
+    return null;
+  }
+
+  if (String(row.first_item_assigned_to || row.firstItemAssignedTo || "").trim() === "Requester") {
+    return null;
+  }
+
+  return buildAssignmentCaption(
+    findActiveStep(normalizeApprovalSteps(row)),
+    stage,
+    computeMassAssignedToDisplay(row)
+  );
+}
+
 const JAKARTA_TZ = "Asia/Jakarta";
 
 // Render an absolute instant as "YYYY-MM-DD HH:MM" wall-clock time in WIB.
@@ -584,6 +666,7 @@ export function normalizeMassApprovalRows(rows = []) {
       createdAt: formatDateTime(row.created_at || row.createdAt),
       approvalStage: resolveMassApprovalStage(row),
       assignedTo: computeMassAssignedToDisplay(row),
+      assignmentCaption: computeMassAssignmentCaption(row),
       ticketType: "Create",
       // Pass the N-stage data straight through for downstream consumers.
       approvalSteps,

@@ -45,6 +45,7 @@ import {
   APPROVAL_STATUS_FILTER_OPTIONS,
   filterApprovalRows,
   filterApprovalRowsByStatus,
+  getEffectiveApprovalStatusLabel,
   isMdmMaterialUser,
   normalizeApprovalRows,
   normalizeMassApprovalRows,
@@ -81,11 +82,43 @@ function StatusBadge({ value }) {
   );
 }
 
+// Spells out which step a still-open request is sitting on — waiting on a named
+// approver, or waiting for Master Data to grab it — so it can be read off the
+// Status column instead of inferred from "Assigned To" at the far right.
+function AssignmentCaption({ status, caption }) {
+  return (
+    <Tooltip title={caption.text} arrow placement="top">
+      <Stack spacing={0.5} alignItems="flex-start" sx={{ maxWidth: 220, mx: "auto" }}>
+        <StatusBadge value={status} />
+        <Typography
+          variant="caption"
+          sx={{
+            color: caption.kind === "UNASSIGNED" ? "#f59e0b" : "text.secondary",
+            fontWeight: 600,
+            textAlign: "left",
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          {caption.text}
+        </Typography>
+      </Stack>
+    </Tooltip>
+  );
+}
+
 // Show the SAP staging status (waiting / created / error) once a request has
 // been pushed; otherwise fall back to the approval status.
 function SapAwareStatusBadge({ row }) {
   const sapChip = getSapStatusChip(row?.sapPushStatus);
   if (!sapChip) {
+    // Only a request still moving through the approval flow ("Submit") has a
+    // next actor to name.
+    if (row?.assignmentCaption && getEffectiveApprovalStatusLabel(row) === "Submit") {
+      return <AssignmentCaption status={row.status} caption={row.assignmentCaption} />;
+    }
     return <StatusBadge value={row?.status} />;
   }
 
