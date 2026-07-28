@@ -74,9 +74,6 @@ function StatusBadge({ value }) {
       label={value || "Waiting"}
       size="small"
       sx={{
-        minWidth: 96,
-        height: 32,
-        borderRadius: 1,
         fontWeight: 800,
         ...(statusStyleMap[value] || statusStyleMap.Waiting),
       }}
@@ -97,9 +94,6 @@ function SapAwareStatusBadge({ row }) {
       label={sapChip.label}
       size="small"
       sx={{
-        minWidth: 96,
-        height: 32,
-        borderRadius: 1,
         fontWeight: 800,
         bgcolor: sapChip.bgcolor,
         color: "common.white",
@@ -112,7 +106,7 @@ function SapAwareStatusBadge({ row }) {
     // text on hover in case it is truncated.
     return (
       <Tooltip title={row.sapErrorMsg} arrow placement="top">
-        <Stack spacing={0.5} alignItems="center" sx={{ maxWidth: 220, mx: "auto" }}>
+        <Stack spacing={0.5} alignItems="flex-start" sx={{ maxWidth: 220, mx: "auto" }}>
           {chip}
           <Typography
             variant="caption"
