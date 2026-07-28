@@ -43,6 +43,9 @@ import { buildApprovalSubGroupsRequestPath } from "src/helper/adminApprovalSubGr
 import { mapApprovalServerErrors } from "src/helper/adminApprovalValidation.js";
 import {
   APPROVAL_STATUS_FILTER_OPTIONS,
+  ASSIGNMENT_FILTER_ASSIGNED_TO_ME,
+  ASSIGNMENT_FILTER_REQUEST_ALL,
+  MDM_ASSIGNMENT_FILTER_OPTIONS,
   filterApprovalRows,
   filterApprovalRowsByStatus,
   getEffectiveApprovalStatusLabel,
@@ -293,6 +296,7 @@ function AssignedToCell({ row }) {
 export default function AdminApprovalView() {
   const axiosPrivate = useAxiosPrivate();
   const isMdmUser = useSessionStore(isMdmMaterialUser);
+  const currentUserId = useSessionStore(state => state.user_id);
   const refreshWarningTimeoutRef = useRef(null);
   const [approvalRows, setApprovalRows] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -459,11 +463,33 @@ export default function AdminApprovalView() {
     );
   };
 
+  // Master Data users get two extra Status options that slice the inbox by who
+  // holds the Master Data step; every other role keeps the plain status list.
+  const statusFilterOptions = useMemo(
+    () =>
+      isMdmUser
+        ? [...APPROVAL_STATUS_FILTER_OPTIONS, ...MDM_ASSIGNMENT_FILTER_OPTIONS]
+        : APPROVAL_STATUS_FILTER_OPTIONS,
+    [isMdmUser]
+  );
+
+  // "No Rework item found" reads fine for a status, but not for the assignment
+  // options — those get their own wording.
+  const buildEmptyStateTitle = noun => {
+    if (statusFilter === ASSIGNMENT_FILTER_ASSIGNED_TO_ME) {
+      return `No ${noun} assigned to you`;
+    }
+    if (statusFilter === ASSIGNMENT_FILTER_REQUEST_ALL) {
+      return `No ${noun} grabbed by Master Data`;
+    }
+    return `No ${statusFilter === "All" ? "" : `${statusFilter} `}${noun} found`;
+  };
+
   const visibleRows = useMemo(() => {
-    const statusRows = filterApprovalRowsByStatus(approvalRows, statusFilter);
+    const statusRows = filterApprovalRowsByStatus(approvalRows, statusFilter, currentUserId);
     const searchRows = filterApprovalRows(statusRows, searchQuery);
     return sortRowsByConfig(searchRows, sortConfig);
-  }, [approvalRows, sortConfig, searchQuery, statusFilter]);
+  }, [approvalRows, sortConfig, searchQuery, statusFilter, currentUserId]);
 
   const pagedRows = useMemo(
     () => paginateApprovalRows(visibleRows, page, rowsPerPage),
@@ -485,10 +511,14 @@ export default function AdminApprovalView() {
 
   // Mass tab derived rows
   const massVisibleRows = useMemo(() => {
-    const statusRows = filterMassApprovalRowsByStatus(massApprovalRows, statusFilter);
+    const statusRows = filterMassApprovalRowsByStatus(
+      massApprovalRows,
+      statusFilter,
+      currentUserId
+    );
     const searchRows = filterMassApprovalRows(statusRows, searchQuery);
     return sortRowsByConfig(searchRows, sortConfig);
-  }, [massApprovalRows, statusFilter, searchQuery, sortConfig]);
+  }, [massApprovalRows, statusFilter, searchQuery, sortConfig, currentUserId]);
 
   const massPagedRows = useMemo(
     () => paginateMassApprovalRows(massVisibleRows, page, rowsPerPage),
@@ -796,7 +826,7 @@ export default function AdminApprovalView() {
             },
           }}
         >
-          {APPROVAL_STATUS_FILTER_OPTIONS.map(option => (
+          {statusFilterOptions.map(option => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
@@ -982,7 +1012,7 @@ export default function AdminApprovalView() {
                     <TableRow>
                       <TableCell colSpan={10} align="center" sx={{ py: 5 }}>
                         <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                          No {statusFilter === "All" ? "" : `${statusFilter} `}item found
+                          {buildEmptyStateTitle("item")}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                           Coba ubah filter status, keyword pencarian, atau cek assignment approval.
@@ -1160,7 +1190,7 @@ export default function AdminApprovalView() {
                     <TableRow>
                       <TableCell colSpan={8} align="center" sx={{ py: 5 }}>
                         <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                          No {statusFilter === "All" ? "" : `${statusFilter} `}mass request found
+                          {buildEmptyStateTitle("mass request")}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                           Coba ubah filter status, keyword pencarian, atau cek assignment approval.
