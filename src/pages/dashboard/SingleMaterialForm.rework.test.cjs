@@ -12,7 +12,7 @@ const pagePath = path.resolve(__dirname, "SingleRequestPage.jsx");
 test("single material form keeps requester rework material group editable", () => {
   const source = fs.readFileSync(formPath, "utf8");
   const materialGroupBlock = source.match(
-    /Material Group[\s\S]*?<TextField[\s\S]*?<\/TextField>/
+    /Material Group[\s\S]*?<SearchableSelect[\s\S]*?\/>/
   );
 
   assert.ok(materialGroupBlock, "expected Material Group field block");
