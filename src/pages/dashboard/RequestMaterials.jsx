@@ -32,9 +32,12 @@ import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
 import { getSapStatusChip, getStagedMaterialCode, isSapError, pickSapFields } from "src/helper/sapStatus.js";
 import {
   computeAssignedToDisplay,
+  computeAssignmentCaption,
   computeMassAssignedToDisplay,
+  computeMassAssignmentCaption,
   formatDateTime,
   formatOptionalDateTime,
+  getEffectiveApprovalStatusLabel,
   normalizeApprovalSteps,
 } from "src/helper/adminApprovalView.js";
 import {
@@ -95,11 +98,42 @@ function StatusPill({ status }) {
   );
 }
 
+// Spells out which step a still-open request is sitting on — waiting on a named
+// approver, or waiting for Master Data to grab it — so it can be read off the
+// Status column instead of inferred from "Assigned To" at the far right.
+function AssignmentCaption({ status, caption }) {
+  return (
+    <Tooltip title={caption.text} arrow placement="top">
+      <Stack spacing={0.5} alignItems="flex-start" sx={{ maxWidth: 220 }}>
+        <StatusPill status={status} />
+        <Typography
+          variant="caption"
+          sx={{
+            color: caption.kind === "UNASSIGNED" ? "#f59e0b" : "text.secondary",
+            fontWeight: 600,
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          {caption.text}
+        </Typography>
+      </Stack>
+    </Tooltip>
+  );
+}
+
 // Once a request is approved and pushed, the SAP staging status is the
 // meaningful one to show; otherwise fall back to the approval status.
 function SapAwareStatus({ row }) {
   const sapChip = getSapStatusChip(row?.sapPushStatus);
   if (!sapChip) {
+    // Only a request still moving through the approval flow ("Submit") has a
+    // next actor to name.
+    if (row?.assignmentCaption && getEffectiveApprovalStatusLabel(row) === "Submit") {
+      return <AssignmentCaption status={row.status} caption={row.assignmentCaption} />;
+    }
     return <StatusPill status={row?.status} />;
   }
 
@@ -653,6 +687,7 @@ export default function RequestMaterials() {
             createdBy: item.created_by,
             createdAt: formatDateTime(item.created_at),
             assignedTo: computeAssignedToDisplay(item),
+            assignmentCaption: computeAssignmentCaption(item),
             reworkStage: item.rework_stage,
             reworkByUserId: item.rework_by_user_id,
             reworkByUsername: item.rework_by_username,
@@ -727,6 +762,7 @@ export default function RequestMaterials() {
               createdBy: item.created_by_username || item.created_by,
               createdAt: formatDateTime(item.created_at),
               assignedTo: computeMassAssignedToDisplay(item),
+              assignmentCaption: computeMassAssignmentCaption(item),
               massRequestReason: item.mass_request_reason,
               itemCount: item.item_count,
               // N-stage approval data: pass through so buildApprovalDetail renders
