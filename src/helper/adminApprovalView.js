@@ -25,6 +25,63 @@ export function isAllStatusFilter(statusFilter) {
   return String(statusFilter || "").trim().toUpperCase() === "ALL";
 }
 
+// Two extra Status-dropdown options, offered to MDM_MATERIAL users only. They
+// cut the inbox by *who holds the Master Data step* rather than by request
+// status. Both are scoped to "Submit" (see findGrabbedMdmStep), which is what
+// keeps them from overlapping the status options they share the dropdown with.
+export const ASSIGNMENT_FILTER_ASSIGNED_TO_ME = "Assigned To Me";
+export const ASSIGNMENT_FILTER_REQUEST_ALL = "Request All";
+
+export const MDM_ASSIGNMENT_FILTER_OPTIONS = [
+  { value: ASSIGNMENT_FILTER_ASSIGNED_TO_ME, label: "Assigned To Me" },
+  { value: ASSIGNMENT_FILTER_REQUEST_ALL, label: "Request All" },
+];
+
+export function isAssignmentFilter(value) {
+  const normalized = String(value || "").trim();
+  return MDM_ASSIGNMENT_FILTER_OPTIONS.some(option => option.value === normalized);
+}
+
+// The MDM step a row is parked on once some Master Data user has grabbed it.
+// Null while the row sits on a manual approval step, is terminal, or is still
+// unclaimed in the grab queue — an unclaimed step belongs to nobody, so neither
+// assignment filter matches it.
+//
+// The "Submit" guard is load-bearing, not defensive. Rework keeps the grabber's
+// approver_user_id on the step and only flips its status to REWORK, which is
+// neither APPROVED nor REJECTED — so the step stays *active* and still points at
+// the Master Data user who reworked it. Without this guard a reworked row, which
+// is sitting with the requester (its Assigned To shows the requester's name),
+// would still count as "grabbed". Resubmit reopens that same step as WAITING
+// with the grabber untouched, so the row correctly reappears here once it is
+// back in Submit.
+function findGrabbedMdmStep(row = {}) {
+  if (getEffectiveApprovalStatusLabel(row) !== "Submit") {
+    return null;
+  }
+
+  const activeStep = findActiveStep(normalizeApprovalSteps(row));
+  if (!activeStep || activeStep.kind !== "MDM" || !activeStep.approverUserId) {
+    return null;
+  }
+  return activeStep;
+}
+
+export function matchesAssignmentFilter(row = {}, assignmentFilter, currentUserId) {
+  const grabbedStep = findGrabbedMdmStep(row);
+
+  if (!grabbedStep) {
+    return false;
+  }
+
+  if (String(assignmentFilter || "").trim() === ASSIGNMENT_FILTER_REQUEST_ALL) {
+    return true;
+  }
+
+  const actorUserId = String(currentUserId ?? "").trim();
+  return actorUserId !== "" && String(grabbedStep.approverUserId).trim() === actorUserId;
+}
+
 // The status shown to the user (and therefore what to filter on): once a request
 // is pushed, the SAP staging state — "Waiting SAP" / "Done" (created in SAP) /
 // "SAP Error" — replaces the bare approval "Done", matching the table chip. This
@@ -57,9 +114,12 @@ export function normalizeApprovalStatusForFilter(value) {
   return "Submit";
 }
 
-export function filterApprovalRowsByStatus(rows = [], statusFilter = "All") {
+export function filterApprovalRowsByStatus(rows = [], statusFilter = "All", currentUserId = null) {
   if (isAllStatusFilter(statusFilter)) {
     return rows;
+  }
+  if (isAssignmentFilter(statusFilter)) {
+    return rows.filter(row => matchesAssignmentFilter(row, statusFilter, currentUserId));
   }
   return rows.filter(row => getEffectiveApprovalStatusLabel(row) === statusFilter);
 }
@@ -722,9 +782,18 @@ export function normalizeMassApprovalRows(rows = []) {
   });
 }
 
-export function filterMassApprovalRowsByStatus(rows = [], statusFilter = "All") {
+export function filterMassApprovalRowsByStatus(
+  rows = [],
+  statusFilter = "All",
+  currentUserId = null
+) {
   if (isAllStatusFilter(statusFilter)) {
     return rows;
+  }
+  // A mass request carries the same step rows as a single one, so the Master
+  // Data assignment filters read identically here.
+  if (isAssignmentFilter(statusFilter)) {
+    return rows.filter(row => matchesAssignmentFilter(row, statusFilter, currentUserId));
   }
   // Mass requests are never pushed to SAP, so this resolves to the approval
   // status; the SAP-only filter values simply match nothing here.
