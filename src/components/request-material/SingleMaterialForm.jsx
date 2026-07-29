@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Autocomplete,
   Box,
@@ -11,8 +11,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControl,
-  FormHelperText,
   Grid,
   IconButton,
   InputAdornment,
@@ -20,12 +18,10 @@ import {
   TextField,
   Typography,
   Tooltip,
-  MenuItem,
-  ListSubheader,
-  Select,
 } from "@mui/material";
 import { Delete, InfoOutlined } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
+import SearchableSelect from "../common/SearchableSelect";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 import { validateSpecField, getValidationHint } from "./specFieldValidation.js";
 import { formatIdrInput, parseIdrInput } from "../../helper/idrFormat.js";
@@ -162,6 +158,66 @@ const resetForMaterialGroupChange = currentState => ({
   templateFieldValues: {},
   requestFieldValues: {},
 });
+
+// Header order of the brand categories in the Sub Material Group dropdown.
+const SUBGROUP_CATEGORY_ORDER = ["Acuator (Brand)", "Solenoid Valve (Brand)", "Other"];
+
+/** Only material group 901* splits its subgroups into brand categories. */
+const isBrandGroupedMaterialGroup = materialGroup =>
+  Boolean(materialGroup) && String(materialGroup).startsWith("901");
+
+/**
+ * Resolve which brand category a subgroup option belongs to, by subgroup code
+ * first and brand name second.
+ *
+ * @param {{ value: *, label: string, data?: object }} option
+ * @returns {string} one of SUBGROUP_CATEGORY_ORDER
+ */
+const getSubgroupCategory = option => {
+  const code = String(option?.data?.code || option?.value || "");
+  const name = String(option?.data?.name || option?.label || "").toLowerCase();
+
+  if (["002", "050"].includes(code) || name.includes("gestra") || name.includes("actiar")) {
+    return "Acuator (Brand)";
+  }
+
+  if (["103", "105"].includes(code) || name.includes("danfoos") || name.includes("smc")) {
+    return "Solenoid Valve (Brand)";
+  }
+
+  return "Other";
+};
+
+/**
+ * Tag subgroup options with their brand category for SearchableSelect's grouping,
+ * and sort them so each category renders under exactly one header.
+ *
+ * The sort is required, not cosmetic: SearchableSelect passes `group` to MUI's
+ * groupBy, which starts a new header on every change of value as it walks the
+ * list. Interleaved categories would repeat headers ("Acuator, Solenoid, Acuator").
+ * Array.prototype.sort is stable, so options keep their API order within a category.
+ *
+ * Non-901 material groups are returned untouched — no `group` key, so the dropdown
+ * stays a flat list.
+ *
+ * @param {{ value: *, label: string, data?: object }[]} subgroupOptions
+ * @param {string} materialGroup - currently selected material group code
+ * @returns {{ value: *, label: string, group?: string }[]}
+ */
+const buildSubgroupSelectOptions = (subgroupOptions, materialGroup) => {
+  const options = Array.isArray(subgroupOptions) ? subgroupOptions : [];
+
+  if (!isBrandGroupedMaterialGroup(materialGroup)) {
+    return options;
+  }
+
+  return options
+    .map(option => ({ ...option, group: getSubgroupCategory(option) }))
+    .sort(
+      (a, b) =>
+        SUBGROUP_CATEGORY_ORDER.indexOf(a.group) - SUBGROUP_CATEGORY_ORDER.indexOf(b.group)
+    );
+};
 
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp"];
 const isImageFile = fileName => {
@@ -346,24 +402,6 @@ const SingleMaterialForm = ({
   const [attachments, setAttachments] = useState([]);
   const [attachmentError, setAttachmentError] = useState("");
 
-  const compactDropdownMenuProps = {
-    anchorOrigin: {
-      vertical: "bottom",
-      horizontal: "left",
-    },
-    transformOrigin: {
-      vertical: "top",
-      horizontal: "left",
-    },
-    variant: "menu",
-    PaperProps: {
-      sx: {
-        maxHeight: 260,
-        mt: 0.5,
-      },
-    },
-  };
-
   useEffect(() => {
     if (prefetchedGroups.length > 0) {
       setMaterialGroups(prefetchedGroups);
@@ -521,8 +559,7 @@ const SingleMaterialForm = ({
     [axiosPrivate, formData]
   );
 
-  const handleGroupChange = e => {
-    const newGroup = e.target.value;
+  const handleGroupChange = newGroup => {
     activeMaterialGroupRef.current = newGroup;
     setFormState(prev => {
       const nextState = resetForMaterialGroupChange(prev);
@@ -546,8 +583,7 @@ const SingleMaterialForm = ({
     }
   };
 
-  const handleSubgroupChange = e => {
-    const newSubgroup = e.target.value;
+  const handleSubgroupChange = newSubgroup => {
     setFormState(prev => ({ ...prev, subgroup: newSubgroup }));
     setFieldErrors(prev => ({
       ...prev,
@@ -704,6 +740,21 @@ const SingleMaterialForm = ({
     setSaveSuccessOpen(false);
     navigate("/dashboard/materials/request");
   };
+
+  // Memoized so unrelated re-renders (typing in Price, editing a spec field) don't
+  // rebuild and re-sort both option lists on every keystroke.
+  const materialGroupOptions = useMemo(
+    () =>
+      materialGroups.map(group => ({
+        value: group.code,
+        label: `${group.code} - ${group.name}`,
+      })),
+    [materialGroups]
+  );
+  const subgroupSelectOptions = useMemo(
+    () => buildSubgroupSelectOptions(formState.subgroupOptions, formState.materialGroup),
+    [formState.subgroupOptions, formState.materialGroup]
+  );
 
   const specificationFields = (formState.visibleSections || [])
     .flatMap(section => section.fields || [])
@@ -881,122 +932,33 @@ const SingleMaterialForm = ({
                 <Typography variant="caption" sx={{ fontWeight: 700, mb: 1, display: "block" }}>
                   Material Group <span style={{ color: "red" }}>*</span>
                 </Typography>
-                <TextField
-                  fullWidth
-                  size="small"
-                  select
+                <SearchableSelect
+                  options={materialGroupOptions}
                   value={formState.materialGroup}
                   onChange={handleGroupChange}
                   disabled={isViewMode}
                   error={Boolean(fieldErrors.materialGroup?.error)}
                   helperText={fieldErrors.materialGroup?.message || ""}
-                  SelectProps={{
-                    displayEmpty: true,
-                    MenuProps: compactDropdownMenuProps,
-                  }}
-                >
-                  <MenuItem value="" disabled>
-                    Choose
-                  </MenuItem>
-                  {materialGroups.map(group => (
-                    <MenuItem key={group.code} value={group.code}>
-                      {group.code} - {group.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                  noOptionsText="No material group found"
+                />
               </Grid>
 
               <Grid item xs={12} md={6}>
                 <Typography variant="caption" sx={{ fontWeight: 700, mb: 1, display: "block" }}>
                   Sub Material Group
                 </Typography>
-                <FormControl fullWidth error={Boolean(fieldErrors.subgroup?.error)}>
-                  <Select
-                    value={formState.subgroup}
-                    onChange={handleSubgroupChange}
-                    disabled={isViewMode || !formState.materialGroup}
-                    displayEmpty
-                    MenuProps={compactDropdownMenuProps}
-                    size="small"
-                    sx={{
-                      backgroundColor: !formState.materialGroup ? "#f5f5f5" : "white",
-                    }}
-                  >
-                    <MenuItem value="" disabled>
-                      Choose
-                    </MenuItem>
-                    {(() => {
-                      try {
-                        const grouped = {};
-                        const is901 =
-                          formState.materialGroup &&
-                          String(formState.materialGroup).startsWith("901");
-
-                        (formState.subgroupOptions || []).forEach(opt => {
-                          let cat = "";
-                          if (is901) {
-                            const code = String(opt.data?.code || opt.value || "");
-                            const name = String(opt.data?.name || opt.label || "");
-                            const nameLower = name.toLowerCase();
-                            if (
-                              ["002", "050"].includes(code) ||
-                              nameLower.includes("gestra") ||
-                              nameLower.includes("actiar")
-                            ) {
-                              cat = "Acuator (Brand)";
-                            } else if (
-                              ["103", "105"].includes(code) ||
-                              nameLower.includes("danfoos") ||
-                              nameLower.includes("smc")
-                            ) {
-                              cat = "Solenoid Valve (Brand)";
-                            } else {
-                              cat = "Other";
-                            }
-                          }
-
-                          if (!grouped[cat]) grouped[cat] = [];
-                          grouped[cat].push(opt);
-                        });
-
-                        const elements = [];
-                        Object.entries(grouped).forEach(([groupName, opts]) => {
-                          if (groupName) {
-                            elements.push(
-                              <ListSubheader
-                                key={`header-${groupName}`}
-                                sx={{ fontWeight: "bold", color: "#1976d2", lineHeight: "36px" }}
-                              >
-                                {groupName}
-                              </ListSubheader>
-                            );
-                          }
-                          opts.forEach(opt => {
-                            elements.push(
-                              <MenuItem
-                                key={String(opt.value)}
-                                value={opt.value}
-                                sx={groupName ? { pl: 4 } : {}}
-                              >
-                                {opt.label}
-                              </MenuItem>
-                            );
-                          });
-                        });
-
-                        return elements;
-                      } catch (err) {
-                        console.error("Error in subgroup optgroup rendering", err);
-                        return formState.subgroupOptions?.map(opt => (
-                          <MenuItem key={String(opt.value)} value={opt.value}>
-                            {opt.label}
-                          </MenuItem>
-                        ));
-                      }
-                    })()}
-                  </Select>
-                  <FormHelperText>{fieldErrors.subgroup?.message || ""}</FormHelperText>
-                </FormControl>
+                <SearchableSelect
+                  options={subgroupSelectOptions}
+                  value={formState.subgroup}
+                  onChange={handleSubgroupChange}
+                  disabled={isViewMode || !formState.materialGroup}
+                  error={Boolean(fieldErrors.subgroup?.error)}
+                  helperText={fieldErrors.subgroup?.message || ""}
+                  noOptionsText="No sub material group found"
+                  sx={{
+                    backgroundColor: !formState.materialGroup ? "#f5f5f5" : "white",
+                  }}
+                />
               </Grid>
 
               <Grid item xs={12} md={6}>
