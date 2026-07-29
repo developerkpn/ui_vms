@@ -1110,6 +1110,7 @@ export default function AdminApprovalFormDialog({
                     minRows={2}
                     size="small"
                     disabled={!canActNow}
+                    inputProps={{ maxLength: MATERIAL_DESCRIPTION_MAX_LENGTH }}
                     // Shift+Enter is allowed for a visual line break only — the
                     // displayed text (with the newline) is local state; the
                     // newline is collapsed to a space before it ever reaches
@@ -1120,10 +1121,11 @@ export default function AdminApprovalFormDialog({
                         return;
                       }
                       const raw = event.target.value;
-                      setDescriptionDisplayText(raw);
+                      const boundedRaw = raw.slice(0, MATERIAL_DESCRIPTION_MAX_LENGTH);
+                      setDescriptionDisplayText(boundedRaw);
                       updateDraftValues(current => ({
                         ...current,
-                        ...splitMaterialDescription(raw),
+                        ...splitMaterialDescription(boundedRaw),
                       }));
                     }}
                     error={Boolean(displayFieldErrors.material_description?.error)}
