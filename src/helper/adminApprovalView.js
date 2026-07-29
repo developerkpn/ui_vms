@@ -26,7 +26,8 @@ export function isAllStatusFilter(statusFilter) {
 }
 
 // Two extra Status-dropdown options, offered to MDM_MATERIAL users only. They cut
-// the inbox by *who holds the Master Data step* rather than by request status.
+// the inbox by *who grabbed the Master Data step* rather than by request status —
+// neither one narrows to a status, so both span the whole lifecycle.
 export const ASSIGNMENT_FILTER_ASSIGNED_TO_ME = "Assigned To Me";
 export const ASSIGNMENT_FILTER_REQUEST_ALL = "Request All";
 
@@ -41,59 +42,50 @@ export function isAssignmentFilter(value) {
 }
 
 /**
- * The MDM step a row is parked on *right now*. Backs "Assigned To Me".
+ * Every MDM step this row has ever had grabbed, whatever its status. Backs both
+ * assignment filters.
  *
- * The "Submit" guard is load-bearing, not defensive: rework keeps the grabber's
- * approver_user_id on the step and only flips its status to REWORK, which is neither
- * APPROVED nor REJECTED, so the step stays active and still points at the Master Data
- * user who reworked it. Rework hands the request back to the requester, so it must not
- * count as assigned. Resubmit reopens the same step as WAITING with the grabber
- * untouched, and the row reappears here.
+ * A grab is never released — rework, reject and approval all keep it — so this mirrors
+ * the backend's hasGrabbedMdmStep predicate (materialService.js). Neither the step's
+ * status nor which step is currently active is consulted, on purpose: keying off the
+ * active step would drop completed requests entirely (their MDM step is APPROVED, so
+ * there is no active step) and would keep rework rows only by accident. MANUAL steps
+ * are excluded, same as the backend: the Approval 1/2 queues stay private.
  *
  * @param {object} row - Normalized approval row.
- * @returns {object|null} The active grabbed MDM step, or null when the row sits on a
- *   manual step, is terminal, or is still unclaimed in the grab queue.
+ * @returns {object[]} The grabbed MDM steps, empty when no MDM user ever grabbed this row.
  */
-function findActiveGrabbedMdmStep(row = {}) {
-  if (getEffectiveApprovalStatusLabel(row) !== "Submit") {
-    return null;
-  }
-
-  const activeStep = findActiveStep(normalizeApprovalSteps(row));
-  if (!activeStep || activeStep.kind !== "MDM" || !activeStep.approverUserId) {
-    return null;
-  }
-  return activeStep;
+function findGrabbedMdmSteps(row = {}) {
+  return normalizeApprovalSteps(row).filter(
+    step => step.kind === "MDM" && step.approverUserId
+  );
 }
 
 /**
- * Any MDM step this row has ever had grabbed, whatever its status. Backs "Request All".
+ * Both Master Data options select from the same set — every request an MDM user has
+ * ever grabbed, at any status — and differ only in whose grab counts: "Request All"
+ * takes anyone's, "Assigned To Me" takes only this actor's.
  *
- * A grab is never released — rework, reject and approval all keep it — so this mirrors
- * the backend's hasGrabbedMdmStep predicate (materialService.js). MANUAL steps are
- * excluded, same as the backend: the Approval 1/2 queues stay private.
- *
- * @param {object} row - Normalized approval row.
- * @returns {object|null} The first grabbed MDM step, or null when no MDM user ever
- *   grabbed this row.
+ * "Assigned To Me" needs no widened fetch to see its terminal rows the way "Request
+ * All" does. The backend already keeps a row visible to anyone who has acted on any of
+ * its steps whatever that step's status (isStepRowVisibleForActor in materialService.js),
+ * so the actor's own grabs are in the default inbox at every status.
  */
-function findAnyGrabbedMdmStep(row = {}) {
-  const steps = normalizeApprovalSteps(row);
-  return steps.find(step => step.kind === "MDM" && step.approverUserId) || null;
-}
-
 export function matchesAssignmentFilter(row = {}, assignmentFilter, currentUserId) {
-  if (String(assignmentFilter || "").trim() === ASSIGNMENT_FILTER_REQUEST_ALL) {
-    return Boolean(findAnyGrabbedMdmStep(row));
-  }
-
-  const grabbedStep = findActiveGrabbedMdmStep(row);
-  if (!grabbedStep) {
+  const grabbedSteps = findGrabbedMdmSteps(row);
+  if (grabbedSteps.length === 0) {
     return false;
   }
 
+  if (String(assignmentFilter || "").trim() === ASSIGNMENT_FILTER_REQUEST_ALL) {
+    return true;
+  }
+
   const actorUserId = String(currentUserId ?? "").trim();
-  return actorUserId !== "" && String(grabbedStep.approverUserId).trim() === actorUserId;
+  return (
+    actorUserId !== "" &&
+    grabbedSteps.some(step => String(step.approverUserId).trim() === actorUserId)
+  );
 }
 
 // The status shown to the user (and therefore what to filter on): once a request
