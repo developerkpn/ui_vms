@@ -25,10 +25,8 @@ export function isAllStatusFilter(statusFilter) {
   return String(statusFilter || "").trim().toUpperCase() === "ALL";
 }
 
-// Two extra Status-dropdown options, offered to MDM_MATERIAL users only. They
-// cut the inbox by *who holds the Master Data step* rather than by request
-// status. Both are scoped to "Submit" (see findGrabbedMdmStep), which is what
-// keeps them from overlapping the status options they share the dropdown with.
+// Two extra Status-dropdown options, offered to MDM_MATERIAL users only. They cut
+// the inbox by *who holds the Master Data step* rather than by request status.
 export const ASSIGNMENT_FILTER_ASSIGNED_TO_ME = "Assigned To Me";
 export const ASSIGNMENT_FILTER_REQUEST_ALL = "Request All";
 
@@ -42,20 +40,21 @@ export function isAssignmentFilter(value) {
   return MDM_ASSIGNMENT_FILTER_OPTIONS.some(option => option.value === normalized);
 }
 
-// The MDM step a row is parked on once some Master Data user has grabbed it.
-// Null while the row sits on a manual approval step, is terminal, or is still
-// unclaimed in the grab queue — an unclaimed step belongs to nobody, so neither
-// assignment filter matches it.
-//
-// The "Submit" guard is load-bearing, not defensive. Rework keeps the grabber's
-// approver_user_id on the step and only flips its status to REWORK, which is
-// neither APPROVED nor REJECTED — so the step stays *active* and still points at
-// the Master Data user who reworked it. Without this guard a reworked row, which
-// is sitting with the requester (its Assigned To shows the requester's name),
-// would still count as "grabbed". Resubmit reopens that same step as WAITING
-// with the grabber untouched, so the row correctly reappears here once it is
-// back in Submit.
-function findGrabbedMdmStep(row = {}) {
+/**
+ * The MDM step a row is parked on *right now*. Backs "Assigned To Me".
+ *
+ * The "Submit" guard is load-bearing, not defensive: rework keeps the grabber's
+ * approver_user_id on the step and only flips its status to REWORK, which is neither
+ * APPROVED nor REJECTED, so the step stays active and still points at the Master Data
+ * user who reworked it. Rework hands the request back to the requester, so it must not
+ * count as assigned. Resubmit reopens the same step as WAITING with the grabber
+ * untouched, and the row reappears here.
+ *
+ * @param {object} row - Normalized approval row.
+ * @returns {object|null} The active grabbed MDM step, or null when the row sits on a
+ *   manual step, is terminal, or is still unclaimed in the grab queue.
+ */
+function findActiveGrabbedMdmStep(row = {}) {
   if (getEffectiveApprovalStatusLabel(row) !== "Submit") {
     return null;
   }
@@ -67,15 +66,30 @@ function findGrabbedMdmStep(row = {}) {
   return activeStep;
 }
 
-export function matchesAssignmentFilter(row = {}, assignmentFilter, currentUserId) {
-  const grabbedStep = findGrabbedMdmStep(row);
+/**
+ * Any MDM step this row has ever had grabbed, whatever its status. Backs "Request All".
+ *
+ * A grab is never released — rework, reject and approval all keep it — so this mirrors
+ * the backend's hasGrabbedMdmStep predicate (materialService.js). MANUAL steps are
+ * excluded, same as the backend: the Approval 1/2 queues stay private.
+ *
+ * @param {object} row - Normalized approval row.
+ * @returns {object|null} The first grabbed MDM step, or null when no MDM user ever
+ *   grabbed this row.
+ */
+function findAnyGrabbedMdmStep(row = {}) {
+  const steps = normalizeApprovalSteps(row);
+  return steps.find(step => step.kind === "MDM" && step.approverUserId) || null;
+}
 
-  if (!grabbedStep) {
-    return false;
+export function matchesAssignmentFilter(row = {}, assignmentFilter, currentUserId) {
+  if (String(assignmentFilter || "").trim() === ASSIGNMENT_FILTER_REQUEST_ALL) {
+    return Boolean(findAnyGrabbedMdmStep(row));
   }
 
-  if (String(assignmentFilter || "").trim() === ASSIGNMENT_FILTER_REQUEST_ALL) {
-    return true;
+  const grabbedStep = findActiveGrabbedMdmStep(row);
+  if (!grabbedStep) {
+    return false;
   }
 
   const actorUserId = String(currentUserId ?? "").trim();
