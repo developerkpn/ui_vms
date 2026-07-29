@@ -562,7 +562,8 @@ export default function AdminApprovalView() {
   };
 
   // Master Data users get two extra Status options that slice the inbox by who
-  // holds the Master Data step; every other role keeps the plain status list.
+  // grabbed the Master Data step, at any status; every other role keeps the
+  // plain status list.
   const statusFilterOptions = isMdmUser
     ? [...APPROVAL_STATUS_FILTER_OPTIONS, ...MDM_ASSIGNMENT_FILTER_OPTIONS]
     : APPROVAL_STATUS_FILTER_OPTIONS;
