@@ -324,6 +324,17 @@ export default function AdminApprovalView() {
   const [massReworkDialogRow, setMassReworkDialogRow] = useState(null);
   const [massApprovalItems, setMassApprovalItems] = useState([]);
 
+  // "Request All" scope: every request any Master Data user has ever grabbed, not just
+  // this actor's own inbox. Fetched lazily on first selection and cached here, so
+  // switching filters doesn't re-fetch. "idle" -> "loading" -> "loaded"; anything short
+  // of "loaded" falls back to the default inbox rows rather than blanking the table.
+  const [mdmAllApprovalRows, setMdmAllApprovalRows] = useState([]);
+  const [mdmAllMassApprovalRows, setMdmAllMassApprovalRows] = useState([]);
+  const [mdmAllRowsStatus, setMdmAllRowsStatus] = useState("idle");
+  // Claims the one-shot fetch. A ref, not state, so claiming it doesn't re-run the effect
+  // that guards on it. Released on failure so re-selecting the filter retries.
+  const mdmAllFetchStartedRef = useRef(false);
+
   const fetchMassApprovalRows = async () => {
     const response = await axiosPrivate.get("/material/requests/mass/approval-inbox");
     const rows = normalizeMassApprovalRows(response.data?.data);
@@ -334,6 +345,52 @@ export default function AdminApprovalView() {
     const response = await axiosPrivate.get("/material/requests/single/approval-inbox");
     const rows = normalizeApprovalRows(response.data?.data);
     setApprovalRows(rows);
+  };
+
+  const fetchMdmAllApprovalRows = async () => {
+    const response = await axiosPrivate.get("/material/requests/single/approval-inbox", {
+      params: { scope: "mdmAll" },
+    });
+    return normalizeApprovalRows(response.data?.data);
+  };
+
+  const fetchMdmAllMassApprovalRows = async () => {
+    const response = await axiosPrivate.get("/material/requests/mass/approval-inbox", {
+      params: { scope: "mdmAll" },
+    });
+    return normalizeMassApprovalRows(response.data?.data);
+  };
+
+  /**
+   * Re-pull the widened scope after an action, but only once it has been loaded — an
+   * actor who never opened "Request All" this session shouldn't fetch it just because
+   * they approved something on "Assigned To Me".
+   *
+   * Rejects rather than swallowing, so the single and mass action handlers can raise their
+   * existing "inbox belum diperbarui" warning instead of leaving a stale row under a
+   * success message. The grab handler only logs — which is why the failure path below
+   * leaves the rendered rows alone.
+   */
+  const refreshMdmAllRowsIfLoaded = async () => {
+    if (mdmAllRowsStatus !== "loaded") {
+      return;
+    }
+
+    try {
+      const [singleRows, massRows] = await Promise.all([
+        fetchMdmAllApprovalRows(),
+        fetchMdmAllMassApprovalRows(),
+      ]);
+      setMdmAllApprovalRows(singleRows);
+      setMdmAllMassApprovalRows(massRows);
+    } catch (error) {
+      // Release the one-shot claim so re-selecting "Request All" refetches rather than
+      // serving rows missing this action. The status deliberately stays "loaded": dropping
+      // it to "idle" would pull the widened rows out from under a table the actor may be
+      // looking at, and the grab path has no warning to explain why they vanished.
+      mdmAllFetchStartedRef.current = false;
+      throw error;
+    }
   };
 
   const clearRefreshWarningTimeout = () => {
@@ -390,6 +447,47 @@ export default function AdminApprovalView() {
       clearRefreshWarningTimeout();
     };
   }, [axiosPrivate]);
+
+  // One-shot lazy fetch of the widened "Request All" scope, on first selection by a
+  // Master Data user. Deliberately has no cleanup that cancels the in-flight request:
+  // what it loads is cached data, not view state, so a fetch outliving the selection
+  // that started it should still populate the cache. Cancelling it here would instead
+  // strand mdmAllRowsStatus on "loading" with the ref already claimed — no rows, no
+  // retry. A failure releases the claim so re-selecting the filter tries again.
+  useEffect(() => {
+    if (
+      !isMdmUser ||
+      statusFilter !== ASSIGNMENT_FILTER_REQUEST_ALL ||
+      mdmAllFetchStartedRef.current
+    ) {
+      return;
+    }
+
+    mdmAllFetchStartedRef.current = true;
+    setMdmAllRowsStatus("loading");
+
+    const loadMdmAllRows = async () => {
+      try {
+        const [singleRows, massRows] = await Promise.all([
+          fetchMdmAllApprovalRows(),
+          fetchMdmAllMassApprovalRows(),
+        ]);
+        setMdmAllApprovalRows(singleRows);
+        setMdmAllMassApprovalRows(massRows);
+        setMdmAllRowsStatus("loaded");
+      } catch (error) {
+        console.error("Failed to fetch Request All inbox scope:", error);
+        mdmAllFetchStartedRef.current = false;
+        setMdmAllRowsStatus("error");
+        openSnackbar(
+          "Request All belum berhasil dimuat sepenuhnya. Menampilkan data yang tersedia saat ini.",
+          "warning"
+        );
+      }
+    };
+
+    loadMdmAllRows();
+  }, [isMdmUser, statusFilter, axiosPrivate]);
 
   useEffect(() => {
     if (!approvalDialogRow) {
@@ -465,13 +563,9 @@ export default function AdminApprovalView() {
 
   // Master Data users get two extra Status options that slice the inbox by who
   // holds the Master Data step; every other role keeps the plain status list.
-  const statusFilterOptions = useMemo(
-    () =>
-      isMdmUser
-        ? [...APPROVAL_STATUS_FILTER_OPTIONS, ...MDM_ASSIGNMENT_FILTER_OPTIONS]
-        : APPROVAL_STATUS_FILTER_OPTIONS,
-    [isMdmUser]
-  );
+  const statusFilterOptions = isMdmUser
+    ? [...APPROVAL_STATUS_FILTER_OPTIONS, ...MDM_ASSIGNMENT_FILTER_OPTIONS]
+    : APPROVAL_STATUS_FILTER_OPTIONS;
 
   // "No Rework item found" reads fine for a status, but not for the assignment
   // options — those get their own wording.
@@ -485,11 +579,32 @@ export default function AdminApprovalView() {
     return `No ${statusFilter === "All" ? "" : `${statusFilter} `}${noun} found`;
   };
 
+  // "Request All" reads the widened scope once loaded; otherwise the default inbox.
+  const isRequestAllFilterActive = isMdmUser && statusFilter === ASSIGNMENT_FILTER_REQUEST_ALL;
+  const mdmAllRowsReady = mdmAllRowsStatus === "loaded";
+  // Pending covers "idle" too, not just "loading": selecting the filter is a discrete
+  // update, so this can render once before the passive effect flips the status. Reading
+  // "loading" only would let the empty state paint for that frame. "error" is excluded so
+  // the failed fetch settles on the fallback rows instead of loading forever.
+  const isMdmAllPending =
+    isRequestAllFilterActive && !mdmAllRowsReady && mdmAllRowsStatus !== "error";
+
   const visibleRows = useMemo(() => {
-    const statusRows = filterApprovalRowsByStatus(approvalRows, statusFilter, currentUserId);
+    const sourceRows =
+      isRequestAllFilterActive && mdmAllRowsReady ? mdmAllApprovalRows : approvalRows;
+    const statusRows = filterApprovalRowsByStatus(sourceRows, statusFilter, currentUserId);
     const searchRows = filterApprovalRows(statusRows, searchQuery);
     return sortRowsByConfig(searchRows, sortConfig);
-  }, [approvalRows, sortConfig, searchQuery, statusFilter, currentUserId]);
+  }, [
+    approvalRows,
+    mdmAllApprovalRows,
+    isRequestAllFilterActive,
+    mdmAllRowsReady,
+    sortConfig,
+    searchQuery,
+    statusFilter,
+    currentUserId,
+  ]);
 
   const pagedRows = useMemo(
     () => paginateApprovalRows(visibleRows, page, rowsPerPage),
@@ -511,14 +626,21 @@ export default function AdminApprovalView() {
 
   // Mass tab derived rows
   const massVisibleRows = useMemo(() => {
-    const statusRows = filterMassApprovalRowsByStatus(
-      massApprovalRows,
-      statusFilter,
-      currentUserId
-    );
+    const sourceRows =
+      isRequestAllFilterActive && mdmAllRowsReady ? mdmAllMassApprovalRows : massApprovalRows;
+    const statusRows = filterMassApprovalRowsByStatus(sourceRows, statusFilter, currentUserId);
     const searchRows = filterMassApprovalRows(statusRows, searchQuery);
     return sortRowsByConfig(searchRows, sortConfig);
-  }, [massApprovalRows, statusFilter, searchQuery, sortConfig, currentUserId]);
+  }, [
+    massApprovalRows,
+    mdmAllMassApprovalRows,
+    isRequestAllFilterActive,
+    mdmAllRowsReady,
+    statusFilter,
+    searchQuery,
+    sortConfig,
+    currentUserId,
+  ]);
 
   const massPagedRows = useMemo(
     () => paginateMassApprovalRows(massVisibleRows, page, rowsPerPage),
@@ -576,11 +698,25 @@ export default function AdminApprovalView() {
     try {
       setSubmittingAction(true);
       await axiosPrivate.post(`/material/requests/single/${row.id}/sap-resubmit`);
-      await fetchApprovalRows();
+
       openSnackbar(
         "Request dibuka kembali di tahap Master Data. Silakan edit lalu approve ulang untuk resubmit ke SAP.",
         "success"
       );
+
+      try {
+        await fetchApprovalRows();
+        await refreshMdmAllRowsIfLoaded();
+      } catch (refreshError) {
+        console.error("Failed to refresh approval rows after SAP resubmit:", refreshError);
+        refreshWarningTimeoutRef.current = setTimeout(() => {
+          openSnackbar(
+            "Resubmit berhasil diproses, tetapi inbox belum berhasil diperbarui. Silakan refresh halaman.",
+            "warning"
+          );
+          refreshWarningTimeoutRef.current = null;
+        }, 1600);
+      }
     } catch (error) {
       openSnackbar(
         error?.response?.data?.message || "Gagal memulai resubmit ke SAP.",
@@ -630,6 +766,7 @@ export default function AdminApprovalView() {
 
       try {
         await fetchApprovalRows();
+        await refreshMdmAllRowsIfLoaded();
       } catch (refreshError) {
         console.error("Failed to refresh approval rows after approval:", refreshError);
         refreshWarningTimeoutRef.current = setTimeout(() => {
@@ -702,6 +839,7 @@ export default function AdminApprovalView() {
         await Promise.all([
           fetchApprovalRows(),
           fetchMassApprovalRows(),
+          refreshMdmAllRowsIfLoaded(),
         ]);
       } catch (refreshError) {
         console.error("Failed to refresh after mass action:", refreshError);
@@ -929,7 +1067,7 @@ export default function AdminApprovalView() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {loading && (
+                  {(loading || isMdmAllPending) && (
                     <TableRow>
                       <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
                         Loading approval items...
@@ -938,6 +1076,7 @@ export default function AdminApprovalView() {
                   )}
 
                   {!loading &&
+                    !isMdmAllPending &&
                     pagedRows.map(row => (
                       <TableRow
                         key={row.id || row.ticketNumber}
@@ -1008,7 +1147,7 @@ export default function AdminApprovalView() {
                       </TableRow>
                     ))}
 
-                  {!loading && visibleRows.length === 0 && (
+                  {!loading && !isMdmAllPending && visibleRows.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={10} align="center" sx={{ py: 5 }}>
                         <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
@@ -1102,7 +1241,7 @@ export default function AdminApprovalView() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {loading && (
+                  {(loading || isMdmAllPending) && (
                     <TableRow>
                       <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
                         Loading mass requests...
@@ -1111,6 +1250,7 @@ export default function AdminApprovalView() {
                   )}
 
                   {!loading &&
+                    !isMdmAllPending &&
                     massPagedRows.map(row => (
                       <TableRow
                         key={row.id || row.massRequestNo}
@@ -1186,7 +1326,7 @@ export default function AdminApprovalView() {
                       </TableRow>
                     ))}
 
-                  {!loading && massVisibleRows.length === 0 && (
+                  {!loading && !isMdmAllPending && massVisibleRows.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={8} align="center" sx={{ py: 5 }}>
                         <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
@@ -1246,9 +1386,12 @@ export default function AdminApprovalView() {
         }}
         onAction={handleApprovalAction}
         onGrabbed={() => {
-          Promise.all([fetchApprovalRows(), fetchMassApprovalRows()]).catch(
-            refreshError =>
-              console.error("Failed to refresh after MDM grab:", refreshError)
+          Promise.all([
+            fetchApprovalRows(),
+            fetchMassApprovalRows(),
+            refreshMdmAllRowsIfLoaded(),
+          ]).catch(refreshError =>
+            console.error("Failed to refresh after MDM grab:", refreshError)
           );
         }}
         submitting={submittingAction}
