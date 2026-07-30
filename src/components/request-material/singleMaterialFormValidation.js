@@ -71,6 +71,31 @@ export function validateRequesterField(fieldKey = "", rawValue = "") {
   return { error: false, message: "" };
 }
 
+/**
+ * Validate one template (specification) field the way submit does.
+ *
+ * validateSpecField early-returns "valid" for an empty value and has no
+ * isRequired check at all, so it can never raise the required error on its own.
+ * Callers that validate while the user is still editing must go through here,
+ * otherwise a keystroke reports a field clean that submit will reject.
+ *
+ * @param {*} rawValue - the current input value
+ * @param {object} field - the field definition from the schema
+ * @returns {{ error: boolean, message: string }}
+ */
+export function validateTemplateField(rawValue, field) {
+  const value = toStringValue(rawValue);
+  const label = field?.label || field?.fieldNameId || field?.fieldKey;
+
+  // Whitespace-only counts as empty: trim before the required check so "   "
+  // cannot satisfy a required field.
+  if (field?.isRequired && !value.trim()) {
+    return toFieldError(`${label} wajib diisi`);
+  }
+
+  return validateSpecField(value, field);
+}
+
 export function validateRequesterDraft({ formState = {} } = {}) {
   const fieldErrors = {};
   const requestFieldValues = formState?.requestFieldValues || {};
@@ -91,15 +116,7 @@ export function validateRequesterDraft({ formState = {} } = {}) {
   getTemplateFields(formState?.visibleSections)
     .filter(field => field?.kind === "template_field")
     .forEach(field => {
-      const value = toStringValue(templateFieldValues[field.fieldKey]);
-      const label = field.label || field.fieldNameId || field.fieldKey;
-
-      if (field.isRequired && !value.trim()) {
-        addFieldError(fieldErrors, field.fieldKey, `${label} wajib diisi`);
-        return;
-      }
-
-      const validation = validateSpecField(value, field);
+      const validation = validateTemplateField(templateFieldValues[field.fieldKey], field);
       if (validation.error) {
         addFieldError(fieldErrors, field.fieldKey, validation.message);
       }

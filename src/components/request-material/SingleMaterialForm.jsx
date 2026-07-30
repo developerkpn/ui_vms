@@ -23,7 +23,7 @@ import { Delete, InfoOutlined } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import SearchableSelect from "../common/SearchableSelect";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
-import { validateSpecField, getValidationHint } from "./specFieldValidation.js";
+import { getValidationHint } from "./specFieldValidation.js";
 import { formatIdrInput, parseIdrInput } from "../../helper/idrFormat.js";
 import {
   MAX_ATTACHMENTS,
@@ -36,6 +36,7 @@ import {
   mapRequesterServerErrors,
   validateRequesterDraft,
   validateRequesterField,
+  validateTemplateField,
 } from "./singleMaterialFormValidation.js";
 
 
@@ -766,11 +767,16 @@ const SingleMaterialForm = ({
 
     handleTemplateFieldChange(field.fieldKey, value);
 
-    const result = validateSpecField(value, field);
-    setFieldErrors(prev => ({
-      ...prev,
-      [field.fieldKey]: result,
-    }));
+    // Typing only ever *clears* an error the user is in the middle of fixing;
+    // raising one is the blur path's job. Clearing goes through the full
+    // validator so a whitespace-only value can no longer wipe a required error.
+    setFieldErrors(prev => {
+      if (!prev[field.fieldKey]?.error) {
+        return prev;
+      }
+
+      return { ...prev, [field.fieldKey]: validateTemplateField(value, field) };
+    });
   };
 
   const renderSpecField = field => {
@@ -783,7 +789,7 @@ const SingleMaterialForm = ({
     };
 
     const handleBlur = () => {
-      const result = validateSpecField(value, field);
+      const result = validateTemplateField(value, field);
       setFieldErrors(prev => ({
         ...prev,
         [field.fieldKey]: result,
