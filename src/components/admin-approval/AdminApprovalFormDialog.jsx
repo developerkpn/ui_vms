@@ -22,6 +22,7 @@ import {
   Divider,
   Grid,
   IconButton,
+  MenuItem,
   Paper,
   Popover,
   Snackbar,
@@ -50,6 +51,11 @@ import {
   findSubGroupOptionById,
   formatSubGroupOptionLabel,
 } from "src/helper/adminApprovalSubGroup.js";
+import {
+  buildReworkStepOptions,
+  resolveReworkToLevel,
+  REWORK_TO_REQUESTER,
+} from "src/helper/adminApprovalRework.js";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 
 function firstDefined(...values) {
@@ -531,6 +537,10 @@ export default function AdminApprovalFormDialog({
       ...(fieldHistory.long_text_3 || []),
     ].sort((a, b) => String(b.approvedAt || "").localeCompare(String(a.approvedAt || "")));
   }, [detail.fieldHistory]);
+  const reworkStepOptions = useMemo(
+    () => buildReworkStepOptions(detail.approvalSteps),
+    [detail.approvalSteps]
+  );
   const isScopedChangeExtendRequest = isChangeExtendRequest(row);
 
   const [draftValues, setDraftValues] = useState(() => createApprovalDraft(detail));
@@ -549,6 +559,7 @@ export default function AdminApprovalFormDialog({
   const [previewImageError, setPreviewImageError] = useState(false);
   const [currentAction, setCurrentAction] = useState("");
   const [remarkText, setRemarkText] = useState("");
+  const [reworkTarget, setReworkTarget] = useState(REWORK_TO_REQUESTER);
   const [finalCodeSuffix, setFinalCodeSuffix] = useState("");
   const [finalCodeSuffixError, setFinalCodeSuffixError] = useState("");
 
@@ -591,6 +602,7 @@ export default function AdminApprovalFormDialog({
       setFinalCodeDialogOpen(false);
       setCurrentAction("");
       setRemarkText("");
+      setReworkTarget(REWORK_TO_REQUESTER);
       setFinalCodeSuffix("");
       setFinalCodeSuffixError("");
       setClientFieldErrors({});
@@ -845,6 +857,9 @@ export default function AdminApprovalFormDialog({
   const handleReworkClick = () => {
     setCurrentAction("Rework");
     setRemarkText("");
+    // The requester is the destination every time the dialog is opened, so a
+    // rewind is never inherited from a previous rework in this session.
+    setReworkTarget(REWORK_TO_REQUESTER);
     setRemarkError("");
     setFinalCodeSuffix("");
     setFinalCodeSuffixError("");
@@ -922,6 +937,14 @@ export default function AdminApprovalFormDialog({
   const isFinalStageActive = detail.isFinalStage || detail.currentStageKind === "MDM";
   const isFinalStageApprove =
     currentAction === "Approve" && isFinalStageActive && !isScopedChangeExtendRequest;
+  // Master Data may send a rework back to a MANUAL step that already approved
+  // instead of to the requester. The reason dialog is shared by
+  // Approve/Rework/Reject, hence the action check; the rest is gated on the
+  // active *step* rather than on the user's group, so an ADMIN acting on the
+  // Master Data step gets the same choice and an MDM user who happens to be an
+  // approver elsewhere does not.
+  const canChooseReworkTarget =
+    currentAction === "Rework" && isMdmStageActive && reworkStepOptions.length > 0;
 
   const renderFieldHint = fieldKey => {
     const hintText = fieldHints[fieldKey];
@@ -1650,6 +1673,32 @@ export default function AdminApprovalFormDialog({
               ? `Please enter the reason before proceeding with ${currentAction.toLowerCase()}.`
               : "Please enter the reason before proceeding."}
           </Typography>
+          {canChooseReworkTarget && (
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label="Rework To"
+              value={reworkTarget}
+              onChange={event => setReworkTarget(event.target.value)}
+              // REWORK_TO_REQUESTER is the empty string, and a MUI Select skips
+              // rendering the selected item's label unless the value is filled.
+              // Without displayEmpty the Requester default is selected but shows
+              // blank, reading as "nothing picked yet" on a field that always
+              // has a destination.
+              SelectProps={{ displayEmpty: true }}
+              InputLabelProps={{ shrink: true }}
+              helperText="Defaults to Requester, or choose a specific step to rework to."
+              sx={{ mb: 2 }}
+            >
+              <MenuItem value={REWORK_TO_REQUESTER}>Requester</MenuItem>
+              {reworkStepOptions.map(option => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
           <TextField
             fullWidth
             multiline
@@ -1687,16 +1736,24 @@ export default function AdminApprovalFormDialog({
                 return;
               }
 
+              // Absent unless Master Data actually had the choice, so every
+              // other rework keeps sending exactly what it sent before.
+              const reworkDestination = canChooseReworkTarget
+                ? { reworkToLevel: resolveReworkToLevel(reworkTarget) }
+                : {};
+
               onAction?.(
                 currentAction,
                 detail,
                 isScopedChangeExtendRequest
                   ? {
                       remark: remarkText,
+                      ...reworkDestination,
                       ...(isFinalStageApprove ? { finalCodeSuffix } : {}),
                     }
                   : {
                       remark: remarkText,
+                      ...reworkDestination,
                       ...(isFinalStageApprove ? { finalCodeSuffix } : {}),
                       editedRequest: {
                         material_sub_group_id: draftValues.material_sub_group_id,
