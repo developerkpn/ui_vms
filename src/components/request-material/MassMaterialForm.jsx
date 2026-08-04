@@ -35,6 +35,7 @@ import * as XLSX from "xlsx";
 import { useNavigate } from "react-router-dom";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 import {
+  MASS_MAX_DESCRIPTION_LENGTH,
   MASS_MAX_ROWS,
   MASS_SHARED_MIN_ATTACHMENTS,
   MASS_TEXT_FIELDS,
@@ -760,7 +761,7 @@ const MassMaterialForm = ({ onBack }) => {
                             maxRows={4}
                             inputProps={
                               fieldKey === "description"
-                                ? { maxLength: 40 }
+                                ? { maxLength: MASS_MAX_DESCRIPTION_LENGTH }
                                 : undefined
                             }
                             value={row[fieldKey]}
