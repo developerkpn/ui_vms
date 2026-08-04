@@ -40,6 +40,7 @@ import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
 import { getSapStatusChip, getStagedMaterialCode, isSapError } from "src/helper/sapStatus.js";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import { buildApprovalSubGroupsRequestPath } from "src/helper/adminApprovalSubGroup.js";
+import { findReworkStepLabel } from "src/helper/adminApprovalRework.js";
 import { mapApprovalServerErrors } from "src/helper/adminApprovalValidation.js";
 import {
   APPROVAL_STATUS_FILTER_OPTIONS,
@@ -412,9 +413,13 @@ export default function AdminApprovalView() {
     return "Approval berhasil diproses.";
   };
 
-  const getActionSuccessMessage = (action, nextStage) => {
+  const getActionSuccessMessage = (action, nextStage, reworkStepLabel = null) => {
     if (action === "Rework") {
-      return "Request berhasil dikembalikan untuk dirework.";
+      // A rework aimed at an approval step is a rewind, not a rework: the
+      // request goes to that approver with status Submit, never to the requester.
+      return reworkStepLabel
+        ? `Request berhasil dikembalikan ke ${reworkStepLabel} untuk direview ulang.`
+        : "Request berhasil dikembalikan untuk dirework.";
     }
 
     if (action === "Reject") {
@@ -747,23 +752,37 @@ export default function AdminApprovalView() {
             : `/material/requests/single/${detail.id}/approve`;
       const isScopedChangeExtend = isChangeExtendRequest(detail.rawRow || detail);
       const requestBody =
-        action === "Rework" || action === "Reject"
-          ? { reason: payload?.remark ?? null }
-          : isScopedChangeExtend
-            ? {
-                remark: payload?.remark ?? null,
-                finalCodeSuffix: payload?.finalCodeSuffix ?? null,
-              }
-            : {
-                remark: payload?.remark ?? null,
-                finalCodeSuffix: payload?.finalCodeSuffix ?? null,
-                editedRequest: payload?.editedRequest ?? {},
-              };
+        action === "Rework"
+          ? {
+              // null is the requester, i.e. the only destination this endpoint
+              // had before; a level rewinds the chain to that MANUAL step.
+              reason: payload?.remark ?? null,
+              reworkToLevel: payload?.reworkToLevel ?? null,
+            }
+          : action === "Reject"
+            ? { reason: payload?.remark ?? null }
+            : isScopedChangeExtend
+              ? {
+                  remark: payload?.remark ?? null,
+                  finalCodeSuffix: payload?.finalCodeSuffix ?? null,
+                }
+              : {
+                  remark: payload?.remark ?? null,
+                  finalCodeSuffix: payload?.finalCodeSuffix ?? null,
+                  editedRequest: payload?.editedRequest ?? {},
+                };
       const response = await axiosPrivate.post(endpoint, requestBody);
 
       const nextStage = response.data?.data?.next_stage;
       setApprovalDialogRow(null);
-      openSnackbar(getActionSuccessMessage(action, nextStage), "success");
+      openSnackbar(
+        getActionSuccessMessage(
+          action,
+          nextStage,
+          findReworkStepLabel(detail.approvalSteps, requestBody.reworkToLevel)
+        ),
+        "success"
+      );
 
       try {
         await fetchApprovalRows();
