@@ -18,6 +18,7 @@ import {
   InputAdornment,
   Menu,
   MenuItem,
+  Pagination,
   Paper,
   Snackbar,
   Stack,
@@ -612,14 +613,24 @@ export default function AdminApprovalView() {
     currentUserId,
   ]);
 
+  const totalPages = Math.max(1, Math.ceil(visibleRows.length / rowsPerPage));
+  // Approving or rejecting removes the row from this inbox, so the row count can
+  // shrink under a page the actor is already standing on. Clamping on read keeps
+  // the last page rendering rows instead of going blank.
+  const currentPage = Math.min(page, totalPages - 1);
+
   const pagedRows = useMemo(
-    () => paginateApprovalRows(visibleRows, page, rowsPerPage),
-    [page, rowsPerPage, visibleRows]
+    () => paginateApprovalRows(visibleRows, currentPage, rowsPerPage),
+    [currentPage, rowsPerPage, visibleRows]
   );
 
   const handleStatusFilterChange = event => {
     setStatusFilter(event.target.value);
     setPage(0);
+  };
+
+  const handleChangePage = (event, newPage) => {
+    setPage(newPage - 1); // Pagination component is 1-indexed, but our state is 0-indexed
   };
 
   const handleSort = key => {
@@ -648,9 +659,12 @@ export default function AdminApprovalView() {
     currentUserId,
   ]);
 
+  const massTotalPages = Math.max(1, Math.ceil(massVisibleRows.length / rowsPerPage));
+  const massCurrentPage = Math.min(page, massTotalPages - 1);
+
   const massPagedRows = useMemo(
-    () => paginateMassApprovalRows(massVisibleRows, page, rowsPerPage),
-    [page, rowsPerPage, massVisibleRows]
+    () => paginateMassApprovalRows(massVisibleRows, massCurrentPage, rowsPerPage),
+    [massCurrentPage, rowsPerPage, massVisibleRows]
   );
 
   const handleMenuOpen = (event, row) => {
@@ -939,7 +953,7 @@ export default function AdminApprovalView() {
               : "Search mass request by number, reason, requester..."
           }
           value={searchQuery}
-          onChange={event => setSearchQuery(event.target.value)}
+          onChange={event => { setSearchQuery(event.target.value); setPage(0); }}
           InputProps={{
             endAdornment: (
               <InputAdornment position="end">
@@ -1183,6 +1197,27 @@ export default function AdminApprovalView() {
               </Table>
         </PageTablePaper>
       )}
+
+      {activeTab === "single" && (
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            py: 2,
+            mt: 1,
+          }}
+        >
+          <Pagination
+            count={totalPages}
+            page={currentPage + 1}
+            onChange={handleChangePage}
+            color="primary"
+            disabled={totalPages <= 1}
+            size="medium"
+          />
+        </Box>
+      )}
+
       {/* Mass tab table */}
 
       {activeTab === "mass" && (
@@ -1362,6 +1397,27 @@ export default function AdminApprovalView() {
               </Table>
         </PageTablePaper>
       )}
+
+      {activeTab === "mass" && (
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            py: 2,
+            mt: 1,
+          }}
+        >
+          <Pagination
+            count={massTotalPages}
+            page={massCurrentPage + 1}
+            onChange={handleChangePage}
+            color="primary"
+            disabled={massTotalPages <= 1}
+            size="medium"
+          />
+        </Box>
+      )}
+
       <Menu
         anchorEl={menuAnchorEl}
         open={Boolean(menuAnchorEl)}
