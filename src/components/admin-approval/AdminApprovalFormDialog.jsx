@@ -1520,14 +1520,26 @@ export default function AdminApprovalFormDialog({
               const rawRow = detail?.rawRow || row || {};
               const materialGroupCode = String(rawRow.materialGroupCode || rawRow.material_group_code || "").trim();
               const materialGroupName = String(rawRow.materialGroupName || rawRow.material_group_name || "").trim();
+              // The sub material group is still editable on this stage, so the
+              // code that makes up the material code comes from the current
+              // selection, not from what the request was submitted with.
+              const selectedSubGroup = findSubGroupOptionById(
+                subGroupOptions,
+                draftValues.material_sub_group_id,
+                row
+              );
               const subGroupCode = String(
-                rawRow.subMaterialGroupCode ||
+                selectedSubGroup?.code ||
+                  selectedSubGroup?.subGroupCode ||
+                  rawRow.subMaterialGroupCode ||
                   rawRow.material_sub_group_code ||
                   rawRow.sub_material_group_code ||
                   ""
               ).trim();
               const subGroupName = String(
-                rawRow.subMaterialGroupName ||
+                selectedSubGroup?.name ||
+                  selectedSubGroup?.subGroupName ||
+                  rawRow.subMaterialGroupName ||
                   rawRow.material_sub_group_name ||
                   rawRow.sub_material_group_name ||
                   ""
