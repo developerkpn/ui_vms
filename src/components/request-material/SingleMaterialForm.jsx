@@ -5,7 +5,6 @@ import {
   Button,
   Card,
   CardContent,
-  CircularProgress,
   Divider,
   Dialog,
   DialogActions,
@@ -22,6 +21,7 @@ import {
 import { Delete, InfoOutlined } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import SearchableSelect from "../common/SearchableSelect";
+import SectionLoadingSkeleton from "../common/SectionLoadingSkeleton";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 import { getValidationHint } from "./specFieldValidation.js";
 import { formatIdrInput, parseIdrInput } from "../../helper/idrFormat.js";
@@ -860,22 +860,23 @@ const SingleMaterialForm = ({
           mb: 4,
         }}
       >
+        {/* This form is the whole body of the read-only detail modal opened
+            from a ticket number, so it loads the way every other late-fetched
+            section of those modals does: skeleton lines shaped like the two
+            field groups that are about to arrive, in the card that will hold
+            them — not a spinner in an empty box. */}
         <Box
           sx={{
             display: "flex",
             flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 2,
+            gap: 4,
             minHeight: 320,
             px: 3,
-            py: 8,
+            py: 5,
           }}
         >
-          <CircularProgress size={36} />
-          <Typography variant="body2" color="text.secondary">
-            Loading request data…
-          </Typography>
+          <SectionLoadingSkeleton lines={2} height={44} spacing={2} />
+          <SectionLoadingSkeleton lines={4} height={44} spacing={2} />
         </Box>
       </Card>
     );

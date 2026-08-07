@@ -29,6 +29,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
+import { buildEmailReplyCaption } from "src/helper/reworkEmailThread.js";
 import { getSapStatusChip, getStagedMaterialCode, isSapError, pickSapFields } from "src/helper/sapStatus.js";
 import {
   computeAssignedToDisplay,
@@ -52,6 +53,8 @@ import PageHeader from "src/components/common/PageHeader";
 import PageTablePaper, { PAGE_TABLE_HEADER_SX } from "src/components/common/PageTablePaper";
 import PageSearchField from "src/components/common/PageSearchField";
 import PageTabs from "src/components/common/PageTabs";
+import TableLoadingRows, { TableEmptyRow } from "src/components/common/TableLoadingRows";
+import SectionLoadingSkeleton from "src/components/common/SectionLoadingSkeleton";
 
 const APPROVAL_STATUS_BADGES = {
   APPROVED: { label: "Approve", bgcolor: "#2146d8", color: "#ffffff" },
@@ -124,9 +127,21 @@ function AssignmentCaption({ status, caption }) {
   );
 }
 
+// Same caption slot the SAP error message and the assignment caption already
+// occupy under the Status chip, in a distinct colour: a reply landing is news,
+// not a fault, so it must not read like the red SAP error line above it.
+const EMAIL_REPLY_CAPTION_SX = {
+  color: "success.main",
+  fontWeight: 600,
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical",
+  overflow: "hidden",
+};
+
 // Once a request is approved and pushed, the SAP staging status is the
 // meaningful one to show; otherwise fall back to the approval status.
-function SapAwareStatus({ row }) {
+function SapAwareStatusContent({ row }) {
   const sapChip = getSapStatusChip(row?.sapPushStatus);
   if (!sapChip) {
     // Only a request still moving through the approval flow ("Submit") has a
@@ -170,6 +185,27 @@ function SapAwareStatus({ row }) {
     );
   }
   return chip;
+}
+
+// The status cell: the chip (or chip + its own caption) plus, when the approver
+// answered the rework mail, a line saying so. Nothing is rendered for a request
+// with no replies, so every row that has none looks exactly as it did.
+function SapAwareStatus({ row }) {
+  const replyCaption = buildEmailReplyCaption(row?.emailReplyCount);
+  const statusContent = <SapAwareStatusContent row={row} />;
+
+  if (replyCaption === "") {
+    return statusContent;
+  }
+
+  return (
+    <Stack spacing={0.5} alignItems="flex-start" sx={{ maxWidth: 220 }}>
+      {statusContent}
+      <Typography variant="caption" sx={EMAIL_REPLY_CAPTION_SX}>
+        {replyCaption}
+      </Typography>
+    </Stack>
+  );
 }
 
 function TicketTypePill({ value }) {
@@ -431,16 +467,12 @@ function RequestDetailDialog({ open, request, onClose, massItems, massItemsLoadi
           <Typography variant="subtitle2" sx={{ fontWeight: 800, mt: 1 }}>
             Items
           </Typography>
-          {massItemsLoading ? (
-            <Typography variant="body2" color="text.secondary">
-              Loading items...
-            </Typography>
-          ) : (
-            <Table size="small">
+          <Table size="small">
               <TableHead>
                 <TableRow>
                   <TableCell sx={{ fontWeight: 800 }}>No</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Ticket</TableCell>
+                  <TableCell sx={{ fontWeight: 800 }}>Material Code</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Material Description</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>UoM</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Plant</TableCell>
@@ -450,30 +482,34 @@ function RequestDetailDialog({ open, request, onClose, massItems, massItemsLoadi
                 </TableRow>
               </TableHead>
               <TableBody>
-                {(massItems || []).map((item, index) => (
+                {massItemsLoading && <TableLoadingRows columns={9} />}
+                {!massItemsLoading && (massItems || []).map((item, index) => (
                   <TableRow key={item.id ?? index}>
                     <TableCell>{item.item_no ?? index + 1}</TableCell>
                     <TableCell sx={{ whiteSpace: "nowrap" }}>{item.request_no || "-"}</TableCell>
+                    <TableCell sx={{ whiteSpace: "nowrap", fontWeight: 600 }}>
+                      {getStagedMaterialCode(item) || "-"}
+                    </TableCell>
                     <TableCell>{item.material_description || "-"}</TableCell>
                     <TableCell>{item.uom || item.base_uom || "-"}</TableCell>
                     <TableCell>{item.plant_code || "-"}</TableCell>
                     <TableCell>{item.sloc_code || "-"}</TableCell>
                     <TableCell>{item.po_text || "-"}</TableCell>
                     <TableCell>
-                      <StatusPill status={item.status || "-"} />
+                      {/* Once the item has been pushed, its SAP staging status
+                          is the meaningful one — same chips the single request
+                          list shows. */}
+                      <SapAwareStatus
+                        row={{ status: item.status || "-", ...pickSapFields(item) }}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
-                {(massItems || []).length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={8} align="center">
-                      No items found
-                    </TableCell>
-                  </TableRow>
+                {!massItemsLoading && (massItems || []).length === 0 && (
+                  <TableEmptyRow columns={9} title="No items found" />
                 )}
               </TableBody>
             </Table>
-          )}
         </Stack>
       </DialogContent>
 
@@ -487,6 +523,9 @@ function RequestDetailDialog({ open, request, onClose, massItems, massItemsLoadi
 function ChangeExtendReworkForm({
   row,
   locations = [],
+  // True while the page is still fetching the initial-screen locations that
+  // fill the Plant / Storage Location dropdowns.
+  locationsLoading = false,
   onSubmit,
   onCancel,
   submitting = false,
@@ -500,6 +539,9 @@ function ChangeExtendReworkForm({
   });
 
   const [uomOptions, setUomOptions] = useState([]);
+  // Starts true: the fetch is kicked off on the very first render, so the field
+  // is never briefly "loaded with nothing in it".
+  const [uomLoading, setUomLoading] = useState(true);
   const axiosPrivate = useAxiosPrivate();
 
   useEffect(() => {
@@ -508,7 +550,11 @@ function ChangeExtendReworkForm({
       if (active && res.data?.success) {
         setUomOptions(res.data.data || []);
       }
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => {
+      if (active) {
+        setUomLoading(false);
+      }
+    });
     return () => { active = false; };
   }, []);
 
@@ -550,9 +596,17 @@ function ChangeExtendReworkForm({
     opt => opt.uom_code === draft.baseUom
   ) || null;
 
+  // Each branch is only editable once its own dropdown source has landed: an
+  // Extend revise is Plant + Storage (locations), a Change revise is Material
+  // Name + Base UoM (uom list). Rendering the controls early would show the
+  // approver empty dropdowns and a blank UoM that fills itself in.
+  const optionsLoading = isExtend ? locationsLoading : uomLoading;
+
   return (
     <Stack spacing={2}>
-      {isExtend ? (
+      {optionsLoading ? (
+        <SectionLoadingSkeleton lines={2} height={44} spacing={2} />
+      ) : isExtend ? (
         <>
           <TextField
             select
@@ -613,7 +667,7 @@ function ChangeExtendReworkForm({
         </>
       )}
       <Stack direction="row" spacing={1}>
-        <Button variant="contained" onClick={submit} disabled={submitting}>
+        <Button variant="contained" onClick={submit} disabled={submitting || optionsLoading}>
           {submitting ? "Saving..." : "Submit"}
         </Button>
         <Button onClick={onCancel} disabled={submitting}>
@@ -637,6 +691,7 @@ export default function RequestMaterials() {
   const [scopedReworkSubmitting, setScopedReworkSubmitting] = useState(false);
   const [reviseChangeExtendOpen, setReviseChangeExtendOpen] = useState(false);
   const [initialLocations, setInitialLocations] = useState([]);
+  const [initialLocationsLoading, setInitialLocationsLoading] = useState(false);
   const [reviseMassOpen, setReviseMassOpen] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [detailMassItems, setDetailMassItems] = useState([]);
@@ -684,6 +739,8 @@ export default function RequestMaterials() {
             templatePayload: item.template_payload,
             attachments: item.attachments,
             ...pickSapFields(item),
+            // Replies the picked approver sent back on a "via email" rework.
+            emailReplyCount: item.email_reply_count ?? item.emailReplyCount ?? 0,
             createdBy: item.created_by,
             createdAt: formatDateTime(item.created_at),
             assignedTo: computeAssignedToDisplay(item),
@@ -765,6 +822,11 @@ export default function RequestMaterials() {
               assignmentCaption: computeMassAssignmentCaption(item),
               massRequestReason: item.mass_request_reason,
               itemCount: item.item_count,
+              // Batch-level SAP staging status: the backend rolls the per-item
+              // sap_push_status up worst-first, so the row reads like a single one.
+              ...pickSapFields(item),
+              // Replies counted across the whole batch's rework mail thread.
+              emailReplyCount: item.email_reply_count ?? item.emailReplyCount ?? 0,
               // N-stage approval data: pass through so buildApprovalDetail renders
               // every stage from approvalSteps instead of probing _1/_2/_3 fields.
               approvalSteps,
@@ -842,6 +904,7 @@ export default function RequestMaterials() {
     }
 
     let active = true;
+    setInitialLocationsLoading(true);
 
     const loadInitialLocations = async () => {
       try {
@@ -852,6 +915,10 @@ export default function RequestMaterials() {
       } catch (error) {
         if (active) {
           setInitialLocations([]);
+        }
+      } finally {
+        if (active) {
+          setInitialLocationsLoading(false);
         }
       }
     };
@@ -1185,14 +1252,8 @@ export default function RequestMaterials() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {requestsLoading && (
-                  <TableRow>
-                    <TableCell colSpan={10} align="center">
-                      Loading requests...
-                    </TableCell>
-                  </TableRow>
-                )}
-                {filteredRequests
+                {requestsLoading && <TableLoadingRows columns={10} />}
+                {!requestsLoading && filteredRequests
                   .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                   .map(row => (
                     <TableRow
@@ -1237,6 +1298,14 @@ export default function RequestMaterials() {
                       <TableCell sx={{ whiteSpace: "nowrap" }}>{row.assignedTo}</TableCell>
                     </TableRow>
                   ))}
+
+                {!requestsLoading && filteredRequests.length === 0 && (
+                  <TableEmptyRow
+                    columns={10}
+                    title="No request found"
+                    description="Coba ubah keyword pencarian atau tab request."
+                  />
+                )}
               </TableBody>
             </Table>
           </PageTablePaper>
@@ -1259,16 +1328,6 @@ export default function RequestMaterials() {
             />
           </Box>
 
-          {filteredRequests.length === 0 && (
-            <Paper variant="outlined" sx={{ mt: 2, p: 3, textAlign: "center" }}>
-              <Typography variant="body1" sx={{ fontWeight: 700 }}>
-                No request found
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                Coba ubah keyword pencarian atau tab request.
-              </Typography>
-            </Paper>
-          )}
         </Box>
 
       <Menu
@@ -1337,6 +1396,7 @@ export default function RequestMaterials() {
           <ChangeExtendReworkForm
             row={selectedRequest}
             locations={initialLocations}
+            locationsLoading={initialLocationsLoading}
             onSubmit={handleScopedReworkSubmit}
             onCancel={() => setReviseChangeExtendOpen(false)}
             submitting={scopedReworkSubmitting}

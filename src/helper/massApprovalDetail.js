@@ -1,3 +1,5 @@
+import { pickSapFields } from "./sapStatus.js";
+
 /**
  * Build dialog detail data for a mass approval request.
  *
@@ -103,5 +105,9 @@ function normalizeMassRequestItem(item = {}) {
     spesifikasiTambahan: item.spesifikasi_tambahan ?? item.spesifikasiTambahan ?? "",
     status: item.status ?? "Submit",
     assignedTo: item.assigned_to ?? item.assignedTo ?? "-",
+    // SAP staging, filled once Master Data approved the batch: the composed
+    // material code plus the Oracle write-back status/message per item.
+    finalCode: item.final_code ?? item.finalCode ?? null,
+    ...pickSapFields(item),
   };
 }

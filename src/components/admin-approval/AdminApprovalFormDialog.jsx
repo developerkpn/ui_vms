@@ -22,7 +22,6 @@ import {
   Divider,
   Grid,
   IconButton,
-  MenuItem,
   Paper,
   Popover,
   Snackbar,
@@ -31,10 +30,23 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import SectionLoadingSkeleton from "src/components/common/SectionLoadingSkeleton";
 import useSessionStore from "src/store/useSessionStore";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
 import { isMdmMaterialUser } from "src/helper/adminApprovalView.js";
+import {
+  applyOptimisticMdmClaim,
+  buildClaimMdmPath,
+  evaluateMdmClaimGate,
+  extractClaimedApprovalSteps,
+  identifiersMatch,
+  MDM_GRAB_BUTTON_BUSY_LABEL,
+  MDM_GRAB_BUTTON_LABEL,
+  MDM_STEP_KIND,
+  resolveMdmClaimErrorMessage,
+  resolveStepApproverUserId,
+} from "src/helper/mdmClaimGate.js";
 import {
   combineMaterialDescription,
   splitMaterialDescription,
@@ -52,20 +64,30 @@ import {
   formatSubGroupOptionLabel,
 } from "src/helper/adminApprovalSubGroup.js";
 import {
-  buildReworkStepOptions,
-  resolveReworkToLevel,
+  buildReworkDestinationPayload,
+  buildReworkDestinationSlots,
+  describeReworkDestination,
+  NOTIFY_VIA_APP,
+  NOTIFY_VIA_EMAIL,
+  resolveReworkRequester,
+  REWORK_TO_NEW_APPROVER,
   REWORK_TO_REQUESTER,
+  validateReworkDestination,
 } from "src/helper/adminApprovalRework.js";
+import {
+  buildReworkEmailPayload,
+  deriveReworkEmailReason,
+  hasReworkEmailContentError,
+  resolveReworkEmailKind,
+  REWORK_EMAIL_REASON_NOTICE,
+  validateReworkEmailContent,
+} from "src/helper/reworkEmailThread.js";
+import ReworkDestinationField from "./ReworkDestinationField";
+import ReworkEmailThreadSection from "./ReworkEmailThreadSection";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 
 function firstDefined(...values) {
   return values.find(value => value !== undefined && value !== null);
-}
-
-function identifiersMatch(left, right) {
-  if (left === undefined || left === null || left === "") return false;
-  if (right === undefined || right === null || right === "") return false;
-  return String(left).trim() === String(right).trim();
 }
 
 function cloneTemplatePayload(templatePayload) {
@@ -484,6 +506,10 @@ export default function AdminApprovalFormDialog({
   submitting = false,
   subGroups = [],
   formSchema = null,
+  // True while the page is still fetching the sub-group list and the material
+  // group's form schema — both start only once this dialog is already open, so
+  // the sections built from them need somewhere to stand in the meantime.
+  referenceDataLoading = false,
   serverValidationErrors = {},
   onClearServerValidationErrors,
 }) {
@@ -537,10 +563,7 @@ export default function AdminApprovalFormDialog({
       ...(fieldHistory.long_text_3 || []),
     ].sort((a, b) => String(b.approvedAt || "").localeCompare(String(a.approvedAt || "")));
   }, [detail.fieldHistory]);
-  const reworkStepOptions = useMemo(
-    () => buildReworkStepOptions(detail.approvalSteps),
-    [detail.approvalSteps]
-  );
+  const reworkRequester = useMemo(() => resolveReworkRequester(detail), [detail]);
   const isScopedChangeExtendRequest = isChangeExtendRequest(row);
 
   const [draftValues, setDraftValues] = useState(() => createApprovalDraft(detail));
@@ -560,6 +583,17 @@ export default function AdminApprovalFormDialog({
   const [currentAction, setCurrentAction] = useState("");
   const [remarkText, setRemarkText] = useState("");
   const [reworkTarget, setReworkTarget] = useState(REWORK_TO_REQUESTER);
+  // User hand-picked for the fillable "Approval 1" slot, and how they should be
+  // told about it. Both only ever leave this component together with the
+  // REWORK_TO_NEW_APPROVER destination.
+  const [reworkNewApprover, setReworkNewApprover] = useState(null);
+  const [reworkNotifyVia, setReworkNotifyVia] = useState(NOTIFY_VIA_APP);
+  // The mail itself, once the EMAIL channel is chosen. It lives here rather than
+  // in the field so a trip through the "Via aplikasi" radio does not throw away
+  // what Master Data has already typed.
+  const [reworkEmailSubject, setReworkEmailSubject] = useState("");
+  const [reworkEmailBody, setReworkEmailBody] = useState("");
+  const [reworkEmailErrors, setReworkEmailErrors] = useState({ subject: "", body: "" });
   const [finalCodeSuffix, setFinalCodeSuffix] = useState("");
   const [finalCodeSuffixError, setFinalCodeSuffixError] = useState("");
 
@@ -603,6 +637,11 @@ export default function AdminApprovalFormDialog({
       setCurrentAction("");
       setRemarkText("");
       setReworkTarget(REWORK_TO_REQUESTER);
+      setReworkNewApprover(null);
+      setReworkNotifyVia(NOTIFY_VIA_APP);
+      setReworkEmailSubject("");
+      setReworkEmailBody("");
+      setReworkEmailErrors({ subject: "", body: "" });
       setFinalCodeSuffix("");
       setFinalCodeSuffixError("");
       setClientFieldErrors({});
@@ -678,13 +717,7 @@ export default function AdminApprovalFormDialog({
         ) || null;
       const source = byLevel || byKind || fallback;
       if (source) {
-        return {
-          approverUserId: firstDefined(
-            source.approverUserId,
-            source.approver_user_id,
-            null
-          ),
-        };
+        return { approverUserId: resolveStepApproverUserId(source) };
       }
     }
     return detail.currentStep || null;
@@ -692,38 +725,21 @@ export default function AdminApprovalFormDialog({
 
   // The active stage is the MDM (Master Data) claimable queue.
   const isMdmStageActive =
-    detail.currentStageKind === "MDM" || detail.currentStep?.kind === "MDM";
-  const mdmApproverUserId = firstDefined(
-    activeMdmStep?.approverUserId,
-    activeMdmStep?.approver_user_id,
-    null
-  );
-  const isMdmUnclaimed =
-    isMdmStageActive &&
-    (mdmApproverUserId === null ||
-      mdmApproverUserId === undefined ||
-      String(mdmApproverUserId).trim() === "");
-  const isMdmClaimedByMe =
-    isMdmStageActive && identifiersMatch(mdmApproverUserId, currentUserId);
-  // Separation of duties: whoever already acted as approver on an earlier
-  // (non-MDM) step of this request must not grab its Master Data step. The
-  // backend enforces the same rule; this only hides the button.
-  const hasApprovedEarlierStep = useMemo(() => {
-    const steps = Array.isArray(detail.approvalSteps) ? detail.approvalSteps : [];
-    return steps.some(
-      step =>
-        String(step.kind ?? "").toUpperCase() !== "MDM" &&
-        identifiersMatch(step.approverUserId, currentUserId)
-    );
-  }, [detail.approvalSteps, currentUserId]);
-  // Show "Grab/Claim" when the MDM queue is open to this MDM_MATERIAL user.
-  const canGrabMdm =
-    isMdmStageActive &&
-    isMdmUnclaimed &&
-    isMdmUser &&
-    !hasApprovedEarlierStep &&
-    canSubmitApprovalAction &&
-    !isMdmClaimedByMe;
+    detail.currentStageKind === MDM_STEP_KIND ||
+    detail.currentStep?.kind === MDM_STEP_KIND;
+  const mdmApproverUserId = resolveStepApproverUserId(activeMdmStep);
+  // Whether the MDM queue is open to this MDM_MATERIAL user — including the
+  // separation-of-duties rule that bars an earlier approver from grabbing. The
+  // rules live in one helper so this dialog and the mass one cannot drift apart;
+  // the backend enforces them again.
+  const { canGrabMdm, isMdmClaimedByMe, claimNotice } = evaluateMdmClaimGate({
+    approvalSteps: detail.approvalSteps,
+    isMdmStageActive,
+    mdmApproverUserId,
+    currentUserId,
+    isMdmUser,
+    canSubmitApprovalAction,
+  });
   // It is this user's turn only when they are the ACTIVE step's assigned
   // approver (manual stage) or its claimer (MDM stage). ADMIN keeps its
   // backend-side override. Everyone else — including approvers who already
@@ -732,7 +748,7 @@ export default function AdminApprovalFormDialog({
     String(currentUsername || "").trim().toUpperCase() === "ADMIN";
   const isMyManualTurn =
     Boolean(detail.currentStep) &&
-    String(detail.currentStep.kind || "").toUpperCase() !== "MDM" &&
+    String(detail.currentStep.kind || "").toUpperCase() !== MDM_STEP_KIND &&
     identifiersMatch(detail.currentStep.approverUserId, currentUserId);
   const canActNow =
     canSubmitApprovalAction &&
@@ -745,43 +761,34 @@ export default function AdminApprovalFormDialog({
   );
 
   const handleGrabMdm = async () => {
-    if (!detail.id || grabbing) {
+    const claimPath = buildClaimMdmPath({
+      requestId: detail.id,
+      isMassRequest,
+    });
+
+    if (!claimPath || grabbing) {
       return;
     }
+
     setGrabbing(true);
     setGrabError("");
     try {
-      const basePath = isMassRequest
-        ? `/material/requests/mass/${detail.id}/claim-mdm`
-        : `/material/requests/single/${detail.id}/claim-mdm`;
-      const response = await axiosPrivate.post(basePath);
-      const nextSteps =
-        response.data?.data?.approvalSteps ||
-        response.data?.data?.approval_steps ||
-        response.data?.approvalSteps ||
-        response.data?.approval_steps ||
-        (Array.isArray(response.data?.data) ? response.data.data : null);
-      if (Array.isArray(nextSteps)) {
-        setClaimedSteps(nextSteps);
-      } else {
-        // No steps echoed back: optimistically mark this user as the claimer.
-        setClaimedSteps([
-          {
-            level: detail.currentStageLevel,
-            kind: "MDM",
-            status: "WAITING",
-            approverUserId: currentUserId,
-          },
-        ]);
-      }
+      const response = await axiosPrivate.post(claimPath);
+      const nextSteps = extractClaimedApprovalSteps(response.data);
+      setClaimedSteps(
+        nextSteps ||
+          // No steps echoed back: optimistically mark this user as the claimer.
+          applyOptimisticMdmClaim({
+            approvalSteps: detail.approvalSteps,
+            currentStageLevel: detail.currentStageLevel,
+            userId: currentUserId,
+          })
+      );
       // Notify the parent so the main inbox table reflects the claim — the
       // request should no longer show as "unclaimed" to this (or any) MDM user.
       onGrabbed?.();
     } catch (error) {
-      setGrabError(
-        error?.response?.data?.message ||
-          "Gagal claim Master Data step. Silakan coba lagi."
-      );
+      setGrabError(resolveMdmClaimErrorMessage(error));
     } finally {
       setGrabbing(false);
     }
@@ -857,9 +864,18 @@ export default function AdminApprovalFormDialog({
   const handleReworkClick = () => {
     setCurrentAction("Rework");
     setRemarkText("");
-    // The requester is the destination every time the dialog is opened, so a
-    // rewind is never inherited from a previous rework in this session.
+    // The requester is the destination every time the dialog is opened, so
+    // neither a rewind nor a hand-picked approver is ever inherited from a
+    // previous rework in this session.
     setReworkTarget(REWORK_TO_REQUESTER);
+    setReworkNewApprover(null);
+    setReworkNotifyVia(NOTIFY_VIA_APP);
+    // Dropping the draft re-arms the template fetch: the field unmounts with the
+    // reason dialog, so the next EMAIL choice pulls a fresh mail rather than
+    // reusing one composed for an earlier attempt.
+    setReworkEmailSubject("");
+    setReworkEmailBody("");
+    setReworkEmailErrors({ subject: "", body: "" });
     setRemarkError("");
     setFinalCodeSuffix("");
     setFinalCodeSuffixError("");
@@ -937,14 +953,76 @@ export default function AdminApprovalFormDialog({
   const isFinalStageActive = detail.isFinalStage || detail.currentStageKind === "MDM";
   const isFinalStageApprove =
     currentAction === "Approve" && isFinalStageActive && !isScopedChangeExtendRequest;
-  // Master Data may send a rework back to a MANUAL step that already approved
+  // Master Data may send a rework back to a MANUAL step that already approved,
+  // or — on a request that never had a manual chain — to a hand-picked user,
   // instead of to the requester. The reason dialog is shared by
   // Approve/Rework/Reject, hence the action check; the rest is gated on the
   // active *step* rather than on the user's group, so an ADMIN acting on the
   // Master Data step gets the same choice and an MDM user who happens to be an
   // approver elsewhere does not.
-  const canChooseReworkTarget =
-    currentAction === "Rework" && isMdmStageActive && reworkStepOptions.length > 0;
+  const canChooseReworkTarget = currentAction === "Rework" && isMdmStageActive;
+  const reworkSlots = useMemo(
+    () =>
+      buildReworkDestinationSlots({
+        approvalSteps: detail.approvalSteps,
+        requesterLabel: reworkRequester.label,
+        newApprover: reworkNewApprover,
+        // Mass rework has no reworkToLevel support, so its real steps are shown
+        // for context only.
+        allowStepRewind: !isMassRequest,
+      }),
+    [detail.approvalSteps, reworkRequester.label, reworkNewApprover, isMassRequest]
+  );
+  // Whoever claimed the Master Data step must not end up in the chain they are
+  // handing the request to, and neither may the requester.
+  const reworkExcludedIdentifiers = useMemo(
+    () => [...reworkRequester.identifiers, currentUserId, currentUsername],
+    [reworkRequester.identifiers, currentUserId, currentUsername]
+  );
+  const reworkDestinationError = canChooseReworkTarget
+    ? validateReworkDestination({
+        selectedValue: reworkTarget,
+        newApprover: reworkNewApprover,
+        requesterIdentifiers: reworkRequester.identifiers,
+        actorIdentifiers: [currentUserId, currentUsername],
+      })
+    : "";
+  // Which request table the mail endpoints are keyed by — the dialog serves
+  // both kinds, and the mass batch's thread lives under a different path.
+  const reworkEmailKind = resolveReworkEmailKind(isMassRequest);
+  // A mail is only in play on the hand-picked-approver row; every other
+  // destination notifies in-app, so its draft is neither shown nor validated.
+  const reworkEmailChannel =
+    canChooseReworkTarget && reworkTarget === REWORK_TO_NEW_APPROVER
+      ? reworkNotifyVia
+      : NOTIFY_VIA_APP;
+  // On the EMAIL channel the mail is the message, so the reason box gives way to
+  // the subject the approver reads first — asking for a second wording of the
+  // same thing is the one step Master Data would only ever repeat itself in.
+  // The reason is still sent: the endpoint requires one and the in-app history
+  // shows it. Every other destination keeps typing its own.
+  const isReworkEmailReason = reworkEmailChannel === NOTIFY_VIA_EMAIL;
+  const reworkEmailReason = isReworkEmailReason
+    ? deriveReworkEmailReason(reworkEmailSubject)
+    : "";
+  // The transcript is for the people who can act on the Master Data step; for
+  // everyone else the section never mounts and never fetches.
+  const canSeeReworkEmailThread = isMdmUser || isAdminOverride;
+
+  const handleReworkEmailTemplateLoaded = useCallback(template => {
+    setReworkEmailSubject(template.subject);
+    setReworkEmailBody(template.body);
+  }, []);
+
+  const handleReworkEmailSubjectChange = value => {
+    setReworkEmailSubject(value);
+    setReworkEmailErrors(prev => (prev.subject ? { ...prev, subject: "" } : prev));
+  };
+
+  const handleReworkEmailBodyChange = value => {
+    setReworkEmailBody(value);
+    setReworkEmailErrors(prev => (prev.body ? { ...prev, body: "" } : prev));
+  };
 
   const renderFieldHint = fieldKey => {
     const hintText = fieldHints[fieldKey];
@@ -1245,7 +1323,15 @@ export default function AdminApprovalFormDialog({
 
               <Box>
                 <SectionLabel>Specification</SectionLabel>
-                {specificationFields.length > 0 ? (
+                {/* The schema decides which specification fields exist, what
+                    they are called and in what order — so until it lands there
+                    is nothing honest to draw here. Rendering the row's raw
+                    fields first would relabel and reorder them a beat later,
+                    and rendering the "belum tersimpan" line would be a plain
+                    lie about a request that does have a specification. */}
+                {referenceDataLoading ? (
+                  <SectionLoadingSkeleton lines={4} />
+                ) : specificationFields.length > 0 ? (
                   <Grid container spacing={2.5}>
                 {specificationFields.map(field => {
                   const historySections = field.historySections || [];
@@ -1339,6 +1425,15 @@ export default function AdminApprovalFormDialog({
               </Box>
             </>
           )}
+
+          {/* Renders nothing at all unless this request actually has rework
+              mail, so a request that never used the EMAIL channel looks
+              exactly as it did before. */}
+          <ReworkEmailThreadSection
+            enabled={open && canSeeReworkEmailThread}
+            requestKind={reworkEmailKind}
+            requestId={detail.id}
+          />
         </Stack>
       </DialogContent>
 
@@ -1440,17 +1535,11 @@ export default function AdminApprovalFormDialog({
           >
             Close
           </Button>
-          {isMdmStageActive &&
-            canSubmitApprovalAction &&
-            !isMdmClaimedByMe &&
-            isMdmUser &&
-            !hasApprovedEarlierStep && (
-              <Typography variant="caption" sx={{ color: "#c2410c", fontWeight: 700 }}>
-                {isMdmUnclaimed
-                  ? "Master Data stage belum di-claim."
-                  : "Master Data stage sudah di-claim oleh user MDM lain."}
-              </Typography>
-            )}
+          {claimNotice && (
+            <Typography variant="caption" sx={{ color: "#c2410c", fontWeight: 700 }}>
+              {claimNotice}
+            </Typography>
+          )}
           {grabError && (
             <Typography variant="caption" color="error" sx={{ fontWeight: 700 }}>
               {grabError}
@@ -1466,7 +1555,7 @@ export default function AdminApprovalFormDialog({
               onClick={handleGrabMdm}
               sx={{ bgcolor: "#0f766e", textTransform: "none", fontWeight: 800 }}
             >
-              {grabbing ? "Grabbing..." : "Grab / Claim"}
+              {grabbing ? MDM_GRAB_BUTTON_BUSY_LABEL : MDM_GRAB_BUTTON_LABEL}
             </Button>
           )}
           <Button
@@ -1670,7 +1759,9 @@ export default function AdminApprovalFormDialog({
       <Dialog
         open={remarkDialogOpen}
         onClose={handleRemarkDialogClose}
-        maxWidth="xs"
+        // The destination list carries "Approval N - Name - email" rows, which
+        // wrap badly in the reason dialog's usual width.
+        maxWidth={canChooseReworkTarget ? "sm" : "xs"}
         fullWidth
       >
         <Box sx={{ p: 2, display: "flex", alignItems: "center", gap: 1 }}>
@@ -1681,56 +1772,76 @@ export default function AdminApprovalFormDialog({
         </Box>
         <DialogContent sx={{ pt: 0 }}>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {currentAction
-              ? `Please enter the reason before proceeding with ${currentAction.toLowerCase()}.`
-              : "Please enter the reason before proceeding."}
+            {isReworkEmailReason
+              ? "Please review the email below before proceeding with rework."
+              : currentAction
+                ? `Please enter the reason before proceeding with ${currentAction.toLowerCase()}.`
+                : "Please enter the reason before proceeding."}
           </Typography>
           {canChooseReworkTarget && (
-            <TextField
-              select
-              fullWidth
-              size="small"
-              label="Rework To"
+            <ReworkDestinationField
+              slots={reworkSlots}
               value={reworkTarget}
-              onChange={event => setReworkTarget(event.target.value)}
-              // REWORK_TO_REQUESTER is the empty string, and a MUI Select skips
-              // rendering the selected item's label unless the value is filled.
-              // Without displayEmpty the Requester default is selected but shows
-              // blank, reading as "nothing picked yet" on a field that always
-              // has a destination.
-              SelectProps={{ displayEmpty: true }}
-              InputLabelProps={{ shrink: true }}
-              helperText="Defaults to Requester, or choose a specific step to rework to."
-              sx={{ mb: 2 }}
-            >
-              <MenuItem value={REWORK_TO_REQUESTER}>Requester</MenuItem>
-              {reworkStepOptions.map(option => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </TextField>
+              onChange={setReworkTarget}
+              onNewApproverChange={setReworkNewApprover}
+              newApprover={reworkNewApprover}
+              notifyVia={reworkNotifyVia}
+              onNotifyViaChange={setReworkNotifyVia}
+              excludeIdentifiers={reworkExcludedIdentifiers}
+              disabled={submitting}
+              errorText={reworkDestinationError}
+              requestKind={reworkEmailKind}
+              requestId={detail.id}
+              emailSubject={reworkEmailSubject}
+              emailBody={reworkEmailBody}
+              onEmailSubjectChange={handleReworkEmailSubjectChange}
+              onEmailBodyChange={handleReworkEmailBodyChange}
+              onEmailTemplateLoaded={handleReworkEmailTemplateLoaded}
+              emailErrors={reworkEmailErrors}
+            />
           )}
-          <TextField
-            fullWidth
-            multiline
-            rows={4}
-            placeholder="Enter your message here..."
-            value={remarkText}
-            error={Boolean(remarkError)}
-            helperText={remarkError}
-            onChange={e => {
-              setRemarkText(e.target.value);
-              if (remarkError) {
-                setRemarkError("");
-              }
-            }}
-            sx={{
-              "& .MuiInputBase-root": {
+          {isReworkEmailReason ? (
+            <Box
+              sx={{
+                p: 1.5,
+                borderRadius: 1,
                 bgcolor: "#f5f5f5",
-              },
-            }}
-          />
+                border: "1px solid",
+                borderColor: "divider",
+              }}
+            >
+              <Typography variant="caption" color="text.secondary">
+                {REWORK_EMAIL_REASON_NOTICE}
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ mt: 0.5, fontWeight: 700, wordBreak: "break-word" }}
+              >
+                {reworkEmailReason}
+              </Typography>
+            </Box>
+          ) : (
+            <TextField
+              fullWidth
+              multiline
+              rows={4}
+              placeholder="Enter your message here..."
+              value={remarkText}
+              error={Boolean(remarkError)}
+              helperText={remarkError}
+              onChange={e => {
+                setRemarkText(e.target.value);
+                if (remarkError) {
+                  setRemarkError("");
+                }
+              }}
+              sx={{
+                "& .MuiInputBase-root": {
+                  bgcolor: "#f5f5f5",
+                },
+              }}
+            />
+          )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button
@@ -1748,10 +1859,52 @@ export default function AdminApprovalFormDialog({
                 return;
               }
 
+              if (reworkDestinationError) {
+                return;
+              }
+
+              // The endpoint rejects a blank subject or body with
+              // <PREFIX>_REWORK_EMAIL_CONTENT_REQUIRED; catching it here keeps
+              // the half-written mail on screen instead of losing it to a 400.
+              const emailContentErrors = validateReworkEmailContent({
+                notifyVia: reworkEmailChannel,
+                subject: reworkEmailSubject,
+                body: reworkEmailBody,
+              });
+              setReworkEmailErrors(emailContentErrors);
+              if (hasReworkEmailContentError(emailContentErrors)) {
+                return;
+              }
+
+              // The mail's own subject stands in for the reason nobody was
+              // asked to type; the box is what everything else still sends.
+              const submittedRemark = isReworkEmailReason
+                ? reworkEmailReason
+                : remarkText;
+
               // Absent unless Master Data actually had the choice, so every
               // other rework keeps sending exactly what it sent before.
               const reworkDestination = canChooseReworkTarget
-                ? { reworkToLevel: resolveReworkToLevel(reworkTarget) }
+                ? {
+                    ...buildReworkDestinationPayload({
+                      selectedValue: reworkTarget,
+                      newApprover: reworkNewApprover,
+                      notifyVia: reworkNotifyVia,
+                      emailContent: buildReworkEmailPayload({
+                        notifyVia: reworkEmailChannel,
+                        subject: reworkEmailSubject,
+                        body: reworkEmailBody,
+                      }),
+                    }),
+                    // Confirmation copy only — the page strips it before POSTing.
+                    reworkDestinationLabel: describeReworkDestination({
+                      slots: reworkSlots,
+                      selectedValue: reworkTarget,
+                    }),
+                    // Likewise copy-only: the "Via email" snackbar names the
+                    // address the mail went to, and only the dialog holds it.
+                    reworkRecipientEmail: reworkNewApprover?.email ?? "",
+                  }
                 : {};
 
               onAction?.(
@@ -1759,12 +1912,12 @@ export default function AdminApprovalFormDialog({
                 detail,
                 isScopedChangeExtendRequest
                   ? {
-                      remark: remarkText,
+                      remark: submittedRemark,
                       ...reworkDestination,
                       ...(isFinalStageApprove ? { finalCodeSuffix } : {}),
                     }
                   : {
-                      remark: remarkText,
+                      remark: submittedRemark,
                       ...reworkDestination,
                       ...(isFinalStageApprove ? { finalCodeSuffix } : {}),
                       editedRequest: {
@@ -1781,7 +1934,7 @@ export default function AdminApprovalFormDialog({
                     }
               );
             }}
-            disabled={submitting}
+            disabled={submitting || Boolean(reworkDestinationError)}
             sx={{ textTransform: "none", fontWeight: 800 }}
           >
             {submitting ? "Saving..." : currentAction || "Save"}

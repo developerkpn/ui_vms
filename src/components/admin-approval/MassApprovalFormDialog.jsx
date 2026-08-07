@@ -8,6 +8,7 @@ import {
 import {
   Box,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -21,11 +22,60 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import TableLoadingRows from "src/components/common/TableLoadingRows";
 import { buildMassApprovalDetail } from "src/helper/massApprovalDetail.js";
+import {
+  formatMassFinalCodeSuffixPreview,
+  MASS_FINAL_CODE_SUFFIX_HELPER_TEXT,
+  MASS_FINAL_CODE_SUFFIX_LENGTH,
+  sanitizeMassFinalCodeSuffix,
+  validateMassFinalCodeSuffix,
+} from "src/helper/massFinalCode.js";
+import {
+  getSapStatusChip,
+  getStagedMaterialCode,
+  isSapError,
+} from "src/helper/sapStatus.js";
+import { isMdmMaterialUser } from "src/helper/adminApprovalView.js";
+import {
+  applyOptimisticMdmClaim,
+  buildClaimMdmPath,
+  evaluateMdmClaimGate,
+  extractClaimedApprovalSteps,
+  identifiersMatch,
+  MDM_GRAB_BUTTON_BUSY_LABEL,
+  MDM_GRAB_BUTTON_LABEL,
+  MDM_STEP_KIND,
+  resolveMdmClaimErrorMessage,
+  resolveStepApproverUserId,
+} from "src/helper/mdmClaimGate.js";
+import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import useSessionStore from "src/store/useSessionStore";
+import {
+  buildReworkDestinationPayload,
+  buildReworkDestinationSlots,
+  describeReworkDestination,
+  NOTIFY_VIA_APP,
+  NOTIFY_VIA_EMAIL,
+  resolveReworkRequester,
+  REWORK_TO_NEW_APPROVER,
+  REWORK_TO_REQUESTER,
+  validateReworkDestination,
+} from "src/helper/adminApprovalRework.js";
+import {
+  buildReworkEmailPayload,
+  deriveReworkEmailReason,
+  hasReworkEmailContentError,
+  REWORK_EMAIL_KIND_MASS,
+  REWORK_EMAIL_REASON_NOTICE,
+  validateReworkEmailContent,
+} from "src/helper/reworkEmailThread.js";
+import ReworkDestinationField from "./ReworkDestinationField";
+import ReworkEmailThreadSection from "./ReworkEmailThreadSection";
 
 const EDITABLE_FIELD_META = [
   { key: "plantCode", label: "Plant", dbKey: "plant_code", required: true },
@@ -39,13 +89,66 @@ const EDITABLE_FIELD_META = [
 ];
 const REQUIRED_FIELD_KEYS = EDITABLE_FIELD_META.filter(m => m.required).map(m => m.key);
 
+// Per-item SAP staging status, same chips the single request shows in the
+// approval list — plus the SAP write-back message on hover when it errored.
+function ItemSapStatus({ item }) {
+  const sapChip = getSapStatusChip(item?.sapPushStatus);
+
+  if (!sapChip) {
+    return (
+      <Typography variant="caption" color="text.secondary">
+        -
+      </Typography>
+    );
+  }
+
+  const chip = (
+    <Chip
+      label={sapChip.label}
+      size="small"
+      sx={{ fontWeight: 800, bgcolor: sapChip.bgcolor, color: sapChip.color }}
+    />
+  );
+
+  if (isSapError(item?.sapPushStatus) && item?.sapErrorMsg) {
+    return (
+      <Tooltip title={item.sapErrorMsg} arrow placement="top">
+        <Stack spacing={0.5} alignItems="flex-start" sx={{ maxWidth: 200 }}>
+          {chip}
+          <Typography
+            variant="caption"
+            sx={{
+              color: "#dc2626",
+              fontWeight: 600,
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
+            {item.sapErrorMsg}
+          </Typography>
+        </Stack>
+      </Tooltip>
+    );
+  }
+
+  return chip;
+}
+
 export default function MassApprovalFormDialog({
   open,
   row,
   items = [],
+  // True while the page is still fetching this batch's items — the dialog is
+  // opened first and the items arrive after, so the table needs to say so
+  // instead of claiming the batch is empty.
+  itemsLoading = false,
   onClose,
   onAction,
+  onGrabbed,
   submitting = false,
+  serverValidationErrors = {},
 }) {
   const detail = useMemo(
     () => buildMassApprovalDetail(row || {}, items),
@@ -59,6 +162,27 @@ export default function MassApprovalFormDialog({
   const [currentAction, setCurrentAction] = useState("");
   const [remarkText, setRemarkText] = useState("");
   const [remarkError, setRemarkError] = useState("");
+  // Rework destination — Master Data only; see the Rework To field below.
+  const [reworkTarget, setReworkTarget] = useState(REWORK_TO_REQUESTER);
+  const [reworkNewApprover, setReworkNewApprover] = useState(null);
+  const [reworkNotifyVia, setReworkNotifyVia] = useState(NOTIFY_VIA_APP);
+  // The mail itself, once the EMAIL channel is chosen. Kept here rather than in
+  // the field so toggling back to "Via aplikasi" and out again does not discard
+  // what Master Data has already typed.
+  const [reworkEmailSubject, setReworkEmailSubject] = useState("");
+  const [reworkEmailBody, setReworkEmailBody] = useState("");
+  const [reworkEmailErrors, setReworkEmailErrors] = useState({ subject: "", body: "" });
+  // Running number entered at the Master Data stage — one for the whole batch,
+  // incremented per item server-side. See the Final Code dialog below.
+  const [finalCodeDialogOpen, setFinalCodeDialogOpen] = useState(false);
+  const [finalCodeSuffix, setFinalCodeSuffix] = useState("");
+  const [finalCodeSuffixError, setFinalCodeSuffixError] = useState("");
+  // Holds the freshly-claimed approval steps returned by the claim-mdm endpoint
+  // so the dialog reflects the grab without waiting for a parent refresh.
+  const [claimedSteps, setClaimedSteps] = useState(null);
+  const [grabbing, setGrabbing] = useState(false);
+  const [grabError, setGrabError] = useState("");
+  const axiosPrivate = useAxiosPrivate();
 
   // Reset state when dialog opens/closes
   const [fieldErrors, setFieldErrors] = useState({});
@@ -71,33 +195,203 @@ export default function MassApprovalFormDialog({
       setCurrentAction("");
       setRemarkText("");
       setRemarkError("");
+      setReworkTarget(REWORK_TO_REQUESTER);
+      setReworkNewApprover(null);
+      setReworkNotifyVia(NOTIFY_VIA_APP);
+      setReworkEmailSubject("");
+      setReworkEmailBody("");
+      setReworkEmailErrors({ subject: "", body: "" });
+      setFinalCodeDialogOpen(false);
+      setFinalCodeSuffix("");
+      setFinalCodeSuffixError("");
+      setClaimedSteps(null);
+      setGrabbing(false);
+      setGrabError("");
     }
   }, [open]);
+
+  // A different batch is a different claim: whatever the last grab returned says
+  // nothing about this one.
+  useEffect(() => {
+    setClaimedSteps(null);
+    setGrabError("");
+  }, [row]);
 
   const normalizedStatus = String(detail.status || "").trim().toUpperCase();
   const currentUserId = useSessionStore(state => state.user_id);
   const currentUsername = useSessionStore(state => state.username);
+  const isMdmUser = useSessionStore(isMdmMaterialUser);
+  const canSubmitApprovalAction = normalizedStatus === "SUBMIT";
+  // The batch's steps as currently known: prefer the ones a fresh grab returned,
+  // otherwise whatever the row was opened with. This is what lets the dialog go
+  // from claimable to claimed without being reopened.
+  const approvalSteps = useMemo(() => {
+    if (Array.isArray(claimedSteps) && claimedSteps.length > 0) {
+      return claimedSteps;
+    }
+    return Array.isArray(row?.approvalSteps) ? row.approvalSteps : [];
+  }, [claimedSteps, row]);
   // It is this user's turn only when they are the ACTIVE step's assigned
   // approver (or MDM claimer). ADMIN keeps its backend-side override. Everyone
   // else — including approvers who already acted — gets a view-only dialog.
-  const activeStep = useMemo(() => {
-    const steps = Array.isArray(row?.approvalSteps) ? row.approvalSteps : [];
-    return (
-      steps.find(
+  const activeStep = useMemo(
+    () =>
+      approvalSteps.find(
         step => step.status !== "APPROVED" && step.status !== "REJECTED"
-      ) || null
-    );
-  }, [row]);
+      ) || null,
+    [approvalSteps]
+  );
   const isAdminOverride =
     String(currentUsername || "").trim().toUpperCase() === "ADMIN";
-  const isMyTurn =
+  const activeApproverUserId = resolveStepApproverUserId(activeStep);
+
+  // Master Data is the only stage that gets to choose where a rework lands, and
+  // the only one that is claimed rather than assigned. Mass requests have no
+  // rewind support, so the real steps below render for context only — the
+  // requester and the one fillable slot are the destinations.
+  const isMdmStageActive =
+    String(activeStep?.kind ?? row?.currentStageKind ?? "")
+      .trim()
+      .toUpperCase() === MDM_STEP_KIND;
+  // Same rules the single-request dialog grabs by — they live in one helper so
+  // the two dialogs cannot drift apart. The backend enforces them again.
+  const { canGrabMdm, isMdmClaimedByMe, claimNotice } = evaluateMdmClaimGate({
+    approvalSteps,
+    isMdmStageActive,
+    mdmApproverUserId: activeApproverUserId,
+    currentUserId,
+    isMdmUser,
+    canSubmitApprovalAction,
+  });
+  const isMyManualTurn =
     activeStep != null &&
-    activeStep.approverUserId != null &&
-    String(activeStep.approverUserId).trim() !== "" &&
-    String(activeStep.approverUserId).trim() ===
-      String(currentUserId ?? "").trim();
+    String(activeStep.kind || "").trim().toUpperCase() !== MDM_STEP_KIND &&
+    identifiersMatch(activeApproverUserId, currentUserId);
+  // Before the Master Data step is grabbed nobody may act on it — not even the
+  // MDM user about to grab it — so Approve/Rework/Reject stay disabled until the
+  // claim lands, exactly as they do on a single request.
   const canAct =
-    normalizedStatus === "SUBMIT" && (isAdminOverride || isMyTurn);
+    canSubmitApprovalAction &&
+    (isAdminOverride || isMyManualTurn || (isMdmStageActive && isMdmClaimedByMe));
+
+  const handleGrabMdm = async () => {
+    const claimPath = buildClaimMdmPath({
+      requestId: row?.id,
+      isMassRequest: true,
+    });
+
+    if (!claimPath || grabbing) {
+      return;
+    }
+
+    setGrabbing(true);
+    setGrabError("");
+
+    try {
+      const response = await axiosPrivate.post(claimPath);
+      const nextSteps = extractClaimedApprovalSteps(response.data);
+      setClaimedSteps(
+        nextSteps ||
+          // No steps echoed back: optimistically mark this user as the claimer.
+          applyOptimisticMdmClaim({
+            approvalSteps,
+            currentStageLevel: activeStep?.level ?? row?.currentStageLevel ?? null,
+            userId: currentUserId,
+          })
+      );
+      // Notify the parent so the main inbox table reflects the claim — the batch
+      // should no longer show as "unclaimed" to this (or any) MDM user.
+      onGrabbed?.();
+    } catch (error) {
+      setGrabError(resolveMdmClaimErrorMessage(error));
+    } finally {
+      setGrabbing(false);
+    }
+  };
+
+  const canChooseReworkTarget = currentAction === "Rework" && isMdmStageActive;
+  const reworkRequester = useMemo(() => resolveReworkRequester(row || {}), [row]);
+  const reworkSlots = useMemo(
+    () =>
+      buildReworkDestinationSlots({
+        approvalSteps: row?.approvalSteps,
+        requesterLabel: reworkRequester.label,
+        newApprover: reworkNewApprover,
+        allowStepRewind: false,
+      }),
+    [row?.approvalSteps, reworkRequester.label, reworkNewApprover]
+  );
+  const reworkExcludedIdentifiers = useMemo(
+    () => [...reworkRequester.identifiers, currentUserId, currentUsername],
+    [reworkRequester.identifiers, currentUserId, currentUsername]
+  );
+  const reworkDestinationError = canChooseReworkTarget
+    ? validateReworkDestination({
+        selectedValue: reworkTarget,
+        newApprover: reworkNewApprover,
+        requesterIdentifiers: reworkRequester.identifiers,
+        actorIdentifiers: [currentUserId, currentUsername],
+      })
+    : "";
+  // A mail is only in play on the hand-picked-approver row; every other
+  // destination notifies in-app, so its draft is neither shown nor validated.
+  const reworkEmailChannel =
+    canChooseReworkTarget && reworkTarget === REWORK_TO_NEW_APPROVER
+      ? reworkNotifyVia
+      : NOTIFY_VIA_APP;
+  // On the EMAIL channel the mail is the message, so the reason box gives way to
+  // the subject the approver reads first rather than asking Master Data to word
+  // the same thing twice. A reason still travels — the endpoint requires one and
+  // the in-app history shows it — it is just derived from the subject.
+  const isReworkEmailReason = reworkEmailChannel === NOTIFY_VIA_EMAIL;
+  const reworkEmailReason = isReworkEmailReason
+    ? deriveReworkEmailReason(reworkEmailSubject)
+    : "";
+
+  const handleReworkEmailTemplateLoaded = useCallback(template => {
+    setReworkEmailSubject(template.subject);
+    setReworkEmailBody(template.body);
+  }, []);
+
+  const handleReworkEmailSubjectChange = value => {
+    setReworkEmailSubject(value);
+    setReworkEmailErrors(prev => (prev.subject ? { ...prev, subject: "" } : prev));
+  };
+
+  const handleReworkEmailBodyChange = value => {
+    setReworkEmailBody(value);
+    setReworkEmailErrors(prev => (prev.body ? { ...prev, body: "" } : prev));
+  };
+
+  // Master Data types one running number for the batch; the composed material
+  // codes are assembled server-side, so only the increments can be previewed.
+  const finalCodeItemCount = detail.items.length || detail.itemCount || 0;
+  const finalCodeSuffixPreview = formatMassFinalCodeSuffixPreview({
+    finalCodeSuffix,
+    itemCount: finalCodeItemCount,
+  });
+  // The SAP columns only mean something once the batch has been staged, so they
+  // stay out of the (already wide) item table while it is still in approval.
+  const hasSapColumns = useMemo(
+    () => detail.items.some(item => item.finalCode || item.sapPushStatus),
+    [detail.items]
+  );
+  // Item no + request no, one column per editable field, and the two SAP
+  // columns when they are showing. Shared by the loading and empty rows so
+  // neither can drift out of step with the header.
+  const itemColumnCount = 2 + EDITABLE_FIELD_META.length + (hasSapColumns ? 2 : 0);
+
+  // Server-side rejection of the running number (invalid, overflow, or a code
+  // already taken): reopen the Final Code dialog with the server message on the
+  // input so Master Data can pick another number.
+  useEffect(() => {
+    const serverError = serverValidationErrors?.finalCodeSuffix;
+    if (serverError?.message) {
+      setRemarkDialogOpen(false);
+      setFinalCodeSuffixError(serverError.message);
+      setFinalCodeDialogOpen(true);
+    }
+  }, [serverValidationErrors]);
 
   // Resolve a field's display value: draft overrides original item value
   const resolveField = useCallback(
@@ -197,6 +491,44 @@ export default function MassApprovalFormDialog({
     setCurrentAction("Approve");
     setRemarkText("");
     setRemarkError("");
+    setFinalCodeSuffix("");
+    setFinalCodeSuffixError("");
+
+    // The Final Code dialog gates the Master Data (MDM) stage — that approval
+    // is the one that composes every item's material code and stages the batch.
+    if (isMdmStageActive) {
+      setFinalCodeDialogOpen(true);
+      return;
+    }
+
+    setRemarkDialogOpen(true);
+  };
+
+  const handleFinalCodeDialogClose = (_, reason) => {
+    if (
+      submitting &&
+      (reason === "backdropClick" || reason === "escapeKeyDown")
+    ) {
+      return;
+    }
+    if (submitting) return;
+    setFinalCodeDialogOpen(false);
+    setFinalCodeSuffixError("");
+  };
+
+  const handleFinalCodeNext = () => {
+    const error = validateMassFinalCodeSuffix({
+      finalCodeSuffix,
+      itemCount: finalCodeItemCount,
+    });
+
+    if (error) {
+      setFinalCodeSuffixError(error);
+      return;
+    }
+
+    setFinalCodeDialogOpen(false);
+    setFinalCodeSuffixError("");
     setRemarkDialogOpen(true);
   };
 
@@ -204,6 +536,17 @@ export default function MassApprovalFormDialog({
     setCurrentAction("Rework");
     setRemarkText("");
     setRemarkError("");
+    // The requester is the destination every time the dialog is opened, so a
+    // hand-picked approver is never inherited from a previous rework.
+    setReworkTarget(REWORK_TO_REQUESTER);
+    setReworkNotifyVia(NOTIFY_VIA_APP);
+    setReworkNewApprover(null);
+    // Dropping the draft re-arms the template fetch: the field unmounts with the
+    // reason dialog, so the next EMAIL choice pulls a fresh mail rather than
+    // reusing one composed for an earlier attempt.
+    setReworkEmailSubject("");
+    setReworkEmailBody("");
+    setReworkEmailErrors({ subject: "", body: "" });
     setRemarkDialogOpen(true);
   };
 
@@ -219,7 +562,9 @@ export default function MassApprovalFormDialog({
   const handleRemarkConfirm = () => {
     const trimmed = remarkText.trim();
 
-    if (!trimmed) {
+    // An EMAIL rework has no box to leave empty: its reason comes from the
+    // subject, which the blank-draft check below is what guards.
+    if (!trimmed && !isReworkEmailReason) {
       const message =
         currentAction === "Rework"
           ? "Rework reason is required."
@@ -230,16 +575,70 @@ export default function MassApprovalFormDialog({
       return;
     }
 
-    if (currentAction === "Rework" || currentAction === "Reject") {
-      onAction?.(currentAction.toLowerCase(), trimmed, null);
+    if (currentAction === "Rework") {
+      if (reworkDestinationError) {
+        return;
+      }
+
+      // The endpoint rejects a blank subject or body with
+      // MASS_REWORK_EMAIL_CONTENT_REQUIRED; catching it here keeps the
+      // half-written mail on screen instead of losing it to a 400.
+      const emailContentErrors = validateReworkEmailContent({
+        notifyVia: reworkEmailChannel,
+        subject: reworkEmailSubject,
+        body: reworkEmailBody,
+      });
+      setReworkEmailErrors(emailContentErrors);
+      if (hasReworkEmailContentError(emailContentErrors)) {
+        return;
+      }
+
+      // Absent unless Master Data actually had the choice, so every other
+      // rework keeps sending exactly what it sent before.
+      onAction?.(
+        "rework",
+        // The mail's own subject stands in for the reason nobody was asked to
+        // type; the box is what every other destination still sends.
+        isReworkEmailReason ? reworkEmailReason : trimmed,
+        null,
+        canChooseReworkTarget
+          ? {
+              ...buildReworkDestinationPayload({
+                selectedValue: reworkTarget,
+                newApprover: reworkNewApprover,
+                notifyVia: reworkNotifyVia,
+                emailContent: buildReworkEmailPayload({
+                  notifyVia: reworkEmailChannel,
+                  subject: reworkEmailSubject,
+                  body: reworkEmailBody,
+                }),
+              }),
+              // Confirmation copy only — the page strips it before POSTing.
+              reworkDestinationLabel: describeReworkDestination({
+                slots: reworkSlots,
+                selectedValue: reworkTarget,
+              }),
+              // Likewise copy-only: the "Via email" snackbar names the address
+              // the mail went to, and only the dialog holds it.
+              reworkRecipientEmail: reworkNewApprover?.email ?? "",
+            }
+          : {}
+      );
       return;
     }
 
-    // Approve — include edited items if any
+    if (currentAction === "Reject") {
+      onAction?.("reject", trimmed, null);
+      return;
+    }
+
+    // Approve — include edited items if any, plus the batch running number when
+    // this is the Master Data stage (the only stage the backend expects it on).
     onAction?.(
       "approve",
       trimmed,
-      hasEdits ? buildEditedItemsPayload() : null
+      hasEdits ? buildEditedItemsPayload() : null,
+      isMdmStageActive ? { finalCodeSuffix } : {}
     );
   };
 
@@ -249,6 +648,9 @@ export default function MassApprovalFormDialog({
     setCurrentAction("");
     setRemarkText("");
     setRemarkError("");
+    setFinalCodeDialogOpen(false);
+    setFinalCodeSuffix("");
+    setFinalCodeSuffixError("");
     onClose?.();
   };
 
@@ -387,7 +789,10 @@ export default function MassApprovalFormDialog({
 
             {/* Editable items table */}
             <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
-              Items ({detail.items.length})
+              {/* No count while the items are still coming — "Items (0)"
+                  flipping to "Items (24)" is the same pop the table below
+                  used to have. */}
+              {itemsLoading ? "Items" : `Items (${detail.items.length})`}
             </Typography>
 
             <TableContainer
@@ -432,13 +837,39 @@ export default function MassApprovalFormDialog({
                         {meta.label}
                       </TableCell>
                     ))}
+                    {hasSapColumns && (
+                      <TableCell
+                        sx={{
+                          fontWeight: 700,
+                          border: "1px solid #e0e0e0",
+                          py: 1.5,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        Material Code
+                      </TableCell>
+                    )}
+                    {hasSapColumns && (
+                      <TableCell
+                        sx={{
+                          fontWeight: 700,
+                          border: "1px solid #e0e0e0",
+                          py: 1.5,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        SAP Status
+                      </TableCell>
+                    )}
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {detail.items.length === 0 ? (
+                  {itemsLoading ? (
+                    <TableLoadingRows columns={itemColumnCount} />
+                  ) : detail.items.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={2 + EDITABLE_FIELD_META.length}
+                        colSpan={itemColumnCount}
                         align="center"
                         sx={{ py: 3 }}
                       >
@@ -511,12 +942,38 @@ export default function MassApprovalFormDialog({
                             </TableCell>
                           );
                         })}
+                        {hasSapColumns && (
+                          <TableCell
+                            sx={{
+                              border: "1px solid #e0e0e0",
+                              fontWeight: 700,
+                              whiteSpace: "nowrap",
+                              color: "text.secondary",
+                            }}
+                          >
+                            {getStagedMaterialCode(item) || "-"}
+                          </TableCell>
+                        )}
+                        {hasSapColumns && (
+                          <TableCell sx={{ border: "1px solid #e0e0e0" }}>
+                            <ItemSapStatus item={item} />
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))
                   )}
                 </TableBody>
               </Table>
             </TableContainer>
+
+            {/* Renders nothing at all unless this batch actually has rework
+                mail, so a request that never used the EMAIL channel looks
+                exactly as it did before. */}
+            <ReworkEmailThreadSection
+              enabled={open && (isMdmUser || isAdminOverride)}
+              requestKind={REWORK_EMAIL_KIND_MASS}
+              requestId={row?.id}
+            />
           </Stack>
         </DialogContent>
 
@@ -528,45 +985,189 @@ export default function MassApprovalFormDialog({
             borderTop: "1px solid",
             borderColor: "divider",
             display: "flex",
-            justifyContent: "flex-end",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
             gap: 1.5,
           }}
         >
-          <Button
-            variant="contained"
-            startIcon={<Cancel />}
-            onClick={handleRejectClick}
-            disabled={!canAct || submitting}
-            sx={{ bgcolor: "#c62828", textTransform: "none", fontWeight: 800 }}
-          >
-            Reject All
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<Replay />}
-            onClick={handleReworkClick}
-            disabled={!canAct || submitting}
-            sx={{ bgcolor: "#fb8c00", textTransform: "none", fontWeight: 800 }}
-          >
-            Rework All
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<CheckCircle />}
-            onClick={handleApproveClick}
-            disabled={!canAct || submitting}
-            sx={{ bgcolor: "#0b35d9", textTransform: "none", fontWeight: 800 }}
-          >
-            Approve All
-          </Button>
+          <Stack spacing={0.75}>
+            {claimNotice && (
+              <Typography variant="caption" sx={{ color: "#c2410c", fontWeight: 700 }}>
+                {claimNotice}
+              </Typography>
+            )}
+            {grabError && (
+              <Typography variant="caption" color="error" sx={{ fontWeight: 700 }}>
+                {grabError}
+              </Typography>
+            )}
+          </Stack>
+          <Stack direction="row" spacing={1.5} useFlexGap flexWrap="wrap">
+            {canGrabMdm && (
+              <Button
+                variant="contained"
+                startIcon={<CheckCircle />}
+                disabled={submitting || grabbing}
+                onClick={handleGrabMdm}
+                sx={{ bgcolor: "#0f766e", textTransform: "none", fontWeight: 800 }}
+              >
+                {grabbing ? MDM_GRAB_BUTTON_BUSY_LABEL : MDM_GRAB_BUTTON_LABEL}
+              </Button>
+            )}
+            <Button
+              variant="contained"
+              startIcon={<Cancel />}
+              onClick={handleRejectClick}
+              disabled={!canAct || submitting}
+              sx={{ bgcolor: "#c62828", textTransform: "none", fontWeight: 800 }}
+            >
+              Reject All
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<Replay />}
+              onClick={handleReworkClick}
+              disabled={!canAct || submitting}
+              sx={{ bgcolor: "#fb8c00", textTransform: "none", fontWeight: 800 }}
+            >
+              Rework All
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<CheckCircle />}
+              onClick={handleApproveClick}
+              disabled={!canAct || submitting}
+              sx={{ bgcolor: "#0b35d9", textTransform: "none", fontWeight: 800 }}
+            >
+              Approve All
+            </Button>
+          </Stack>
         </Box>
+      </Dialog>
+
+      {/* Final Code dialog — Master Data stage only, ahead of the remark step */}
+      <Dialog
+        open={finalCodeDialogOpen}
+        onClose={handleFinalCodeDialogClose}
+        maxWidth="sm"
+        fullWidth
+      >
+        <Box sx={{ p: 2, display: "flex", alignItems: "center", gap: 1 }}>
+          <WarningAmber sx={{ color: "#f59e0b" }} />
+          <Typography variant="h6" sx={{ fontWeight: 900, color: "#1e3a5f" }}>
+            Final Code Required
+          </Typography>
+        </Box>
+        <DialogContent sx={{ pt: 0 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+            {MASS_FINAL_CODE_SUFFIX_HELPER_TEXT}
+          </Typography>
+          <Box sx={{ maxWidth: 200, mx: "auto", textAlign: "center" }}>
+            <TextField
+              fullWidth
+              value={finalCodeSuffix}
+              placeholder="000"
+              disabled={submitting}
+              inputProps={{
+                maxLength: MASS_FINAL_CODE_SUFFIX_LENGTH,
+                inputMode: "numeric",
+                pattern: "[0-9]*",
+                "aria-label": "Running Number",
+                style: { textAlign: "center" },
+              }}
+              sx={{
+                "& .MuiInputBase-root": {
+                  borderRadius: 2,
+                  border: "1px solid",
+                  borderColor: finalCodeSuffixError ? "#ef5350" : "#cfd8dc",
+                  height: 80,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  bgcolor: "#fff",
+                  px: 1,
+                  py: 0,
+                },
+                "& .MuiInputBase-input": {
+                  padding: 0,
+                  fontSize: "3rem",
+                  fontWeight: 900,
+                  color: "#212121",
+                  lineHeight: 1,
+                  textAlign: "center",
+                },
+                "& .MuiOutlinedInput-notchedOutline": { border: "none" },
+              }}
+              onChange={event => {
+                setFinalCodeSuffix(sanitizeMassFinalCodeSuffix(event.target.value));
+                if (finalCodeSuffixError) {
+                  setFinalCodeSuffixError("");
+                }
+              }}
+            />
+            <Typography
+              variant="body2"
+              sx={{ mt: 1, fontWeight: 700, color: "text.secondary" }}
+            >
+              Running Number
+            </Typography>
+            {finalCodeSuffixError && (
+              <Typography
+                variant="caption"
+                color="error"
+                sx={{ display: "block", mt: 0.5 }}
+              >
+                {finalCodeSuffixError}
+              </Typography>
+            )}
+          </Box>
+          {finalCodeSuffixPreview && (
+            <Paper
+              variant="outlined"
+              sx={{ mt: 2.5, p: 1.5, borderRadius: 2, bgcolor: "#fbfcfe" }}
+            >
+              <Typography
+                variant="caption"
+                sx={{ display: "block", fontWeight: 800, mb: 0.5 }}
+              >
+                Preview Running Number ({finalCodeItemCount} item)
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ fontWeight: 700, color: "text.secondary" }}
+              >
+                {finalCodeSuffixPreview}
+              </Typography>
+            </Paper>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button
+            variant="contained"
+            onClick={handleFinalCodeDialogClose}
+            disabled={submitting}
+            sx={{ bgcolor: "#757575", textTransform: "none", fontWeight: 800 }}
+          >
+            Back
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleFinalCodeNext}
+            disabled={submitting}
+            sx={{ textTransform: "none", fontWeight: 800 }}
+          >
+            Next
+          </Button>
+        </DialogActions>
       </Dialog>
 
       {/* Remark dialog — shown after clicking any action button */}
       <Dialog
         open={remarkDialogOpen}
         onClose={handleRemarkDialogClose}
-        maxWidth="xs"
+        // The destination list carries "Approval N - Name - email" rows, which
+        // wrap badly in the reason dialog's usual width.
+        maxWidth={canChooseReworkTarget ? "sm" : "xs"}
         fullWidth
       >
         <Box sx={{ p: 2, display: "flex", alignItems: "center", gap: 1 }}>
@@ -577,28 +1178,74 @@ export default function MassApprovalFormDialog({
         </Box>
         <DialogContent sx={{ pt: 0 }}>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {currentAction
-              ? `Please enter the reason before proceeding with ${currentAction.toLowerCase()}.`
-              : "Please enter the reason before proceeding."}
+            {isReworkEmailReason
+              ? "Please review the email below before proceeding with rework."
+              : currentAction
+                ? `Please enter the reason before proceeding with ${currentAction.toLowerCase()}.`
+                : "Please enter the reason before proceeding."}
           </Typography>
-          <TextField
-            fullWidth
-            multiline
-            rows={4}
-            placeholder="Enter your message here..."
-            value={remarkText}
-            error={Boolean(remarkError)}
-            helperText={remarkError}
-            onChange={e => {
-              setRemarkText(e.target.value);
-              if (remarkError) setRemarkError("");
-            }}
-            sx={{
-              "& .MuiInputBase-root": {
+          {canChooseReworkTarget && (
+            <ReworkDestinationField
+              slots={reworkSlots}
+              value={reworkTarget}
+              onChange={setReworkTarget}
+              onNewApproverChange={setReworkNewApprover}
+              newApprover={reworkNewApprover}
+              notifyVia={reworkNotifyVia}
+              onNotifyViaChange={setReworkNotifyVia}
+              excludeIdentifiers={reworkExcludedIdentifiers}
+              disabled={submitting}
+              errorText={reworkDestinationError}
+              requestKind={REWORK_EMAIL_KIND_MASS}
+              requestId={row?.id}
+              emailSubject={reworkEmailSubject}
+              emailBody={reworkEmailBody}
+              onEmailSubjectChange={handleReworkEmailSubjectChange}
+              onEmailBodyChange={handleReworkEmailBodyChange}
+              onEmailTemplateLoaded={handleReworkEmailTemplateLoaded}
+              emailErrors={reworkEmailErrors}
+            />
+          )}
+          {isReworkEmailReason ? (
+            <Box
+              sx={{
+                p: 1.5,
+                borderRadius: 1,
                 bgcolor: "#f5f5f5",
-              },
-            }}
-          />
+                border: "1px solid",
+                borderColor: "divider",
+              }}
+            >
+              <Typography variant="caption" color="text.secondary">
+                {REWORK_EMAIL_REASON_NOTICE}
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ mt: 0.5, fontWeight: 700, wordBreak: "break-word" }}
+              >
+                {reworkEmailReason}
+              </Typography>
+            </Box>
+          ) : (
+            <TextField
+              fullWidth
+              multiline
+              rows={4}
+              placeholder="Enter your message here..."
+              value={remarkText}
+              error={Boolean(remarkError)}
+              helperText={remarkError}
+              onChange={e => {
+                setRemarkText(e.target.value);
+                if (remarkError) setRemarkError("");
+              }}
+              sx={{
+                "& .MuiInputBase-root": {
+                  bgcolor: "#f5f5f5",
+                },
+              }}
+            />
+          )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button
@@ -611,7 +1258,7 @@ export default function MassApprovalFormDialog({
           <Button
             variant="contained"
             onClick={handleRemarkConfirm}
-            disabled={submitting}
+            disabled={submitting || Boolean(reworkDestinationError)}
             sx={{ textTransform: "none", fontWeight: 800 }}
           >
             {submitting ? "Saving..." : currentAction || "Save"}

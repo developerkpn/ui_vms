@@ -255,6 +255,9 @@ function normalizeApprovalStep(step = {}, index = 0) {
     label: pickRaw(step.label, fallbackLabel),
     approverUserId: approverUserId ?? null,
     approverName: firstNonEmpty(step.approverName, step.approver_name) ?? null,
+    // Optional: the step payload carries an email only where the API joins one
+    // in. Consumers (rework destination labels) fall back to the name.
+    approverEmail: firstNonEmpty(step.approverEmail, step.approver_email) ?? null,
     status: normalizeApprovalStatus(firstNonEmpty(step.status, "WAITING")),
     claimedAt: firstNonEmpty(step.claimedAt, step.claimed_at) ?? null,
     actedAt: firstNonEmpty(step.actedAt, step.acted_at) ?? null,

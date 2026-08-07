@@ -108,9 +108,6 @@ const MassMaterialForm = ({ onBack }) => {
   const navigate = useNavigate();
   const axiosPrivate = useAxiosPrivate();
   const [rows, setRows] = useState(createInitialRows);
-  const [selectedFilesByRow, setSelectedFilesByRow] = useState(() =>
-    Array.from({ length: MASS_MAX_ROWS }, () => [])
-  );
   const [submitting, setSubmitting] = useState(false);
   const [saveSuccessOpen, setSaveSuccessOpen] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -121,7 +118,6 @@ const MassMaterialForm = ({ onBack }) => {
   const [overwriteConfirmOpen, setOverwriteConfirmOpen] = useState(false);
   const [useSharedImage, setUseSharedImage] = useState(false);
   const [sharedFiles, setSharedFiles] = useState([]);
-  const [selectedSharedFiles, setSelectedSharedFiles] = useState([]);
   const [sharedFileError, setSharedFileError] = useState("");
   const pendingSubmitRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -145,34 +141,18 @@ const MassMaterialForm = ({ onBack }) => {
     });
   };
 
+  // Picking files stages them straight into the row; there is no separate
+  // Upload step. Validation/limits come from normalizeAttachmentSelection.
   const handleAttachmentPick = (rowIndex, fileList) => {
     const incoming = Array.from(fileList || []);
-    setSelectedFilesByRow(prev => {
-      const next = prev.slice();
-      next[rowIndex] = incoming;
-      return next;
+    updateRow(rowIndex, row => {
+      const result = normalizeAttachmentSelection(incoming, row.attachments);
+      return {
+        ...row,
+        attachments: result.files,
+        attachmentError: result.error,
+      };
     });
-    updateRow(rowIndex, row => ({ ...row, attachmentError: "" }));
-  };
-
-  const handleAttachmentUpload = rowIndex => {
-    const picked = selectedFilesByRow[rowIndex] || [];
-    const current = rows[rowIndex].attachments;
-    const result = normalizeAttachmentSelection(picked, current);
-
-    updateRow(rowIndex, row => ({
-      ...row,
-      attachments: result.files,
-      attachmentError: result.error,
-    }));
-
-    if (picked.length > 0) {
-      setSelectedFilesByRow(prev => {
-        const next = prev.slice();
-        next[rowIndex] = [];
-        return next;
-      });
-    }
   };
 
   const handleAttachmentRemove = (rowIndex, attachIndex) => {
@@ -194,27 +174,20 @@ const MassMaterialForm = ({ onBack }) => {
           rowErrors: { ...row.rowErrors, attachments: undefined },
         }))
       );
-      setSelectedFilesByRow(Array.from({ length: MASS_MAX_ROWS }, () => []));
     } else {
       setSharedFiles([]);
-      setSelectedSharedFiles([]);
       setSharedFileError("");
     }
   };
 
+  // Same auto-stage behaviour as the per-row picker, for the shared file box.
   const handleSharedFilePick = fileList => {
-    setSelectedSharedFiles(Array.from(fileList || []));
-    setSharedFileError("");
-  };
-
-  const handleSharedFileUpload = () => {
     const result = normalizeAttachmentSelection(
-      selectedSharedFiles,
+      Array.from(fileList || []),
       sharedFiles
     );
     setSharedFiles(result.files);
     setSharedFileError(result.error || "");
-    setSelectedSharedFiles([]);
   };
 
   const handleSharedFileRemove = attachIndex => {
@@ -300,9 +273,7 @@ const MassMaterialForm = ({ onBack }) => {
     });
 
     setRows(nextRows);
-    setSelectedFilesByRow(Array.from({ length: MASS_MAX_ROWS }, () => []));
     setSharedFiles([]);
-    setSelectedSharedFiles([]);
     setSharedFileError("");
     setSubmitError("");
     pendingImportRef.current = null;
@@ -360,15 +331,16 @@ const MassMaterialForm = ({ onBack }) => {
         return;
       }
 
-      // Warn before discarding any existing work: filled text rows, uploaded
-      // attachments, or files that were picked but not yet uploaded.
+      // Warn before discarding any existing work: filled text rows, per-row
+      // attachments, or the shared attachment — all of which applyImportedRows
+      // resets. Attachments are staged on pick, so there is no separate
+      // picked-but-not-uploaded state left to count.
       const hasExistingData =
         rows.some(
           row =>
             isMassRowFilled(row) ||
             (Array.isArray(row.attachments) && row.attachments.length > 0)
-        ) ||
-        selectedFilesByRow.some(list => Array.isArray(list) && list.length > 0);
+        ) || sharedFiles.length > 0;
 
       if (hasExistingData) {
         pendingImportRef.current = parsed;
@@ -721,9 +693,6 @@ const MassMaterialForm = ({ onBack }) => {
             </TableHead>
             <TableBody>
               {rows.map((row, rowIndex) => {
-                const picked = selectedFilesByRow[rowIndex] || [];
-                const canUpload =
-                  picked.length > 0 && row.attachments.length < 3;
                 return (
                   <TableRow key={rowIndex}>
                     <TableCell
@@ -836,28 +805,7 @@ const MassMaterialForm = ({ onBack }) => {
                                   }
                                 />
                               </Button>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={handleSharedFileUpload}
-                                disabled={
-                                  selectedSharedFiles.length === 0 ||
-                                  sharedFiles.length >= 1
-                                }
-                                sx={{ textTransform: "none" }}
-                              >
-                                Upload
-                              </Button>
                             </Stack>
-                            {selectedSharedFiles.length > 0 ? (
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
-                                {selectedSharedFiles.length} file dipilih (klik
-                                Upload untuk menambahkan).
-                              </Typography>
-                            ) : null}
                             {sharedFileError ? (
                               <Typography variant="caption" color="error">
                                 {sharedFileError}
@@ -959,25 +907,7 @@ const MassMaterialForm = ({ onBack }) => {
                                 }
                               />
                             </Button>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              onClick={() => handleAttachmentUpload(rowIndex)}
-                              disabled={!canUpload}
-                              sx={{ textTransform: "none" }}
-                            >
-                              Upload
-                            </Button>
                           </Stack>
-                          {picked.length > 0 ? (
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                            >
-                              {picked.length} file dipilih (klik Upload untuk
-                              menambahkan ke baris).
-                            </Typography>
-                          ) : null}
                           {row.attachmentError ? (
                             <Typography variant="caption" color="error">
                               {row.attachmentError}

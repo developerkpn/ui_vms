@@ -38,10 +38,21 @@ import AdminApprovalFormDialog from "src/components/admin-approval/AdminApproval
 import MassApprovalFormDialog from "src/components/admin-approval/MassApprovalFormDialog";
 import MassReworkStatusDialog from "src/components/admin-approval/MassReworkStatusDialog";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
+import {
+  buildEmailReplyCaption,
+  buildReworkEmailSentMessage,
+  isReworkEmailOnlyResult,
+  isReworkEmailSendFailed,
+  REWORK_EMAIL_SEND_FAILED_MESSAGE,
+} from "src/helper/reworkEmailThread.js";
 import { getSapStatusChip, getStagedMaterialCode, isSapError } from "src/helper/sapStatus.js";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import { buildApprovalSubGroupsRequestPath } from "src/helper/adminApprovalSubGroup.js";
-import { findReworkStepLabel } from "src/helper/adminApprovalRework.js";
+import {
+  buildMassReworkRequestBody,
+  buildSingleReworkRequestBody,
+  findReworkStepLabel,
+} from "src/helper/adminApprovalRework.js";
 import { mapApprovalServerErrors } from "src/helper/adminApprovalValidation.js";
 import {
   APPROVAL_STATUS_FILTER_OPTIONS,
@@ -62,6 +73,7 @@ import {
 import PageHeader from "src/components/common/PageHeader";
 import PageTablePaper, { PAGE_TABLE_HEADER_SX } from "src/components/common/PageTablePaper";
 import PageTabs from "src/components/common/PageTabs";
+import TableLoadingRows, { TableEmptyRow } from "src/components/common/TableLoadingRows";
 
 
 const statusStyleMap = {
@@ -114,9 +126,22 @@ function AssignmentCaption({ status, caption }) {
   );
 }
 
+// Same caption slot the SAP error message and the assignment caption already
+// occupy under the Status chip, in a distinct colour: a reply landing is news,
+// not a fault, so it must not read like the red SAP error line above it.
+const EMAIL_REPLY_CAPTION_SX = {
+  color: "success.main",
+  fontWeight: 600,
+  textAlign: "left",
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical",
+  overflow: "hidden",
+};
+
 // Show the SAP staging status (waiting / created / error) once a request has
 // been pushed; otherwise fall back to the approval status.
-function SapAwareStatusBadge({ row }) {
+function SapAwareStatusBadgeContent({ row }) {
   const sapChip = getSapStatusChip(row?.sapPushStatus);
   if (!sapChip) {
     // Only a request still moving through the approval flow ("Submit") has a
@@ -164,6 +189,27 @@ function SapAwareStatusBadge({ row }) {
     );
   }
   return chip;
+}
+
+// The status cell: the chip (or chip + its own caption) plus, when the approver
+// answered the rework mail, a line saying so. Nothing is rendered for a request
+// with no replies, so every row that has none looks exactly as it did.
+function SapAwareStatusBadge({ row }) {
+  const replyCaption = buildEmailReplyCaption(row?.emailReplyCount);
+  const statusContent = <SapAwareStatusBadgeContent row={row} />;
+
+  if (replyCaption === "") {
+    return statusContent;
+  }
+
+  return (
+    <Stack spacing={0.5} alignItems="flex-start" sx={{ maxWidth: 220, mx: "auto" }}>
+      {statusContent}
+      <Typography variant="caption" sx={EMAIL_REPLY_CAPTION_SX}>
+        {replyCaption}
+      </Typography>
+    </Stack>
+  );
 }
 
 function TicketTypeBadge({ value }) {
@@ -314,6 +360,10 @@ export default function AdminApprovalView() {
   const [reworkDialogRow, setReworkDialogRow] = useState(null);
   const [approvalDialogSubGroups, setApprovalDialogSubGroups] = useState([]);
   const [approvalDialogSchema, setApprovalDialogSchema] = useState(null);
+  // Both of the above land after the approval dialog is already open, so the
+  // dialog is told they are still coming rather than being left to render an
+  // empty Specification section that fills itself in a beat later.
+  const [approvalDialogDataLoading, setApprovalDialogDataLoading] = useState(false);
   const [approvalDialogServerErrors, setApprovalDialogServerErrors] = useState({});
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -322,9 +372,11 @@ export default function AdminApprovalView() {
   });
   const [activeTab, setActiveTab] = useState("single");
   const [massApprovalRows, setMassApprovalRows] = useState([]);
+  const [massApprovalServerErrors, setMassApprovalServerErrors] = useState({});
   const [massApprovalDialogRow, setMassApprovalDialogRow] = useState(null);
   const [massReworkDialogRow, setMassReworkDialogRow] = useState(null);
   const [massApprovalItems, setMassApprovalItems] = useState([]);
+  const [massApprovalItemsLoading, setMassApprovalItemsLoading] = useState(false);
 
   // "Request All" scope: every request any Master Data user has ever grabbed, not just
   // this actor's own inbox. Fetched lazily on first selection and cached here, so
@@ -395,6 +447,23 @@ export default function AdminApprovalView() {
     }
   };
 
+  /**
+   * A Master Data grab landed in one of the approval dialogs. Both inboxes are
+   * re-pulled because a claim changes who the row is assigned to for every MDM
+   * user, not just the one who grabbed it — and the dialog itself already shows
+   * the claim from the endpoint's own answer, so a failed refresh is logged
+   * rather than raised at the actor.
+   */
+  const handleMdmGrabbed = () => {
+    Promise.all([
+      fetchApprovalRows(),
+      fetchMassApprovalRows(),
+      refreshMdmAllRowsIfLoaded(),
+    ]).catch(refreshError =>
+      console.error("Failed to refresh after MDM grab:", refreshError)
+    );
+  };
+
   const clearRefreshWarningTimeout = () => {
     if (refreshWarningTimeoutRef.current) {
       clearTimeout(refreshWarningTimeoutRef.current);
@@ -416,8 +485,9 @@ export default function AdminApprovalView() {
 
   const getActionSuccessMessage = (action, nextStage, reworkStepLabel = null) => {
     if (action === "Rework") {
-      // A rework aimed at an approval step is a rewind, not a rework: the
-      // request goes to that approver with status Submit, never to the requester.
+      // A rework aimed at an approval step — an existing one it rewinds to, or
+      // a hand-picked approver it hands the chain to — is not a rework back to
+      // the requester: the request goes to that approver with status Submit.
       return reworkStepLabel
         ? `Request berhasil dikembalikan ke ${reworkStepLabel} untuk direview ulang.`
         : "Request berhasil dikembalikan untuk dirework.";
@@ -499,6 +569,7 @@ export default function AdminApprovalView() {
     if (!approvalDialogRow) {
       setApprovalDialogSubGroups([]);
       setApprovalDialogSchema(null);
+      setApprovalDialogDataLoading(false);
       return undefined;
     }
 
@@ -507,6 +578,7 @@ export default function AdminApprovalView() {
       approvalDialogRow?.materialGroupCode || approvalDialogRow?.material_group_code || "";
 
     let active = true;
+    setApprovalDialogDataLoading(true);
 
     const loadDialogData = async () => {
       const [subGroupResult, schemaResult] = await Promise.allSettled([
@@ -519,6 +591,8 @@ export default function AdminApprovalView() {
       if (!active) {
         return;
       }
+
+      setApprovalDialogDataLoading(false);
 
       if (subGroupResult.status === "fulfilled") {
         const response = subGroupResult.value;
@@ -679,10 +753,15 @@ export default function AdminApprovalView() {
   const handleOpenApproval = (row = activeRow) => {
     handleMenuClose();
     setApprovalDialogServerErrors({});
+    setMassApprovalServerErrors({});
 
     if (row?.massRequestNo) {
       // Mass request - fetch items and open mass dialog
       setMassApprovalDialogRow(row);
+      // Set in the same batch as the row so the dialog's first paint already
+      // shows skeleton rows, rather than "No items available" for one frame.
+      setMassApprovalItemsLoading(true);
+      setMassApprovalItems([]);
       axiosPrivate
         .get(`/material/requests/mass/${row.id}/items`)
         .then(response => {
@@ -690,9 +769,15 @@ export default function AdminApprovalView() {
         })
         .catch(() => {
           setMassApprovalItems([]);
+        })
+        .finally(() => {
+          setMassApprovalItemsLoading(false);
         });
     } else {
       setApprovalDialogRow(row);
+      // Same reason: the sub-group/schema effect below only runs after this
+      // render, and the dialog is already on screen by then.
+      setApprovalDialogDataLoading(true);
     }
   };
 
@@ -709,23 +794,36 @@ export default function AdminApprovalView() {
   // this MDM user can edit the data in the approval dialog and re-approve —
   // re-approval re-stages the row to SAP as freshly submitted. Server-side
   // this is gated to an active MDM_MATERIAL user (or ADMIN) only.
+  //
+  // A mass batch works the same way, request-level: one errored item reopens
+  // Master Data for the whole batch, and the re-approval asks for a fresh
+  // running number that recomposes every item's code.
   const handleMdmSapResubmit = async (row = activeRow) => {
     handleMenuClose();
-    if (!row?.id || row?.massRequestNo) {
+    if (!row?.id) {
       return;
     }
 
+    const isMassRow = Boolean(row?.massRequestNo);
+
     try {
       setSubmittingAction(true);
-      await axiosPrivate.post(`/material/requests/single/${row.id}/sap-resubmit`);
+      await axiosPrivate.post(
+        isMassRow
+          ? `/material/requests/mass/${row.id}/sap-resubmit`
+          : `/material/requests/single/${row.id}/sap-resubmit`
+      );
 
       openSnackbar(
-        "Request dibuka kembali di tahap Master Data. Silakan edit lalu approve ulang untuk resubmit ke SAP.",
+        isMassRow
+          ? "Mass request dibuka kembali di tahap Master Data. Silakan edit lalu approve ulang untuk resubmit ke SAP."
+          : "Request dibuka kembali di tahap Master Data. Silakan edit lalu approve ulang untuk resubmit ke SAP.",
         "success"
       );
 
       try {
         await fetchApprovalRows();
+        await fetchMassApprovalRows();
         await refreshMdmAllRowsIfLoaded();
       } catch (refreshError) {
         console.error("Failed to refresh approval rows after SAP resubmit:", refreshError);
@@ -767,12 +865,10 @@ export default function AdminApprovalView() {
       const isScopedChangeExtend = isChangeExtendRequest(detail.rawRow || detail);
       const requestBody =
         action === "Rework"
-          ? {
-              // null is the requester, i.e. the only destination this endpoint
-              // had before; a level rewinds the chain to that MANUAL step.
+          ? buildSingleReworkRequestBody({
               reason: payload?.remark ?? null,
-              reworkToLevel: payload?.reworkToLevel ?? null,
-            }
+              destination: payload,
+            })
           : action === "Reject"
             ? { reason: payload?.remark ?? null }
             : isScopedChangeExtend
@@ -788,14 +884,26 @@ export default function AdminApprovalView() {
       const response = await axiosPrivate.post(endpoint, requestBody);
 
       const nextStage = response.data?.data?.next_stage;
+      const emailSendFailed = isReworkEmailSendFailed(response);
       setApprovalDialogRow(null);
       openSnackbar(
-        getActionSuccessMessage(
-          action,
-          nextStage,
-          findReworkStepLabel(detail.approvalSteps, requestBody.reworkToLevel)
-        ),
-        "success"
+        // "Via email" is correspondence only: nothing was reassigned, so the
+        // message says what actually happened rather than naming a destination
+        // the request never went to — including the send that failed.
+        isReworkEmailOnlyResult(response)
+          ? emailSendFailed
+            ? REWORK_EMAIL_SEND_FAILED_MESSAGE
+            : buildReworkEmailSentMessage(payload?.reworkRecipientEmail)
+          : getActionSuccessMessage(
+              action,
+              nextStage,
+              payload?.reworkDestinationLabel ||
+                findReworkStepLabel(
+                  detail.approvalSteps,
+                  requestBody.reworkToLevel
+                )
+            ),
+        emailSendFailed ? "warning" : "success"
       );
 
       try {
@@ -828,7 +936,15 @@ export default function AdminApprovalView() {
     setPage(0);
   };
 
-  const handleMassApprovalAction = async (action, reason, editedItems) => {
+  // `options` carries the rework destination on a Rework, and the Master Data
+  // running number (finalCodeSuffix) on an Approve — never both.
+  const handleMassApprovalAction = async (
+    action,
+    reason,
+    editedItems,
+    options = {}
+  ) => {
+    const reworkDestination = options;
     const row = massApprovalDialogRow;
     if (!row) return;
 
@@ -836,6 +952,7 @@ export default function AdminApprovalView() {
 
     try {
       setSubmittingAction(true);
+      setMassApprovalServerErrors({});
 
       const actionPath = action === "approve"
         ? "approve"
@@ -853,20 +970,46 @@ export default function AdminApprovalView() {
       const endpoint = `/material/requests/mass/${row.id}/${actionPath}`;
       const requestBody =
         action === "approve"
-          ? { remark: reason ?? null, items: editedItems ?? null }
-          : { reason: reason ?? null };
+          ? {
+              remark: reason ?? null,
+              items: editedItems ?? null,
+              // Only sent from the Master Data stage; every earlier stage
+              // approves with null, exactly as it did before.
+              finalCodeSuffix: options?.finalCodeSuffix ?? null,
+            }
+          : action === "rework"
+            ? // Mass rework has no reworkToLevel support: either the requester
+              // (exactly what it sent before) or a replacement chain.
+              buildMassReworkRequestBody({
+                reason: reason ?? null,
+                destination: reworkDestination,
+              })
+            : { reason: reason ?? null };
 
-      await axiosPrivate.post(endpoint, requestBody);
+      const response = await axiosPrivate.post(endpoint, requestBody);
 
+      const massEmailSendFailed = isReworkEmailSendFailed(response);
       setMassApprovalDialogRow(null);
       setMassApprovalItems([]);
+      setMassApprovalItemsLoading(false);
       openSnackbar(
         action === "approve"
           ? "Mass request berhasil di-approve."
           : action === "rework"
-            ? "Mass request berhasil dikembalikan untuk dirework."
+            ? // "Via email" is correspondence only: the batch was not
+              // reassigned, so it never went to a destination worth naming —
+              // and a failed send must not read as a sent one.
+              isReworkEmailOnlyResult(response)
+              ? massEmailSendFailed
+                ? REWORK_EMAIL_SEND_FAILED_MESSAGE
+                : buildReworkEmailSentMessage(
+                    reworkDestination?.reworkRecipientEmail
+                  )
+              : reworkDestination?.reworkDestinationLabel
+                ? `Mass request berhasil dikembalikan ke ${reworkDestination.reworkDestinationLabel} untuk direview ulang.`
+                : "Mass request berhasil dikembalikan untuk dirework."
             : "Mass request berhasil di-reject.",
-        "success"
+        massEmailSendFailed ? "warning" : "success"
       );
 
       try {
@@ -886,6 +1029,12 @@ export default function AdminApprovalView() {
         }, 1600);
       }
     } catch (error) {
+      // A rejected running number (invalid / overflow / code already taken)
+      // comes back as a finalCodeSuffix field error, which reopens the Final
+      // Code dialog in the mass dialog instead of just flashing a snackbar.
+      setMassApprovalServerErrors(
+        mapApprovalServerErrors(error?.response?.data?.errors)
+      );
       const message =
         error?.response?.data?.message || "Aksi gagal diproses. Silakan coba lagi.";
       openSnackbar(message, "error");
@@ -1101,13 +1250,7 @@ export default function AdminApprovalView() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {(loading || isMdmAllPending) && (
-                    <TableRow>
-                      <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
-                        Loading approval items...
-                      </TableCell>
-                    </TableRow>
-                  )}
+                  {(loading || isMdmAllPending) && <TableLoadingRows columns={10} />}
 
                   {!loading &&
                     !isMdmAllPending &&
@@ -1182,16 +1325,11 @@ export default function AdminApprovalView() {
                     ))}
 
                   {!loading && !isMdmAllPending && visibleRows.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={10} align="center" sx={{ py: 5 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                          {buildEmptyStateTitle("item")}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          Coba ubah filter status, keyword pencarian, atau cek assignment approval.
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
+                    <TableEmptyRow
+                      columns={10}
+                      title={buildEmptyStateTitle("item")}
+                      description="Coba ubah filter status, keyword pencarian, atau cek assignment approval."
+                    />
                   )}
                 </TableBody>
               </Table>
@@ -1296,13 +1434,7 @@ export default function AdminApprovalView() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {(loading || isMdmAllPending) && (
-                    <TableRow>
-                      <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
-                        Loading mass requests...
-                      </TableCell>
-                    </TableRow>
-                  )}
+                  {(loading || isMdmAllPending) && <TableLoadingRows columns={8} />}
 
                   {!loading &&
                     !isMdmAllPending &&
@@ -1382,16 +1514,11 @@ export default function AdminApprovalView() {
                     ))}
 
                   {!loading && !isMdmAllPending && massVisibleRows.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={8} align="center" sx={{ py: 5 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                          {buildEmptyStateTitle("mass request")}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          Coba ubah filter status, keyword pencarian, atau cek assignment approval.
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
+                    <TableEmptyRow
+                      columns={8}
+                      title={buildEmptyStateTitle("mass request")}
+                      description="Coba ubah filter status, keyword pencarian, atau cek assignment approval."
+                    />
                   )}
                 </TableBody>
               </Table>
@@ -1435,10 +1562,8 @@ export default function AdminApprovalView() {
         <MenuItem onClick={() => handleOpenApproval()}>View Approval</MenuItem>
         <Divider />
         <MenuItem onClick={() => handleOpenRework()}>View Rework</MenuItem>
-        {isMdmUser && isSapError(activeRow?.sapPushStatus) && !activeRow?.massRequestNo && (
-          <Divider />
-        )}
-        {isMdmUser && isSapError(activeRow?.sapPushStatus) && !activeRow?.massRequestNo && (
+        {isMdmUser && isSapError(activeRow?.sapPushStatus) && <Divider />}
+        {isMdmUser && isSapError(activeRow?.sapPushStatus) && (
           <MenuItem
             onClick={() => handleMdmSapResubmit()}
             disabled={submittingAction}
@@ -1454,6 +1579,7 @@ export default function AdminApprovalView() {
         row={approvalDialogRow}
         subGroups={approvalDialogSubGroups}
         formSchema={approvalDialogSchema}
+        referenceDataLoading={approvalDialogDataLoading}
         serverValidationErrors={approvalDialogServerErrors}
         onClearServerValidationErrors={() => setApprovalDialogServerErrors({})}
         onClose={() => {
@@ -1461,15 +1587,7 @@ export default function AdminApprovalView() {
           setApprovalDialogServerErrors({});
         }}
         onAction={handleApprovalAction}
-        onGrabbed={() => {
-          Promise.all([
-            fetchApprovalRows(),
-            fetchMassApprovalRows(),
-            refreshMdmAllRowsIfLoaded(),
-          ]).catch(refreshError =>
-            console.error("Failed to refresh after MDM grab:", refreshError)
-          );
-        }}
+        onGrabbed={handleMdmGrabbed}
         submitting={submittingAction}
       />
 
@@ -1483,11 +1601,16 @@ export default function AdminApprovalView() {
         open={Boolean(massApprovalDialogRow)}
         row={massApprovalDialogRow}
         items={massApprovalItems}
+        itemsLoading={massApprovalItemsLoading}
+        serverValidationErrors={massApprovalServerErrors}
         onClose={() => {
           setMassApprovalDialogRow(null);
           setMassApprovalItems([]);
+          setMassApprovalItemsLoading(false);
+          setMassApprovalServerErrors({});
         }}
         onAction={handleMassApprovalAction}
+        onGrabbed={handleMdmGrabbed}
         submitting={submittingAction}
       />
 

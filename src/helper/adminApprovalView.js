@@ -206,6 +206,8 @@ export function normalizeApprovalSteps(row = {}) {
       label,
       approverUserId: step.approverUserId ?? step.approver_user_id ?? null,
       approverName,
+      // Optional: present only where the API joins the approver's email in.
+      approverEmail: stringOrUndefined(step.approverEmail, step.approver_email) ?? null,
       status,
       claimedAt,
       actedAt,
@@ -235,6 +237,10 @@ export function normalizeApprovalRows(rows = []) {
       uom: stringOrFallback(row.uom, row.base_uom, row.baseUom, "-"),
       status: normalizeApprovalStatusForFilter(row.status || "Submit"),
       ...pickSapFields(row),
+      // Replies the picked approver sent back on a "via email" rework; 0 when
+      // the request never had one, and on a deployment still missing the
+      // rework-email tables (the query falls back to a constant 0 there).
+      emailReplyCount: row.email_reply_count ?? row.emailReplyCount ?? 0,
       createdBy: stringOrFallback(row.created_by, row.createdBy, "-"),
       createdAt: formatDateTime(row.created_at || row.createdAt),
       approvalStage: resolveApprovalStage(row),
@@ -728,6 +734,11 @@ export function normalizeMassApprovalRows(rows = []) {
       itemCount: row.item_count ?? row.itemCount ?? 1,
       massRequestReason: stringOrFallback(row.mass_request_reason, row.massRequestReason, "-"),
       status: normalizeApprovalStatusForFilter(row.first_item_status || "Submit"),
+      // Batch-level SAP staging status: the backend rolls the per-item
+      // sap_push_status up worst-first, so the row reads like a single one.
+      ...pickSapFields(row),
+      // Replies counted across the whole batch's rework mail thread.
+      emailReplyCount: row.email_reply_count ?? row.emailReplyCount ?? 0,
       createdBy: stringOrFallback(row.created_by_username, row.created_by, row.createdBy, "-"),
       createdAt: formatDateTime(row.created_at || row.createdAt),
       approvalStage: resolveMassApprovalStage(row),
@@ -758,6 +769,12 @@ export function normalizeMassApprovalRows(rows = []) {
       // Items placeholder (populated by massApprovalDetail)
       items: [],
     };
+
+    // Requester identity, kept only when the payload carries it: the rework
+    // destination list needs it to label the Requestor row and to keep a
+    // hand-picked approver from being the requester themselves.
+    addStringProp(normalized, "requesterUserId", row.created_by, row.requester_user_id);
+    addStringProp(normalized, "requesterEmail", row.created_by_email, row.requester_email);
 
     addStringProp(normalized, "firstItemApproval1UserName", row.first_item_approval_1_user_name);
     addStringProp(normalized, "firstItemApproval2UserName", row.first_item_approval_2_user_name);
@@ -801,8 +818,9 @@ export function filterMassApprovalRowsByStatus(
   if (isAssignmentFilter(statusFilter)) {
     return rows.filter(row => matchesAssignmentFilter(row, statusFilter, currentUserId));
   }
-  // Mass requests are never pushed to SAP, so this resolves to the approval
-  // status; the SAP-only filter values simply match nothing here.
+  // A staged batch carries a rolled-up sap_push_status, so the SAP status
+  // labels ("Waiting SAP" / "Done" / "SAP Error") filter here exactly like they
+  // do for single requests; everything else falls back to the approval status.
   return rows.filter(row => getEffectiveApprovalStatusLabel(row) === statusFilter);
 }
 
