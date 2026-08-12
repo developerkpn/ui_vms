@@ -94,6 +94,12 @@ export default function LoginPage() {
           email: response.email,
           role: response.role,
           groupid: response.groupid,
+          // Login already resolved Master Data membership from the same group
+          // names /user/getsess uses, so seed it here too: the dashboard's own
+          // getsess would otherwise be the first thing to set it, leaving a real
+          // MDM user without the Pickup button and the assignment filters for
+          // the frame or two it takes to land.
+          is_mdm_material: response.user_group?.is_mdm_material,
         });
         setMenu(response.menu);
         setPermission(response.permission);

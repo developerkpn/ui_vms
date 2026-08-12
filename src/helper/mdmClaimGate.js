@@ -13,13 +13,13 @@
 
 export const MDM_STEP_KIND = "MDM";
 
-export const MDM_GRAB_BUTTON_LABEL = "Grab / Claim";
-export const MDM_GRAB_BUTTON_BUSY_LABEL = "Grabbing...";
-export const MDM_CLAIM_NOTICE_UNCLAIMED = "Master Data stage belum di-claim.";
+export const MDM_GRAB_BUTTON_LABEL = "Pickup";
+export const MDM_GRAB_BUTTON_BUSY_LABEL = "Picking up...";
+export const MDM_CLAIM_NOTICE_UNCLAIMED = "Master Data stage belum di-pickup.";
 export const MDM_CLAIM_NOTICE_CLAIMED_BY_OTHER =
-  "Master Data stage sudah di-claim oleh user MDM lain.";
+  "Master Data stage sudah di-pickup oleh user MDM lain.";
 export const MDM_CLAIM_ERROR_FALLBACK =
-  "Gagal claim Master Data step. Silakan coba lagi.";
+  "Gagal pickup Master Data step. Silakan coba lagi.";
 
 /**
  * Compare two user identifiers. Ids arrive as numbers from one payload and as

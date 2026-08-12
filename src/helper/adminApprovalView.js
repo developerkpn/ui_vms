@@ -1,14 +1,22 @@
 import { getSapStatusChip, pickSapFields } from "./sapStatus.js";
 
-// MDM_MATERIAL membership is derived from the session store (role / groupid /
-// dept_id). The backend uses the "MDM_MATERIAL" group name; logins for that
-// group surface as MDM_MAT / MATERIAL on dept_id, so we match any of them.
-const MDM_MATERIAL_IDENTIFIERS = ["MDM_MATERIAL", "MDM_MAT", "MATERIAL"];
-
+// MDM_MATERIAL membership is the backend's call alone: /user/getsess derives
+// is_mdm_material from the user's mst_page_access group names and the session
+// store carries it through verbatim.
+//
+// Nothing is inferred from role / groupid / dept_id any more. Those were matched
+// against MDM_MATERIAL / MDM_MAT / MATERIAL, and since *every* material user has
+// role "MATERIAL", the whole department read as Master Data — approvers and
+// requesters were shown the two assignment-scoped Status options and the Pickup
+// button, and "Assigned To Me" then filtered on a step they had never grabbed,
+// so it only ever rendered an empty table.
+//
+// There is deliberately no fallback to the old matching: a session that predates
+// the flag is one where the answer is unknown, and unknown must read as "not
+// Master Data" rather than as the permissive guess. Both sides ship together and
+// the dashboard repopulates the store from /user/getsess on every load.
 export function isMdmMaterialUser(session = {}) {
-  return [session.role, session.groupid, session.dept_id]
-    .map(value => String(value ?? "").trim().toUpperCase())
-    .some(value => MDM_MATERIAL_IDENTIFIERS.includes(value));
+  return session?.is_mdm_material === true;
 }
 
 export const APPROVAL_STATUS_FILTER_OPTIONS = [
@@ -26,14 +34,16 @@ export function isAllStatusFilter(statusFilter) {
 }
 
 // Two extra Status-dropdown options, offered to MDM_MATERIAL users only. They cut
-// the inbox by *who grabbed the Master Data step* rather than by request status —
-// neither one narrows to a status, so both span the whole lifecycle.
+// the inbox by *who picked up the Master Data step* rather than by request status —
+// neither one narrows to a status, so both span the whole lifecycle. The labels
+// say "Picked Up" because that is the word the button uses; the values stay on
+// their original strings, which are compared internally and never displayed.
 export const ASSIGNMENT_FILTER_ASSIGNED_TO_ME = "Assigned To Me";
 export const ASSIGNMENT_FILTER_REQUEST_ALL = "Request All";
 
 export const MDM_ASSIGNMENT_FILTER_OPTIONS = [
-  { value: ASSIGNMENT_FILTER_ASSIGNED_TO_ME, label: "Assigned To Me" },
-  { value: ASSIGNMENT_FILTER_REQUEST_ALL, label: "Request All" },
+  { value: ASSIGNMENT_FILTER_ASSIGNED_TO_ME, label: "Picked Up By Me" },
+  { value: ASSIGNMENT_FILTER_REQUEST_ALL, label: "Picked Up By Anyone" },
 ];
 
 export function isAssignmentFilter(value) {
@@ -574,7 +584,7 @@ function buildAssignmentCaption(activeStep, stage, assignedToDisplay) {
     // Mirrors computeAssignedToDisplay: an MDM step with no approver_user_id is
     // the grab queue, and shows as "Master Data" rather than a person.
     if (activeStep.kind === "MDM" && !activeStep.approverUserId) {
-      return { kind: "GRAB", text: "Waiting grab by Master Data" };
+      return { kind: "GRAB", text: "Waiting pickup by Master Data" };
     }
     if (activeStep.approverName) {
       return { kind: "APPROVAL", text: `Waiting approval from ${activeStep.approverName}` };
@@ -589,7 +599,7 @@ function buildAssignmentCaption(activeStep, stage, assignedToDisplay) {
   // the assignee name computed from them is all there is to go on.
   if (assignedToDisplay && assignedToDisplay !== "-") {
     if (assignedToDisplay === "Master Data") {
-      return { kind: "GRAB", text: "Waiting grab by Master Data" };
+      return { kind: "GRAB", text: "Waiting pickup by Master Data" };
     }
     return { kind: "APPROVAL", text: `Waiting approval from ${assignedToDisplay}` };
   }

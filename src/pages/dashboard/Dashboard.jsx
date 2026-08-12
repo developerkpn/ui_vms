@@ -123,6 +123,7 @@ export default function MiniDrawer() {
           email: data.email,
           role: data.role,
           groupid: data.groupid,
+          is_mdm_material: data.is_mdm_material,
         });
         setIsResetPWD(data.is_reset_pwd);
         setPermission(data.permission);
