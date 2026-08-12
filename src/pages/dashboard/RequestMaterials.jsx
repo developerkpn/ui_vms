@@ -29,6 +29,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
+import { resolveRequestCommentKind } from "src/helper/requestComments.js";
 import { buildEmailReplyCaption } from "src/helper/reworkEmailThread.js";
 import { getSapStatusChip, getStagedMaterialCode, isSapError, pickSapFields } from "src/helper/sapStatus.js";
 import {
@@ -56,6 +57,7 @@ import PageTabs from "src/components/common/PageTabs";
 import TableLoadingRows, { TableEmptyRow } from "src/components/common/TableLoadingRows";
 import SectionLoadingSkeleton from "src/components/common/SectionLoadingSkeleton";
 import ApprovalStatusCard from "src/components/common/ApprovalStatusCard";
+import RequestCommentsDialog from "src/components/common/RequestCommentsDialog";
 
 // Stable reference: SingleMaterialForm's load-existing-request effect depends
 // on prefetchedGroups, so a fresh [] literal on every render (the component's
@@ -599,6 +601,9 @@ export default function RequestMaterials() {
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
   const [activeRequestId, setActiveRequestId] = useState(null);
   const [actionDialogMode, setActionDialogMode] = useState(null);
+  // Kept out of actionDialogMode: the comments thread is its own dialog reading
+  // its own endpoint, not a third mode of the approval/rework one.
+  const [commentsDialogOpen, setCommentsDialogOpen] = useState(false);
   const [scopedReworkSubmitting, setScopedReworkSubmitting] = useState(false);
   const [reviseChangeExtendOpen, setReviseChangeExtendOpen] = useState(false);
   const [initialLocations, setInitialLocations] = useState([]);
@@ -905,6 +910,11 @@ export default function RequestMaterials() {
 
   const handleOpenActionDialog = mode => {
     setActionDialogMode(mode);
+    handleMenuClose();
+  };
+
+  const handleOpenComments = () => {
+    setCommentsDialogOpen(true);
     handleMenuClose();
   };
 
@@ -1270,6 +1280,8 @@ export default function RequestMaterials() {
           View Rework
         </MenuItem>
         <Divider />
+        <MenuItem onClick={handleOpenComments}>View Comments</MenuItem>
+        <Divider />
         <MenuItem onClick={handleMenuClose}>Copy Request</MenuItem>
       </Menu>
 
@@ -1287,6 +1299,19 @@ export default function RequestMaterials() {
         request={selectedRequest}
         onClose={() => setActionDialogMode(null)}
         onReviseRequest={handleReviseRequest}
+      />
+
+      <RequestCommentsDialog
+        open={commentsDialogOpen && Boolean(selectedRequest)}
+        requestKind={resolveRequestCommentKind(selectedRequest?.mode === "mass")}
+        requestId={selectedRequest?.id}
+        ticketNumber={selectedRequest?.ticketNumber}
+        subtitle={
+          selectedRequest?.mode === "mass"
+            ? selectedRequest?.massRequestReason
+            : selectedRequest?.materialDescription
+        }
+        onClose={() => setCommentsDialogOpen(false)}
       />
 
       <Dialog
