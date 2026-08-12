@@ -1854,8 +1854,16 @@ export default function AdminApprovalFormDialog({
           <Button
             variant="contained"
             onClick={() => {
-              if (currentAction === "Reject" && !String(remarkText || "").trim()) {
-                setRemarkError("Reject reason is required.");
+              if (
+                (currentAction === "Reject" || currentAction === "Rework") &&
+                !isReworkEmailReason &&
+                !String(remarkText || "").trim()
+              ) {
+                setRemarkError(
+                  currentAction === "Rework"
+                    ? "Rework reason is required."
+                    : "Reject reason is required."
+                );
                 return;
               }
 

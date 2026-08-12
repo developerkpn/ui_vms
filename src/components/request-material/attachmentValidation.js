@@ -3,6 +3,7 @@ const ALLOWED_ATTACHMENT_EXTENSIONS = ["pdf", "doc", "docx", "png", "jpg", "jpeg
 const MIN_ATTACHMENTS = 1;
 const MAX_ATTACHMENTS = 3;
 const MAX_ATTACHMENT_SIZE_MB = 5;
+const MAX_ATTACHMENT_SIZE_BYTES = MAX_ATTACHMENT_SIZE_MB * 1024 * 1024;
 
 const getAttachmentExtension = fileName => {
   const normalizedName = String(fileName || "")
@@ -36,6 +37,16 @@ const normalizeAttachmentSelection = (selectedFiles = [], existingFiles = []) =>
     return {
       files: currentFiles,
       error: "Format file tidak didukung. Gunakan PDF, DOC, DOCX, PNG, JPG, atau JPEG.",
+    };
+  }
+
+  const hasOversizedFile = incomingFiles.some(
+    file => Number(file?.size) > MAX_ATTACHMENT_SIZE_BYTES
+  );
+  if (hasOversizedFile) {
+    return {
+      files: currentFiles,
+      error: `Ukuran file maksimal ${MAX_ATTACHMENT_SIZE_MB}MB.`,
     };
   }
 

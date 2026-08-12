@@ -1064,10 +1064,7 @@ const SingleMaterialForm = ({
                   supported formats: PDF, DOC, DOCX, PNG, JPG, JPEG
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
-                  minimal 1 attachment, maksimal {MAX_ATTACHMENTS} attachments
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
-                  maximal size per attachment: {MAX_ATTACHMENT_SIZE_MB} MB
+                  ukuran file maksimal {MAX_ATTACHMENT_SIZE_MB}MB per attachment
                 </Typography>
 
                 <Box sx={{ display: "flex", gap: 2, mb: 4 }}>
@@ -1088,10 +1085,6 @@ const SingleMaterialForm = ({
                     onChange={handleFileChange}
                   />
                 </Box>
-
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
-                  {`${attachments.length}/${MAX_ATTACHMENTS} attachment terpasang`}
-                </Typography>
               </>
             )}
 
