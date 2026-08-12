@@ -1064,7 +1064,7 @@ const SingleMaterialForm = ({
                   supported formats: PDF, DOC, DOCX, PNG, JPG, JPEG
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
-                  ukuran file maksimal {MAX_ATTACHMENT_SIZE_MB}MB per attachment
+                  file size limit: {MAX_ATTACHMENT_SIZE_MB}MB
                 </Typography>
 
                 <Box sx={{ display: "flex", gap: 2, mb: 4 }}>

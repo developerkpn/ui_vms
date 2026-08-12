@@ -39,7 +39,9 @@ import MassApprovalFormDialog from "src/components/admin-approval/MassApprovalFo
 import MassReworkStatusDialog from "src/components/admin-approval/MassReworkStatusDialog";
 import MassApprovalStatusDialog from "src/components/admin-approval/MassApprovalStatusDialog";
 import ApprovalStatusCard from "src/components/common/ApprovalStatusCard";
+import RequestCommentsDialog from "src/components/common/RequestCommentsDialog";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
+import { resolveRequestCommentKind } from "src/helper/requestComments.js";
 import {
   buildEmailReplyCaption,
   buildReworkEmailSentMessage,
@@ -414,6 +416,9 @@ export default function AdminApprovalView() {
   const [approvalDialogRow, setApprovalDialogRow] = useState(null);
   const [reworkDialogRow, setReworkDialogRow] = useState(null);
   const [approvalStatusDialogRow, setApprovalStatusDialogRow] = useState(null);
+  // One row for both kinds: the comments dialog reads the request by kind + id,
+  // so a mass batch needs no separate state the way the two status dialogs do.
+  const [commentsDialogRow, setCommentsDialogRow] = useState(null);
   const [approvalDialogSubGroups, setApprovalDialogSubGroups] = useState([]);
   const [approvalDialogSchema, setApprovalDialogSchema] = useState(null);
   // Both of the above land after the approval dialog is already open, so the
@@ -857,6 +862,14 @@ export default function AdminApprovalView() {
     } else {
       setApprovalStatusDialogRow(row || null);
     }
+  };
+
+  // Everything said about the request, in one thread ("View Comments"). Unlike
+  // the two views above it reads the request's comment history from its own
+  // endpoint, so it shows every rework of a stage rather than the latest one.
+  const handleOpenComments = (row = activeRow) => {
+    handleMenuClose();
+    setCommentsDialogRow(row || null);
   };
 
   // SAP rejected the pushed request: reopen the Master Data step in place so
@@ -1631,6 +1644,8 @@ export default function AdminApprovalView() {
         <MenuItem onClick={() => handleOpenApprovalStatus()}>View Approval</MenuItem>
         <Divider />
         <MenuItem onClick={() => handleOpenRework()}>View Rework</MenuItem>
+        <Divider />
+        <MenuItem onClick={() => handleOpenComments()}>View Comments</MenuItem>
         {isMdmUser && isSapError(activeRow?.sapPushStatus) && <Divider />}
         {isMdmUser && isSapError(activeRow?.sapPushStatus) && (
           <MenuItem
@@ -1699,6 +1714,21 @@ export default function AdminApprovalView() {
         open={Boolean(massApprovalStatusDialogRow)}
         row={massApprovalStatusDialogRow}
         onClose={() => setMassApprovalStatusDialogRow(null)}
+      />
+
+      <RequestCommentsDialog
+        open={Boolean(commentsDialogRow)}
+        requestKind={resolveRequestCommentKind(Boolean(commentsDialogRow?.massRequestNo))}
+        requestId={commentsDialogRow?.id}
+        ticketNumber={
+          commentsDialogRow?.massRequestNo || commentsDialogRow?.ticketNumber
+        }
+        subtitle={
+          commentsDialogRow?.massRequestNo
+            ? commentsDialogRow?.massRequestReason
+            : commentsDialogRow?.materialDescription
+        }
+        onClose={() => setCommentsDialogRow(null)}
       />
 
       <Snackbar

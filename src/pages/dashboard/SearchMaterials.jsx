@@ -249,14 +249,14 @@ function MaterialActionDialog({
                 label={config.primaryLabel}
                 fullWidth
                 value={draft.materialName || ""}
-                onChange={event => onFieldChange("materialName", event.target.value)}
+                onChange={event => onFieldChange("materialName", event.target.value.toUpperCase())}
                 InputLabelProps={{ shrink: true }}
               />
               <TextField
                 label={config.secondaryLabel}
                 fullWidth
                 value={draft.baseUom || ""}
-                onChange={event => onFieldChange("baseUom", event.target.value)}
+                onChange={event => onFieldChange("baseUom", event.target.value.toUpperCase())}
                 disabled={config.secondaryDisabled}
                 InputLabelProps={{ shrink: true }}
               />
@@ -272,6 +272,10 @@ function MaterialActionDialog({
               InputLabelProps={{ shrink: true }}
             />
           ))}
+          {/* Reason stays as-typed on purpose — it's free-text explanation,
+              not a material field going to SAP. Mass Request's own Reason
+              field (MassMaterialForm.jsx) does uppercase, so this is a
+              deliberate deviation from that one, not an oversight. */}
           <TextField
             label="Reason"
             fullWidth
