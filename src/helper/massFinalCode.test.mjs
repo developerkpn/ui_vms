@@ -17,12 +17,9 @@ const helper = await import(
 );
 
 const {
-  buildMassFinalCodeSuffixPreview,
-  buildMassFinalCodeSuffixes,
-  formatMassFinalCodeSuffixPreview,
   isValidMassFinalCodeSuffix,
   sanitizeMassFinalCodeSuffix,
-  validateMassFinalCodeSuffix,
+  validateMassFinalCodeSuffixes,
 } = helper;
 
 test("sanitize keeps digits only and caps at three characters", () => {
@@ -40,67 +37,46 @@ test("only an exactly three-digit suffix is valid", () => {
   assert.equal(isValidMassFinalCodeSuffix(""), false);
 });
 
-test("item k takes the entered suffix + (k - 1), zero-padded", () => {
+const items = [
+  { id: "11", itemNo: 1 },
+  { id: "12", itemNo: 2 },
+  { id: "13", itemNo: 3 },
+];
+
+test("every item needs its own valid three-digit suffix", () => {
   assert.deepEqual(
-    buildMassFinalCodeSuffixes({ finalCodeSuffix: "008", itemCount: 3 }).map(e => e.suffix),
-    ["008", "009", "010"]
+    validateMassFinalCodeSuffixes({
+      finalCodeSuffixes: { 11: "005", 12: "006", 13: "007" },
+      items,
+    }),
+    {}
   );
-  assert.deepEqual(buildMassFinalCodeSuffixes({ finalCodeSuffix: "005", itemCount: 0 }), []);
-  // Nothing to increment from until the suffix is complete.
-  assert.deepEqual(buildMassFinalCodeSuffixes({ finalCodeSuffix: "9", itemCount: 3 }), []);
 });
 
-test("a running number past the three-digit range is flagged, not widened", () => {
-  const entries = buildMassFinalCodeSuffixes({ finalCodeSuffix: "998", itemCount: 4 });
-
+test("a missing or malformed entry is flagged on that item only", () => {
   assert.deepEqual(
-    entries.map(e => e.suffix),
-    ["998", "999", null, null]
+    validateMassFinalCodeSuffixes({
+      finalCodeSuffixes: { 11: "005", 13: "007" },
+      items,
+    }),
+    { 12: "Running number harus 3 digit angka." }
   );
-  assert.equal(entries[2].value, 1000);
-});
-
-test("validation mirrors the backend's invalid and overflow rules", () => {
-  assert.equal(validateMassFinalCodeSuffix({ finalCodeSuffix: "005", itemCount: 10 }), "");
-  assert.match(
-    validateMassFinalCodeSuffix({ finalCodeSuffix: "5", itemCount: 2 }),
-    /exactly 3 digits/
-  );
-  assert.match(
-    validateMassFinalCodeSuffix({ finalCodeSuffix: "A01", itemCount: 2 }),
-    /exactly 3 digits/
-  );
-  const overflow = validateMassFinalCodeSuffix({ finalCodeSuffix: "998", itemCount: 4 });
-  assert.match(overflow, /cannot cover 4 items/);
-  assert.match(overflow, /item 3 would need 1000/);
-});
-
-test("preview is capped at three items and marks the remainder", () => {
   assert.deepEqual(
-    buildMassFinalCodeSuffixPreview({ finalCodeSuffix: "101", itemCount: 2 }),
-    {
-      entries: [
-        { itemNo: 1, value: 101, suffix: "101" },
-        { itemNo: 2, value: 102, suffix: "102" },
-      ],
-      hasMore: false,
-    }
-  );
-  assert.equal(
-    buildMassFinalCodeSuffixPreview({ finalCodeSuffix: "101", itemCount: 9 }).hasMore,
-    true
+    validateMassFinalCodeSuffixes({
+      finalCodeSuffixes: { 11: "005", 12: "A01", 13: "007" },
+      items,
+    }),
+    { 12: "Running number harus 3 digit angka." }
   );
 });
 
-test("formatted preview lists the first items and ellipsis when truncated", () => {
-  assert.equal(
-    formatMassFinalCodeSuffixPreview({ finalCodeSuffix: "098", itemCount: 5 }),
-    "Item 1: 098, Item 2: 099, Item 3: 100, ..."
-  );
-  assert.equal(
-    formatMassFinalCodeSuffixPreview({ finalCodeSuffix: "098", itemCount: 2 }),
-    "Item 1: 098, Item 2: 099"
-  );
-  assert.equal(formatMassFinalCodeSuffixPreview({ finalCodeSuffix: "09", itemCount: 2 }), "");
-  assert.equal(formatMassFinalCodeSuffixPreview({ finalCodeSuffix: "098", itemCount: 0 }), "");
+test("two items sharing the same running number both get flagged as duplicates", () => {
+  const errors = validateMassFinalCodeSuffixes({
+    finalCodeSuffixes: { 11: "005", 12: "005", 13: "007" },
+    items,
+  });
+
+  assert.equal(Object.keys(errors).length, 1);
+  assert.match(errors[12], /005/);
+  assert.match(errors[12], /item 1/);
 });

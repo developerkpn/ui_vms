@@ -29,11 +29,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import TableLoadingRows from "src/components/common/TableLoadingRows";
 import { buildMassApprovalDetail } from "src/helper/massApprovalDetail.js";
 import {
-  formatMassFinalCodeSuffixPreview,
   MASS_FINAL_CODE_SUFFIX_HELPER_TEXT,
   MASS_FINAL_CODE_SUFFIX_LENGTH,
   sanitizeMassFinalCodeSuffix,
-  validateMassFinalCodeSuffix,
+  validateMassFinalCodeSuffixes,
 } from "src/helper/massFinalCode.js";
 import {
   getSapStatusChip,
@@ -172,11 +171,14 @@ export default function MassApprovalFormDialog({
   const [reworkEmailSubject, setReworkEmailSubject] = useState("");
   const [reworkEmailBody, setReworkEmailBody] = useState("");
   const [reworkEmailErrors, setReworkEmailErrors] = useState({ subject: "", body: "" });
-  // Running number entered at the Master Data stage — one for the whole batch,
-  // incremented per item server-side. See the Final Code dialog below.
+  // Running numbers entered at the Master Data stage — one per item, typed in
+  // one by one, keyed by item id. See the Final Code dialog below.
   const [finalCodeDialogOpen, setFinalCodeDialogOpen] = useState(false);
-  const [finalCodeSuffix, setFinalCodeSuffix] = useState("");
-  const [finalCodeSuffixError, setFinalCodeSuffixError] = useState("");
+  const [finalCodeSuffixes, setFinalCodeSuffixes] = useState({});
+  const [finalCodeSuffixErrors, setFinalCodeSuffixErrors] = useState({});
+  // Server-side rejection of the composed plan (duplicate code, unresolved
+  // group, …) — not tied to one item's box, shown as a banner instead.
+  const [finalCodeGeneralError, setFinalCodeGeneralError] = useState("");
   // Holds the freshly-claimed approval steps returned by the claim-mdm endpoint
   // so the dialog reflects the grab without waiting for a parent refresh.
   const [claimedSteps, setClaimedSteps] = useState(null);
@@ -202,8 +204,9 @@ export default function MassApprovalFormDialog({
       setReworkEmailBody("");
       setReworkEmailErrors({ subject: "", body: "" });
       setFinalCodeDialogOpen(false);
-      setFinalCodeSuffix("");
-      setFinalCodeSuffixError("");
+      setFinalCodeSuffixes({});
+      setFinalCodeSuffixErrors({});
+      setFinalCodeGeneralError("");
       setClaimedSteps(null);
       setGrabbing(false);
       setGrabError("");
@@ -363,13 +366,6 @@ export default function MassApprovalFormDialog({
     setReworkEmailErrors(prev => (prev.body ? { ...prev, body: "" } : prev));
   };
 
-  // Master Data types one running number for the batch; the composed material
-  // codes are assembled server-side, so only the increments can be previewed.
-  const finalCodeItemCount = detail.items.length || detail.itemCount || 0;
-  const finalCodeSuffixPreview = formatMassFinalCodeSuffixPreview({
-    finalCodeSuffix,
-    itemCount: finalCodeItemCount,
-  });
   // The SAP columns only mean something once the batch has been staged, so they
   // stay out of the (already wide) item table while it is still in approval.
   const hasSapColumns = useMemo(
@@ -381,14 +377,14 @@ export default function MassApprovalFormDialog({
   // neither can drift out of step with the header.
   const itemColumnCount = 2 + EDITABLE_FIELD_META.length + (hasSapColumns ? 2 : 0);
 
-  // Server-side rejection of the running number (invalid, overflow, or a code
-  // already taken): reopen the Final Code dialog with the server message on the
-  // input so Master Data can pick another number.
+  // Server-side rejection of the composed plan (invalid entry, duplicate code,
+  // or one already taken): reopen the Final Code dialog with the server
+  // message shown as a banner so Master Data can fix the offending item.
   useEffect(() => {
     const serverError = serverValidationErrors?.finalCodeSuffix;
     if (serverError?.message) {
       setRemarkDialogOpen(false);
-      setFinalCodeSuffixError(serverError.message);
+      setFinalCodeGeneralError(serverError.message);
       setFinalCodeDialogOpen(true);
     }
   }, [serverValidationErrors]);
@@ -491,8 +487,9 @@ export default function MassApprovalFormDialog({
     setCurrentAction("Approve");
     setRemarkText("");
     setRemarkError("");
-    setFinalCodeSuffix("");
-    setFinalCodeSuffixError("");
+    setFinalCodeSuffixes({});
+    setFinalCodeSuffixErrors({});
+    setFinalCodeGeneralError("");
 
     // The Final Code dialog gates the Master Data (MDM) stage — that approval
     // is the one that composes every item's material code and stages the batch.
@@ -513,22 +510,39 @@ export default function MassApprovalFormDialog({
     }
     if (submitting) return;
     setFinalCodeDialogOpen(false);
-    setFinalCodeSuffixError("");
+    setFinalCodeGeneralError("");
+  };
+
+  const handleFinalCodeSuffixChange = (itemId, value) => {
+    setFinalCodeSuffixes(prev => ({
+      ...prev,
+      [itemId]: sanitizeMassFinalCodeSuffix(value),
+    }));
+    setFinalCodeSuffixErrors(prev => {
+      if (!prev[itemId]) return prev;
+      const next = { ...prev };
+      delete next[itemId];
+      return next;
+    });
+    if (finalCodeGeneralError) {
+      setFinalCodeGeneralError("");
+    }
   };
 
   const handleFinalCodeNext = () => {
-    const error = validateMassFinalCodeSuffix({
-      finalCodeSuffix,
-      itemCount: finalCodeItemCount,
+    const errors = validateMassFinalCodeSuffixes({
+      finalCodeSuffixes,
+      items: detail.items,
     });
 
-    if (error) {
-      setFinalCodeSuffixError(error);
+    if (Object.keys(errors).length > 0) {
+      setFinalCodeSuffixErrors(errors);
       return;
     }
 
     setFinalCodeDialogOpen(false);
-    setFinalCodeSuffixError("");
+    setFinalCodeSuffixErrors({});
+    setFinalCodeGeneralError("");
     setRemarkDialogOpen(true);
   };
 
@@ -632,13 +646,14 @@ export default function MassApprovalFormDialog({
       return;
     }
 
-    // Approve — include edited items if any, plus the batch running number when
-    // this is the Master Data stage (the only stage the backend expects it on).
+    // Approve — include edited items if any, plus the per-item running numbers
+    // when this is the Master Data stage (the only stage the backend expects
+    // them on).
     onAction?.(
       "approve",
       trimmed,
       hasEdits ? buildEditedItemsPayload() : null,
-      isMdmStageActive ? { finalCodeSuffix } : {}
+      isMdmStageActive ? { finalCodeSuffixes } : {}
     );
   };
 
@@ -649,8 +664,9 @@ export default function MassApprovalFormDialog({
     setRemarkText("");
     setRemarkError("");
     setFinalCodeDialogOpen(false);
-    setFinalCodeSuffix("");
-    setFinalCodeSuffixError("");
+    setFinalCodeSuffixes({});
+    setFinalCodeSuffixErrors({});
+    setFinalCodeGeneralError("");
     onClose?.();
   };
 
@@ -1060,86 +1076,86 @@ export default function MassApprovalFormDialog({
           </Typography>
         </Box>
         <DialogContent sx={{ pt: 0 }}>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             {MASS_FINAL_CODE_SUFFIX_HELPER_TEXT}
           </Typography>
-          <Box sx={{ maxWidth: 200, mx: "auto", textAlign: "center" }}>
-            <TextField
-              fullWidth
-              value={finalCodeSuffix}
-              placeholder="000"
-              disabled={submitting}
-              inputProps={{
-                maxLength: MASS_FINAL_CODE_SUFFIX_LENGTH,
-                inputMode: "numeric",
-                pattern: "[0-9]*",
-                "aria-label": "Running Number",
-                style: { textAlign: "center" },
-              }}
-              sx={{
-                "& .MuiInputBase-root": {
-                  borderRadius: 2,
-                  border: "1px solid",
-                  borderColor: finalCodeSuffixError ? "#ef5350" : "#cfd8dc",
-                  height: 80,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  bgcolor: "#fff",
-                  px: 1,
-                  py: 0,
-                },
-                "& .MuiInputBase-input": {
-                  padding: 0,
-                  fontSize: "3rem",
-                  fontWeight: 900,
-                  color: "#212121",
-                  lineHeight: 1,
-                  textAlign: "center",
-                },
-                "& .MuiOutlinedInput-notchedOutline": { border: "none" },
-              }}
-              onChange={event => {
-                setFinalCodeSuffix(sanitizeMassFinalCodeSuffix(event.target.value));
-                if (finalCodeSuffixError) {
-                  setFinalCodeSuffixError("");
-                }
-              }}
-            />
+          {finalCodeGeneralError && (
             <Typography
               variant="body2"
-              sx={{ mt: 1, fontWeight: 700, color: "text.secondary" }}
+              color="error"
+              sx={{ mb: 2, fontWeight: 700 }}
             >
-              Running Number
+              {finalCodeGeneralError}
             </Typography>
-            {finalCodeSuffixError && (
-              <Typography
-                variant="caption"
-                color="error"
-                sx={{ display: "block", mt: 0.5 }}
-              >
-                {finalCodeSuffixError}
-              </Typography>
-            )}
-          </Box>
-          {finalCodeSuffixPreview && (
-            <Paper
-              variant="outlined"
-              sx={{ mt: 2.5, p: 1.5, borderRadius: 2, bgcolor: "#fbfcfe" }}
-            >
-              <Typography
-                variant="caption"
-                sx={{ display: "block", fontWeight: 800, mb: 0.5 }}
-              >
-                Preview Running Number ({finalCodeItemCount} item)
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{ fontWeight: 700, color: "text.secondary" }}
-              >
-                {finalCodeSuffixPreview}
-              </Typography>
-            </Paper>
           )}
+          <TableContainer
+            component={Paper}
+            variant="outlined"
+            sx={{ borderRadius: 2, maxHeight: 360 }}
+          >
+            <Table size="small" sx={{ borderCollapse: "collapse" }}>
+              <TableHead>
+                <TableRow sx={{ bgcolor: "#f5f7f9" }}>
+                  <TableCell
+                    align="center"
+                    sx={{ fontWeight: 700, border: "1px solid #e0e0e0", width: 40 }}
+                  >
+                    #
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 700, border: "1px solid #e0e0e0" }}>
+                    Request No
+                  </TableCell>
+                  <TableCell
+                    align="center"
+                    sx={{ fontWeight: 700, border: "1px solid #e0e0e0", width: 160 }}
+                  >
+                    Running Number
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {detail.items.map(item => (
+                  <TableRow key={item.itemNo}>
+                    <TableCell
+                      align="center"
+                      sx={{ border: "1px solid #e0e0e0", fontWeight: 600 }}
+                    >
+                      {item.itemNo}
+                    </TableCell>
+                    <TableCell
+                      sx={{ border: "1px solid #e0e0e0", color: "text.secondary" }}
+                    >
+                      {item.requestNo}
+                    </TableCell>
+                    <TableCell sx={{ border: "1px solid #e0e0e0", p: 0.5 }}>
+                      <TextField
+                        size="small"
+                        fullWidth
+                        value={finalCodeSuffixes[String(item.id)] || ""}
+                        placeholder="000"
+                        disabled={submitting}
+                        error={Boolean(finalCodeSuffixErrors[String(item.id)])}
+                        helperText={finalCodeSuffixErrors[String(item.id)] || ""}
+                        inputProps={{
+                          maxLength: MASS_FINAL_CODE_SUFFIX_LENGTH,
+                          inputMode: "numeric",
+                          pattern: "[0-9]*",
+                          "aria-label": `Running Number item ${item.itemNo}`,
+                          style: { textAlign: "center", fontWeight: 700 },
+                        }}
+                        onChange={event =>
+                          handleFinalCodeSuffixChange(
+                            String(item.id),
+                            event.target.value
+                          )
+                        }
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
           <Button

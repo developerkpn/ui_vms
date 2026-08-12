@@ -55,15 +55,7 @@ import PageSearchField from "src/components/common/PageSearchField";
 import PageTabs from "src/components/common/PageTabs";
 import TableLoadingRows, { TableEmptyRow } from "src/components/common/TableLoadingRows";
 import SectionLoadingSkeleton from "src/components/common/SectionLoadingSkeleton";
-
-const APPROVAL_STATUS_BADGES = {
-  APPROVED: { label: "Approve", bgcolor: "#2146d8", color: "#ffffff" },
-  REWORK: { label: "Rework", bgcolor: "#f59e0b", color: "#ffffff" },
-  REJECTED: { label: "Reject", bgcolor: "#d93025", color: "#ffffff" },
-  WAITING: { label: "Waiting", bgcolor: "#8a9099", color: "#ffffff" },
-  SKIPPED: { label: "Skipped", bgcolor: "#e5e7eb", color: "#6b7280" },
-  "-": { label: "-", bgcolor: "#eceff3", color: "#546e7a" },
-};
+import ApprovalStatusCard from "src/components/common/ApprovalStatusCard";
 
 // Stable reference: SingleMaterialForm's load-existing-request effect depends
 // on prefetchedGroups, so a fresh [] literal on every render (the component's
@@ -210,90 +202,6 @@ function SapAwareStatus({ row }) {
 
 function TicketTypePill({ value }) {
   return <Chip label={value} variant="outlined" size="small" />;
-}
-
-function ApprovalStatusCard({ item }) {
-  const badge = APPROVAL_STATUS_BADGES[item.status] || APPROVAL_STATUS_BADGES["-"];
-  const isSkipped = item.status === "SKIPPED";
-
-  return (
-    <Paper
-      elevation={0}
-      sx={{
-        p: 0,
-        border: "1px solid",
-        borderColor: isSkipped ? "#e5e7eb" : "divider",
-        borderRadius: 2,
-        overflow: "hidden",
-        opacity: isSkipped ? 0.65 : 1,
-      }}
-    >
-      <Stack direction={{ xs: "column", sm: "row" }} alignItems="stretch">
-        <Box
-          sx={{
-            flex: 1,
-            px: 2,
-            py: 1.75,
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
-            gap: 0.75,
-            minHeight: 92,
-          }}
-        >
-          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "text.primary" }}>
-            {item.label || "-"}
-          </Typography>
-          <Typography variant="body2" sx={{ fontWeight: 700, color: "text.secondary" }}>
-            {item.approver || "-"}
-          </Typography>
-        </Box>
-
-        <Box
-          sx={{
-            width: { xs: "100%", sm: 188 },
-            px: 2,
-            py: 1.75,
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
-            alignItems: { xs: "flex-start", sm: "flex-end" },
-            gap: 1,
-            borderTop: { xs: "1px solid", sm: "none" },
-            borderLeft: { xs: "none", sm: "1px solid" },
-            borderColor: "divider",
-            bgcolor: "#fbfcfe",
-            minHeight: 92,
-          }}
-        >
-          <Box
-            sx={{
-              minWidth: 128,
-              px: 2.25,
-              py: 1,
-              borderRadius: 1.5,
-              textAlign: "center",
-              fontWeight: 900,
-              fontSize: "0.95rem",
-              lineHeight: 1.1,
-              ...badge,
-            }}
-          >
-            {badge.label}
-          </Box>
-          {isSkipped ? (
-            <Typography variant="caption" sx={{ fontStyle: "italic", color: "#9ca3af" }}>
-              {item.remark || "Not required"}
-            </Typography>
-          ) : (
-            <Typography variant="caption" sx={{ fontWeight: 700, color: "text.secondary" }}>
-              {item.approvedAt || "-"}
-            </Typography>
-          )}
-        </Box>
-      </Stack>
-    </Paper>
-  );
 }
 
 function RequestActionDialog({ open, mode, request, onClose, onReviseRequest }) {
@@ -648,7 +556,10 @@ function ChangeExtendReworkForm({
             label="Material Name"
             value={draft.materialName}
             onChange={event =>
-              setDraft(current => ({ ...current, materialName: event.target.value }))
+              setDraft(current => ({
+                ...current,
+                materialName: event.target.value.toUpperCase(),
+              }))
             }
           />
           <Autocomplete
@@ -1213,7 +1124,7 @@ export default function RequestMaterials() {
                       UOM
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
+                  <TableCell align="left" sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
                     <TableSortLabel
                       active={sortConfig.key === "status"}
                       direction={sortConfig.key === "status" ? sortConfig.direction : "asc"}
@@ -1290,7 +1201,7 @@ export default function RequestMaterials() {
                         {activeTab === "mass" ? row.massRequestReason : row.materialDescription}
                       </TableCell>
                       <TableCell sx={{ whiteSpace: "nowrap" }}>{row.uom}</TableCell>
-                      <TableCell>
+                      <TableCell align="left">
                         <SapAwareStatus row={row} />
                       </TableCell>
                       <TableCell sx={{ whiteSpace: "nowrap" }}>{row.createdBy}</TableCell>

@@ -37,6 +37,8 @@ import useSessionStore from "src/store/useSessionStore";
 import AdminApprovalFormDialog from "src/components/admin-approval/AdminApprovalFormDialog";
 import MassApprovalFormDialog from "src/components/admin-approval/MassApprovalFormDialog";
 import MassReworkStatusDialog from "src/components/admin-approval/MassReworkStatusDialog";
+import MassApprovalStatusDialog from "src/components/admin-approval/MassApprovalStatusDialog";
+import ApprovalStatusCard from "src/components/common/ApprovalStatusCard";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
 import {
   buildEmailReplyCaption,
@@ -105,7 +107,7 @@ function StatusBadge({ value }) {
 function AssignmentCaption({ status, caption }) {
   return (
     <Tooltip title={caption.text} arrow placement="top">
-      <Stack spacing={0.5} alignItems="flex-start" sx={{ maxWidth: 220, mx: "auto" }}>
+      <Stack spacing={0.5} alignItems="flex-start" sx={{ maxWidth: 220 }}>
         <StatusBadge value={status} />
         <Typography
           variant="caption"
@@ -169,7 +171,7 @@ function SapAwareStatusBadgeContent({ row }) {
     // text on hover in case it is truncated.
     return (
       <Tooltip title={row.sapErrorMsg} arrow placement="top">
-        <Stack spacing={0.5} alignItems="flex-start" sx={{ maxWidth: 220, mx: "auto" }}>
+        <Stack spacing={0.5} alignItems="flex-start" sx={{ maxWidth: 220 }}>
           {chip}
           <Typography
             variant="caption"
@@ -203,7 +205,7 @@ function SapAwareStatusBadge({ row }) {
   }
 
   return (
-    <Stack spacing={0.5} alignItems="flex-start" sx={{ maxWidth: 220, mx: "auto" }}>
+    <Stack spacing={0.5} alignItems="flex-start" sx={{ maxWidth: 220 }}>
       {statusContent}
       <Typography variant="caption" sx={EMAIL_REPLY_CAPTION_SX}>
         {replyCaption}
@@ -329,6 +331,59 @@ function ReworkStatusDialog({ open, row, onClose }) {
   );
 }
 
+// Read-only workflow status — the same per-step cards "My Request" shows the
+// requester, reused here so Approvers/Master Data get the identical view
+// instead of the full actionable ticket form. Acting on the request still
+// only happens through the ticket-number link (AdminApprovalFormDialog).
+function ApprovalStatusDialog({ open, row, onClose }) {
+  const detail = useMemo(() => buildApprovalDetail(row || {}), [row]);
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <Box
+        sx={{
+          px: { xs: 2, sm: 3 },
+          py: 2,
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 2,
+        }}
+      >
+        <Box>
+          <Typography variant="overline" sx={{ fontWeight: 800, color: "text.secondary" }}>
+            Approval Status
+          </Typography>
+          <Typography variant="h5" sx={{ fontWeight: 900, color: "#455a64", lineHeight: 1.1 }}>
+            {detail.ticketNumber || "-"}
+          </Typography>
+          <Typography variant="body2" sx={{ mt: 0.75, fontWeight: 600, color: "text.secondary" }}>
+            {detail.basicInfo.materialDescription || "-"}
+          </Typography>
+        </Box>
+
+        <IconButton onClick={onClose} aria-label="Close approval status dialog">
+          <Close />
+        </IconButton>
+      </Box>
+
+      <DialogContent dividers sx={{ px: { xs: 2, sm: 3 }, py: 2.5 }}>
+        <Stack spacing={1.5}>
+          {detail.approvalHistory.map((item, index) => (
+            <ApprovalStatusCard key={`${item.level ?? index}`} item={item} />
+          ))}
+        </Stack>
+      </DialogContent>
+
+      <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 2 }}>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 const isChangeExtendRequest = row =>
   ["CHANGE", "EXTEND"].includes(String(row?.ticketType || row?.ticket_type || "").toUpperCase());
 
@@ -349,7 +404,7 @@ export default function AdminApprovalView() {
   const [approvalRows, setApprovalRows] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
-  const [statusFilter, setStatusFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("Submit");
   const [page, setPage] = useState(0);
   const [rowsPerPage] = useState(10);
   const [loading, setLoading] = useState(false);
@@ -358,6 +413,7 @@ export default function AdminApprovalView() {
   const [activeRow, setActiveRow] = useState(null);
   const [approvalDialogRow, setApprovalDialogRow] = useState(null);
   const [reworkDialogRow, setReworkDialogRow] = useState(null);
+  const [approvalStatusDialogRow, setApprovalStatusDialogRow] = useState(null);
   const [approvalDialogSubGroups, setApprovalDialogSubGroups] = useState([]);
   const [approvalDialogSchema, setApprovalDialogSchema] = useState(null);
   // Both of the above land after the approval dialog is already open, so the
@@ -375,6 +431,7 @@ export default function AdminApprovalView() {
   const [massApprovalServerErrors, setMassApprovalServerErrors] = useState({});
   const [massApprovalDialogRow, setMassApprovalDialogRow] = useState(null);
   const [massReworkDialogRow, setMassReworkDialogRow] = useState(null);
+  const [massApprovalStatusDialogRow, setMassApprovalStatusDialogRow] = useState(null);
   const [massApprovalItems, setMassApprovalItems] = useState([]);
   const [massApprovalItemsLoading, setMassApprovalItemsLoading] = useState(false);
 
@@ -556,7 +613,7 @@ export default function AdminApprovalView() {
         mdmAllFetchStartedRef.current = false;
         setMdmAllRowsStatus("error");
         openSnackbar(
-          "Request All belum berhasil dimuat sepenuhnya. Menampilkan data yang tersedia saat ini.",
+          "Picked Up By Anyone belum berhasil dimuat sepenuhnya. Menampilkan data yang tersedia saat ini.",
           "warning"
         );
       }
@@ -652,10 +709,10 @@ export default function AdminApprovalView() {
   // options — those get their own wording.
   const buildEmptyStateTitle = noun => {
     if (statusFilter === ASSIGNMENT_FILTER_ASSIGNED_TO_ME) {
-      return `No ${noun} assigned to you`;
+      return `No ${noun} picked up by you`;
     }
     if (statusFilter === ASSIGNMENT_FILTER_REQUEST_ALL) {
-      return `No ${noun} grabbed by Master Data`;
+      return `No ${noun} picked up by Master Data`;
     }
     return `No ${statusFilter === "All" ? "" : `${statusFilter} `}${noun} found`;
   };
@@ -787,6 +844,18 @@ export default function AdminApprovalView() {
       setMassReworkDialogRow(row);
     } else {
       setReworkDialogRow(row || null);
+    }
+  };
+
+  // Read-only workflow status ("View Approval" from the "..." menu). Acting
+  // on the request stays on the ticket-number link, which still opens
+  // AdminApprovalFormDialog / MassApprovalFormDialog via handleOpenApproval.
+  const handleOpenApprovalStatus = (row = activeRow) => {
+    handleMenuClose();
+    if (row?.massRequestNo) {
+      setMassApprovalStatusDialogRow(row);
+    } else {
+      setApprovalStatusDialogRow(row || null);
     }
   };
 
@@ -937,7 +1006,7 @@ export default function AdminApprovalView() {
   };
 
   // `options` carries the rework destination on a Rework, and the Master Data
-  // running number (finalCodeSuffix) on an Approve — never both.
+  // per-item running numbers (finalCodeSuffixes) on an Approve — never both.
   const handleMassApprovalAction = async (
     action,
     reason,
@@ -975,7 +1044,7 @@ export default function AdminApprovalView() {
               items: editedItems ?? null,
               // Only sent from the Master Data stage; every earlier stage
               // approves with null, exactly as it did before.
-              finalCodeSuffix: options?.finalCodeSuffix ?? null,
+              finalCodeSuffixes: options?.finalCodeSuffixes ?? null,
             }
           : action === "rework"
             ? // Mass rework has no reworkToLevel support: either the requester
@@ -1211,7 +1280,7 @@ export default function AdminApprovalView() {
                         UOM
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell align="center" sx={PAGE_TABLE_HEADER_SX}>
+                    <TableCell align="left" sx={PAGE_TABLE_HEADER_SX}>
                       <TableSortLabel
                         active={sortConfig.key === "status"}
                         direction={sortConfig.key === "status" ? sortConfig.direction : "asc"}
@@ -1309,7 +1378,7 @@ export default function AdminApprovalView() {
                         <TableCell align="center" sx={{ color: "text.secondary", fontWeight: 700 }}>
                           {row.uom}
                         </TableCell>
-                        <TableCell align="center">
+                        <TableCell align="left">
                           <SapAwareStatusBadge row={row} />
                         </TableCell>
                         <TableCell sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
@@ -1395,7 +1464,7 @@ export default function AdminApprovalView() {
                         Mass Request Reason
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell align="center" sx={PAGE_TABLE_HEADER_SX}>
+                    <TableCell align="left" sx={PAGE_TABLE_HEADER_SX}>
                       <TableSortLabel
                         active={sortConfig.key === "status"}
                         direction={sortConfig.key === "status" ? sortConfig.direction : "asc"}
@@ -1498,7 +1567,7 @@ export default function AdminApprovalView() {
                             {row.massRequestReason}
                           </Typography>
                         </TableCell>
-                        <TableCell align="center">
+                        <TableCell align="left">
                           <SapAwareStatusBadge row={row} />
                         </TableCell>
                         <TableCell sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
@@ -1559,7 +1628,7 @@ export default function AdminApprovalView() {
           },
         }}
       >
-        <MenuItem onClick={() => handleOpenApproval()}>View Approval</MenuItem>
+        <MenuItem onClick={() => handleOpenApprovalStatus()}>View Approval</MenuItem>
         <Divider />
         <MenuItem onClick={() => handleOpenRework()}>View Rework</MenuItem>
         {isMdmUser && isSapError(activeRow?.sapPushStatus) && <Divider />}
@@ -1597,6 +1666,12 @@ export default function AdminApprovalView() {
         onClose={() => setReworkDialogRow(null)}
       />
 
+      <ApprovalStatusDialog
+        open={Boolean(approvalStatusDialogRow)}
+        row={approvalStatusDialogRow}
+        onClose={() => setApprovalStatusDialogRow(null)}
+      />
+
       <MassApprovalFormDialog
         open={Boolean(massApprovalDialogRow)}
         row={massApprovalDialogRow}
@@ -1618,6 +1693,12 @@ export default function AdminApprovalView() {
         open={Boolean(massReworkDialogRow)}
         row={massReworkDialogRow}
         onClose={() => setMassReworkDialogRow(null)}
+      />
+
+      <MassApprovalStatusDialog
+        open={Boolean(massApprovalStatusDialogRow)}
+        row={massApprovalStatusDialogRow}
+        onClose={() => setMassApprovalStatusDialogRow(null)}
       />
 
       <Snackbar

@@ -135,7 +135,7 @@ const MassMaterialForm = ({ onBack }) => {
       delete nextRowErrors[fieldKey];
       return {
         ...row,
-        [fieldKey]: value,
+        [fieldKey]: value.toUpperCase(),
         rowErrors: nextRowErrors,
       };
     });
@@ -558,7 +558,7 @@ const MassMaterialForm = ({ onBack }) => {
           </Typography>
           <Typography variant="caption" color="text.secondary" display="block">
             *Maksimal {MASS_MAX_ROWS} baris per submit. Minimal 2 baris harus
-            diisi. Setiap baris wajib memiliki minimal 1 attachment.
+            diisi. Ukuran file maksimal 5MB per attachment.
           </Typography>
           <Typography variant="caption" color="text.secondary" display="block">
             Gunakan Export Excel untuk mengunduh template/data, lalu Import Excel
@@ -1054,13 +1054,13 @@ const MassMaterialForm = ({ onBack }) => {
               fullWidth
               value={reasonDraft}
               onChange={event => {
-                setReasonDraft(event.target.value);
+                setReasonDraft(event.target.value.toUpperCase());
                 if (reasonError) {
                   setReasonError("");
                 }
               }}
               error={Boolean(reasonError)}
-              helperText={reasonError || "Minimal 1 karakter."}
+              helperText={reasonError || ""}
             />
           </Stack>
         </DialogContent>
