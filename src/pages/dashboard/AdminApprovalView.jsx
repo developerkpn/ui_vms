@@ -446,6 +446,14 @@ export default function AdminApprovalView() {
   const [massApprovalItems, setMassApprovalItems] = useState([]);
   const [massApprovalItemsLoading, setMassApprovalItemsLoading] = useState(false);
 
+  // Raw status-filter preference from the server, kept for the isMdmUser
+  // correction effect below — undefined until the initial fetch settles,
+  // then either the stored value or null (no preference / fetch failed).
+  const storedStatusFilterRef = useRef(undefined);
+  // Set by handleStatusFilterChange, so a late isMdmUser correction below
+  // never overwrites a choice the actor already made themselves.
+  const hasUserChangedStatusFilterRef = useRef(false);
+
   // "Request All" scope: every request any Master Data user has ever grabbed, not just
   // this actor's own inbox. Fetched lazily on first selection and cached here, so
   // switching filters doesn't re-fetch. "idle" -> "loading" -> "loaded"; anything short
@@ -478,9 +486,12 @@ export default function AdminApprovalView() {
       const response = await axiosPrivate.get(
         `/material/preferences/${STATUS_FILTER_PREFERENCE_KEY}`
       );
-      return resolveStoredStatusFilter(response.data?.data?.value, isMdmUser);
+      const rawValue = response.data?.data?.value ?? null;
+      storedStatusFilterRef.current = rawValue;
+      return resolveStoredStatusFilter(rawValue, isMdmUser);
     } catch (error) {
       console.error("Failed to fetch status filter preference:", error);
+      storedStatusFilterRef.current = null;
       return "All";
     }
   };
@@ -654,6 +665,20 @@ export default function AdminApprovalView() {
     loadMdmAllRows();
   }, [isMdmUser, statusFilter, axiosPrivate]);
 
+  // isMdmUser is read from the session store, which the dashboard shell
+  // populates via its own async session call — it can still read false at
+  // the moment fetchStatusFilterPreference's Promise.all above resolves. If
+  // it flips true afterwards, re-resolve the same raw stored value against
+  // it so a Master Data-only preference isn't left stuck on the All it
+  // incorrectly fell back to. No-ops once the actor has picked a filter
+  // themselves, so this never overwrites a deliberate choice.
+  useEffect(() => {
+    if (hasUserChangedStatusFilterRef.current || storedStatusFilterRef.current === undefined) {
+      return;
+    }
+    setStatusFilter(resolveStoredStatusFilter(storedStatusFilterRef.current, isMdmUser));
+  }, [isMdmUser]);
+
   useEffect(() => {
     if (!approvalDialogRow) {
       setApprovalDialogSubGroups([]);
@@ -789,6 +814,7 @@ export default function AdminApprovalView() {
 
   const handleStatusFilterChange = event => {
     const nextStatusFilter = event.target.value;
+    hasUserChangedStatusFilterRef.current = true;
     setStatusFilter(nextStatusFilter);
     setPage(0);
 

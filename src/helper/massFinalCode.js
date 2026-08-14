@@ -84,18 +84,29 @@ export function validateMassFinalCodeSuffixes({ finalCodeSuffixes = {}, items = 
   return errors;
 }
 
-// Joins a mass item's description and (optional) PO text into the single
-// cell the running-number table shows them in. PO text is explicitly
-// optional in the mass validation rules, so an absent one must not leave a
-// trailing space.
+/**
+ * Joins a mass item's description and (optional) PO text into the single
+ * cell the running-number table shows them in. PO text is explicitly
+ * optional in the mass validation rules, so an absent one must not leave a
+ * trailing space.
+ *
+ * @param {string} description
+ * @param {string} [poText]
+ * @returns {string} description and PO text joined by one space; either half may be empty
+ */
 export function joinMassItemDescription(description, poText) {
   const parts = [String(description ?? "").trim(), String(poText ?? "").trim()];
   return parts.filter(Boolean).join(" ");
 }
 
-// Splits a "CODE - NAME" group/sub group value into its two display parts.
-// When the value doesn't split (a broken or unrecognised row), the raw text
-// renders as the code with no name caption, rather than blanking the cell.
+/**
+ * Splits a "CODE - NAME" group/sub group value into its two display parts.
+ * When the value doesn't split (a broken or unrecognised row), the raw text
+ * renders as the code with no name caption, rather than blanking the cell.
+ *
+ * @param {string} value
+ * @returns {{code: string, name: string}} name is empty when the value doesn't split
+ */
 export function splitMassGroupLabel(value) {
   const raw = String(value ?? "").trim();
   const separatorIndex = raw.indexOf(" - ");

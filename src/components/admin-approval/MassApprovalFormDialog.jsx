@@ -1115,22 +1115,22 @@ export default function MassApprovalFormDialog({
                 <TableRow sx={{ bgcolor: "#f5f7f9" }}>
                   <TableCell
                     align="center"
-                    sx={{ fontWeight: 700, border: "1px solid #e0e0e0", width: 40 }}
+                    sx={{ fontWeight: 700, border: "1px solid", borderColor: "divider", width: 40 }}
                   >
                     #
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 700, border: "1px solid #e0e0e0" }}>
+                  <TableCell sx={{ fontWeight: 700, border: "1px solid", borderColor: "divider" }}>
                     Description
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 700, border: "1px solid #e0e0e0" }}>
+                  <TableCell sx={{ fontWeight: 700, border: "1px solid", borderColor: "divider" }}>
                     Material Group
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 700, border: "1px solid #e0e0e0" }}>
+                  <TableCell sx={{ fontWeight: 700, border: "1px solid", borderColor: "divider" }}>
                     Sub Material Group
                   </TableCell>
                   <TableCell
                     align="center"
-                    sx={{ fontWeight: 700, border: "1px solid #e0e0e0", width: 160 }}
+                    sx={{ fontWeight: 700, border: "1px solid", borderColor: "divider", width: 160 }}
                   >
                     Running Number
                   </TableCell>
@@ -1157,16 +1157,16 @@ export default function MassApprovalFormDialog({
                     <TableRow key={item.itemNo}>
                       <TableCell
                         align="center"
-                        sx={{ border: "1px solid #e0e0e0", fontWeight: 600 }}
+                        sx={{ border: "1px solid", borderColor: "divider", fontWeight: 600 }}
                       >
                         {item.itemNo}
                       </TableCell>
                       <TableCell
-                        sx={{ border: "1px solid #e0e0e0", color: "text.secondary" }}
+                        sx={{ border: "1px solid", borderColor: "divider", color: "text.secondary" }}
                       >
                         {description}
                       </TableCell>
-                      <TableCell sx={{ border: "1px solid #e0e0e0" }}>
+                      <TableCell sx={{ border: "1px solid", borderColor: "divider" }}>
                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
                           {materialGroup.code || "-"}
                         </Typography>
@@ -1176,7 +1176,7 @@ export default function MassApprovalFormDialog({
                           </Typography>
                         )}
                       </TableCell>
-                      <TableCell sx={{ border: "1px solid #e0e0e0" }}>
+                      <TableCell sx={{ border: "1px solid", borderColor: "divider" }}>
                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
                           {materialSubGroup.code || "-"}
                         </Typography>
@@ -1186,7 +1186,7 @@ export default function MassApprovalFormDialog({
                           </Typography>
                         )}
                       </TableCell>
-                      <TableCell sx={{ border: "1px solid #e0e0e0", p: 0.5 }}>
+                      <TableCell sx={{ border: "1px solid", borderColor: "divider", p: 0.5 }}>
                         <TextField
                           size="small"
                           fullWidth
