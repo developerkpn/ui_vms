@@ -29,9 +29,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import TableLoadingRows from "src/components/common/TableLoadingRows";
 import { buildMassApprovalDetail } from "src/helper/massApprovalDetail.js";
 import {
+  joinMassItemDescription,
   MASS_FINAL_CODE_SUFFIX_HELPER_TEXT,
   MASS_FINAL_CODE_SUFFIX_LENGTH,
   sanitizeMassFinalCodeSuffix,
+  splitMassGroupLabel,
   validateMassFinalCodeSuffixes,
 } from "src/helper/massFinalCode.js";
 import {
@@ -40,6 +42,7 @@ import {
   isSapError,
 } from "src/helper/sapStatus.js";
 import { isMdmMaterialUser } from "src/helper/adminApprovalView.js";
+import { normalizeMassMaterialFieldValue } from "src/components/request-material/massMaterialFormValidation.js";
 import {
   applyOptimisticMdmClaim,
   buildClaimMdmPath,
@@ -431,7 +434,13 @@ export default function MassApprovalFormDialog({
         return { ...prev, [itemNo]: next };
       }
 
-      return { ...prev, [itemNo]: { ...current, [fieldKey]: value } };
+      return {
+        ...prev,
+        [itemNo]: {
+          ...current,
+          [fieldKey]: normalizeMassMaterialFieldValue(value),
+        },
+      };
     });
   };
 
@@ -530,9 +539,17 @@ export default function MassApprovalFormDialog({
   };
 
   const handleFinalCodeNext = () => {
+    // Group/sub group are read through resolveField (not the raw item) so a
+    // group edited elsewhere in the dialog is what gets validated here — the
+    // group is two thirds of the material code being assembled.
     const errors = validateMassFinalCodeSuffixes({
       finalCodeSuffixes,
-      items: detail.items,
+      items: detail.items.map(item => ({
+        id: item.id,
+        itemNo: item.itemNo,
+        materialGroup: resolveField(item, "materialGroup"),
+        materialSubGroup: resolveField(item, "materialSubGroup"),
+      })),
     });
 
     if (Object.keys(errors).length > 0) {
@@ -1103,7 +1120,13 @@ export default function MassApprovalFormDialog({
                     #
                   </TableCell>
                   <TableCell sx={{ fontWeight: 700, border: "1px solid #e0e0e0" }}>
-                    Request No
+                    Description
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 700, border: "1px solid #e0e0e0" }}>
+                    Material Group
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 700, border: "1px solid #e0e0e0" }}>
+                    Sub Material Group
                   </TableCell>
                   <TableCell
                     align="center"
@@ -1114,45 +1137,80 @@ export default function MassApprovalFormDialog({
                 </TableRow>
               </TableHead>
               <TableBody>
-                {detail.items.map(item => (
-                  <TableRow key={item.itemNo}>
-                    <TableCell
-                      align="center"
-                      sx={{ border: "1px solid #e0e0e0", fontWeight: 600 }}
-                    >
-                      {item.itemNo}
-                    </TableCell>
-                    <TableCell
-                      sx={{ border: "1px solid #e0e0e0", color: "text.secondary" }}
-                    >
-                      {item.requestNo}
-                    </TableCell>
-                    <TableCell sx={{ border: "1px solid #e0e0e0", p: 0.5 }}>
-                      <TextField
-                        size="small"
-                        fullWidth
-                        value={finalCodeSuffixes[String(item.id)] || ""}
-                        placeholder="000"
-                        disabled={submitting}
-                        error={Boolean(finalCodeSuffixErrors[String(item.id)])}
-                        helperText={finalCodeSuffixErrors[String(item.id)] || ""}
-                        inputProps={{
-                          maxLength: MASS_FINAL_CODE_SUFFIX_LENGTH,
-                          inputMode: "numeric",
-                          pattern: "[0-9]*",
-                          "aria-label": `Running Number item ${item.itemNo}`,
-                          style: { textAlign: "center", fontWeight: 700 },
-                        }}
-                        onChange={event =>
-                          handleFinalCodeSuffixChange(
-                            String(item.id),
-                            event.target.value
-                          )
-                        }
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {detail.items.map(item => {
+                  // Read through the same draft resolver the editable items
+                  // table uses, so a group/description edited elsewhere in
+                  // this dialog shows up here immediately rather than the
+                  // stale original value.
+                  const materialGroup = splitMassGroupLabel(
+                    resolveField(item, "materialGroup")
+                  );
+                  const materialSubGroup = splitMassGroupLabel(
+                    resolveField(item, "materialSubGroup")
+                  );
+                  const description = joinMassItemDescription(
+                    resolveField(item, "materialDescription"),
+                    resolveField(item, "poText")
+                  );
+
+                  return (
+                    <TableRow key={item.itemNo}>
+                      <TableCell
+                        align="center"
+                        sx={{ border: "1px solid #e0e0e0", fontWeight: 600 }}
+                      >
+                        {item.itemNo}
+                      </TableCell>
+                      <TableCell
+                        sx={{ border: "1px solid #e0e0e0", color: "text.secondary" }}
+                      >
+                        {description}
+                      </TableCell>
+                      <TableCell sx={{ border: "1px solid #e0e0e0" }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {materialGroup.code || "-"}
+                        </Typography>
+                        {materialGroup.name && (
+                          <Typography variant="caption" color="text.secondary">
+                            {materialGroup.name}
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell sx={{ border: "1px solid #e0e0e0" }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {materialSubGroup.code || "-"}
+                        </Typography>
+                        {materialSubGroup.name && (
+                          <Typography variant="caption" color="text.secondary">
+                            {materialSubGroup.name}
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell sx={{ border: "1px solid #e0e0e0", p: 0.5 }}>
+                        <TextField
+                          size="small"
+                          fullWidth
+                          value={finalCodeSuffixes[String(item.id)] || ""}
+                          placeholder="A01"
+                          disabled={submitting}
+                          error={Boolean(finalCodeSuffixErrors[String(item.id)])}
+                          helperText={finalCodeSuffixErrors[String(item.id)] || ""}
+                          inputProps={{
+                            maxLength: MASS_FINAL_CODE_SUFFIX_LENGTH,
+                            "aria-label": `Running Number item ${item.itemNo}`,
+                            style: { textAlign: "center", fontWeight: 700 },
+                          }}
+                          onChange={event =>
+                            handleFinalCodeSuffixChange(
+                              String(item.id),
+                              event.target.value
+                            )
+                          }
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>

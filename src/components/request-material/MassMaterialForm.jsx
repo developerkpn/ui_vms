@@ -41,6 +41,7 @@ import {
   MASS_TEXT_FIELDS,
   isMassRowFilled,
   mapMassRequestServerErrors,
+  normalizeMassMaterialFieldValue,
   validateMassRequestBatch,
 } from "./massMaterialFormValidation.js";
 import {
@@ -135,7 +136,7 @@ const MassMaterialForm = ({ onBack }) => {
       delete nextRowErrors[fieldKey];
       return {
         ...row,
-        [fieldKey]: value.toUpperCase(),
+        [fieldKey]: normalizeMassMaterialFieldValue(value),
         rowErrors: nextRowErrors,
       };
     });
@@ -261,14 +262,14 @@ const MassMaterialForm = ({ onBack }) => {
       }
       return {
         ...base,
-        plant: source.plant ?? "",
-        sloc: source.sloc ?? "",
-        materialGroup: source.materialGroup ?? "",
-        materialSubGroup: source.materialSubGroup ?? "",
-        description: source.description ?? "",
-        poText: source.poText ?? "",
-        uom: source.uom ?? "",
-        spesifikasiTambahan: source.spesifikasiTambahan ?? "",
+        plant: normalizeMassMaterialFieldValue(source.plant),
+        sloc: normalizeMassMaterialFieldValue(source.sloc),
+        materialGroup: normalizeMassMaterialFieldValue(source.materialGroup),
+        materialSubGroup: normalizeMassMaterialFieldValue(source.materialSubGroup),
+        description: normalizeMassMaterialFieldValue(source.description),
+        poText: normalizeMassMaterialFieldValue(source.poText),
+        uom: normalizeMassMaterialFieldValue(source.uom),
+        spesifikasiTambahan: normalizeMassMaterialFieldValue(source.spesifikasiTambahan),
       };
     });
 
@@ -1054,7 +1055,7 @@ const MassMaterialForm = ({ onBack }) => {
               fullWidth
               value={reasonDraft}
               onChange={event => {
-                setReasonDraft(event.target.value.toUpperCase());
+                setReasonDraft(event.target.value);
                 if (reasonError) {
                   setReasonError("");
                 }
