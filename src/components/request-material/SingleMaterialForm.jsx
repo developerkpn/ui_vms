@@ -1242,9 +1242,6 @@ const SingleMaterialForm = ({
           {isReworkMode && (
             <Grid item xs={12}>
               <Divider sx={{ mb: 4 }} />
-              <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1.5 }}>
-                Comment <span style={{ color: "red" }}>*</span>
-              </Typography>
               <RequesterCommentField
                 value={comment}
                 onChange={handleCommentChange}
@@ -1255,7 +1252,6 @@ const SingleMaterialForm = ({
                   "Jelaskan apa yang diubah untuk menjawab rework ini."
                 }
                 disabled={submitting}
-                label=""
               />
             </Grid>
           )}
