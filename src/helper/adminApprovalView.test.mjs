@@ -26,7 +26,9 @@ const adminApprovalViewSource = fs
   .readFileSync(path.resolve(helperDir, "adminApprovalView.js"), "utf8")
   .replace("./sapStatus.js", () => sapStatusUrl);
 
-const { isMdmMaterialUser } = await import(toDataUrl(adminApprovalViewSource));
+const { isMdmMaterialUser, resolveStoredStatusFilter } = await import(
+  toDataUrl(adminApprovalViewSource)
+);
 
 test("isMdmMaterialUser is true only when the backend flag is exactly true", () => {
   assert.equal(isMdmMaterialUser({ is_mdm_material: true }), true);
@@ -98,4 +100,25 @@ test("isMdmMaterialUser rejects truthy stand-ins for the flag", () => {
       `expected no MDM grant from ${JSON.stringify(value)}`
     );
   }
+});
+
+test("resolveStoredStatusFilter keeps a stored value that is a valid option", () => {
+  assert.equal(resolveStoredStatusFilter("Rework", false), "Rework");
+});
+
+test("resolveStoredStatusFilter keeps a Master Data-only value for a Master Data user", () => {
+  assert.equal(resolveStoredStatusFilter("Assigned To Me", true), "Assigned To Me");
+  assert.equal(resolveStoredStatusFilter("Request All", true), "Request All");
+});
+
+test("resolveStoredStatusFilter falls back to All for a Master Data-only value on a non-Master Data user", () => {
+  assert.equal(resolveStoredStatusFilter("Assigned To Me", false), "All");
+  assert.equal(resolveStoredStatusFilter("Request All", false), "All");
+});
+
+test("resolveStoredStatusFilter falls back to All for an unrecognised, empty, or absent value", () => {
+  assert.equal(resolveStoredStatusFilter("Nonexistent", false), "All");
+  assert.equal(resolveStoredStatusFilter("", false), "All");
+  assert.equal(resolveStoredStatusFilter(null, false), "All");
+  assert.equal(resolveStoredStatusFilter(undefined, false), "All");
 });

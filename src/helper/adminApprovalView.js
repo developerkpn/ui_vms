@@ -51,6 +51,28 @@ export function isAssignmentFilter(value) {
   return MDM_ASSIGNMENT_FILTER_OPTIONS.some(option => option.value === normalized);
 }
 
+// Namespaced to this page, matching mst_user_preference.pref_key, so a future
+// page's preference cannot collide with this one.
+export const STATUS_FILTER_PREFERENCE_KEY = "my_approval.status_filter";
+
+// A stored value is only ever applied after being checked against the options
+// actually offered to this user, falling back to All otherwise. Master Data
+// users see two extra options that other roles do not, so a value that was
+// valid when it was saved can stop being valid when access changes — that
+// reads the same as a user who has never saved anything.
+export function resolveStoredStatusFilter(storedValue, isMdmUser = false) {
+  const value = String(storedValue ?? "").trim();
+  if (!value) {
+    return "All";
+  }
+
+  const validOptions = isMdmUser
+    ? [...APPROVAL_STATUS_FILTER_OPTIONS, ...MDM_ASSIGNMENT_FILTER_OPTIONS]
+    : APPROVAL_STATUS_FILTER_OPTIONS;
+
+  return validOptions.some(option => option.value === value) ? value : "All";
+}
+
 /**
  * Every MDM step this row has ever had grabbed, whatever its status. Backs both
  * assignment filters.
