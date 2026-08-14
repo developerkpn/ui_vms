@@ -1159,15 +1159,27 @@ export default function MassApprovalFormDialog({
                                 alignItems="center"
                                 spacing={0.5}
                               >
-                                <Typography
-                                  variant="caption"
-                                  noWrap
-                                  sx={{ flex: 1, minWidth: 0 }}
-                                  title={attachment.name}
-                                >
-                                  {attachment.name}
-                                  {attachment.existing ? "" : " (new)"}
-                                </Typography>
+                                <Box sx={{ flex: 1, minWidth: 0 }}>
+                                  <Typography
+                                    variant="caption"
+                                    noWrap
+                                    sx={{ display: "block" }}
+                                    title={attachment.name}
+                                  >
+                                    {attachment.name}
+                                    {attachment.existing ? "" : " (new)"}
+                                  </Typography>
+                                  {attachment.uploadedBy ? (
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                      noWrap
+                                      sx={{ display: "block", fontSize: "0.65rem" }}
+                                    >
+                                      By {attachment.uploadedBy}
+                                    </Typography>
+                                  ) : null}
+                                </Box>
                                 {canAct && (
                                   <IconButton
                                     size="small"
