@@ -74,6 +74,8 @@ import {
   filterMassApprovalRows,
   filterMassApprovalRowsByStatus,
   paginateMassApprovalRows,
+  resolveStoredStatusFilter,
+  STATUS_FILTER_PREFERENCE_KEY,
 } from "src/helper/adminApprovalView.js";
 import PageHeader from "src/components/common/PageHeader";
 import PageTablePaper, { PAGE_TABLE_HEADER_SX } from "src/components/common/PageTablePaper";
@@ -408,7 +410,9 @@ export default function AdminApprovalView() {
   const [approvalRows, setApprovalRows] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
-  const [statusFilter, setStatusFilter] = useState("Submit");
+  // Corrected to the actor's stored preference (or left on All, the no-preference
+  // default) before the table's first paint — see the initial load effect below.
+  const [statusFilter, setStatusFilter] = useState("All");
   const [page, setPage] = useState(0);
   const [rowsPerPage] = useState(10);
   const [loading, setLoading] = useState(false);
@@ -463,6 +467,22 @@ export default function AdminApprovalView() {
     const response = await axiosPrivate.get("/material/requests/single/approval-inbox");
     const rows = normalizeApprovalRows(response.data?.data);
     setApprovalRows(rows);
+  };
+
+  // Never throws: a stored preference is a convenience, not a requirement for
+  // the page to work, so anything that goes wrong reading it — no row yet, the
+  // table not existing, a network failure — resolves to the same All a first
+  // visit gets.
+  const fetchStatusFilterPreference = async () => {
+    try {
+      const response = await axiosPrivate.get(
+        `/material/preferences/${STATUS_FILTER_PREFERENCE_KEY}`
+      );
+      return resolveStoredStatusFilter(response.data?.data?.value, isMdmUser);
+    } catch (error) {
+      console.error("Failed to fetch status filter preference:", error);
+      return "All";
+    }
   };
 
   const fetchMdmAllApprovalRows = async () => {
@@ -568,10 +588,15 @@ export default function AdminApprovalView() {
     const run = async () => {
       try {
         setLoading(true);
-        await Promise.all([
+        // Fetched alongside the data the page already loads, and applied
+        // before setLoading(false) lets the table render its first rows —
+        // never a default that gets corrected a beat later.
+        const [, , resolvedStatusFilter] = await Promise.all([
           fetchApprovalRows(),
           fetchMassApprovalRows(),
+          fetchStatusFilterPreference(),
         ]);
+        setStatusFilter(resolvedStatusFilter);
       } catch (error) {
         console.error("Failed to fetch approval data:", error);
         setApprovalRows([]);
@@ -763,8 +788,20 @@ export default function AdminApprovalView() {
   );
 
   const handleStatusFilterChange = event => {
-    setStatusFilter(event.target.value);
+    const nextStatusFilter = event.target.value;
+    setStatusFilter(nextStatusFilter);
     setPage(0);
+
+    // Fire-and-forget: the filter is already applied above, over rows already
+    // in hand, so a slow or failed save is never something the actor waits on
+    // or is blocked by.
+    axiosPrivate
+      .put(`/material/preferences/${STATUS_FILTER_PREFERENCE_KEY}`, {
+        value: nextStatusFilter,
+      })
+      .catch(error =>
+        console.error("Failed to save status filter preference:", error)
+      );
   };
 
   const handleChangePage = (event, newPage) => {

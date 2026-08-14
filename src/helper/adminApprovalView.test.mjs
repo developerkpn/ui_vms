@@ -32,6 +32,7 @@ const {
   getRewindStepLevels,
   getEffectiveApprovalStatusLabel,
   filterApprovalRowsByStatus,
+  resolveStoredStatusFilter,
 } = await import(toDataUrl(adminApprovalViewSource));
 
 test("isMdmMaterialUser is true only when the backend flag is exactly true", () => {
@@ -238,4 +239,25 @@ test("getRewindStepLevels marks both the sending (MDM) and receiving stage, and 
     approvalSteps: [step(1, "MANUAL", "WAITING"), step(2, "MDM", "WAITING")],
   };
   assert.equal(getRewindStepLevels(untouchedRow), null);
+});
+
+test("resolveStoredStatusFilter keeps a stored value that is a valid option", () => {
+  assert.equal(resolveStoredStatusFilter("Rework", false), "Rework");
+});
+
+test("resolveStoredStatusFilter keeps a Master Data-only value for a Master Data user", () => {
+  assert.equal(resolveStoredStatusFilter("Assigned To Me", true), "Assigned To Me");
+  assert.equal(resolveStoredStatusFilter("Request All", true), "Request All");
+});
+
+test("resolveStoredStatusFilter falls back to All for a Master Data-only value on a non-Master Data user", () => {
+  assert.equal(resolveStoredStatusFilter("Assigned To Me", false), "All");
+  assert.equal(resolveStoredStatusFilter("Request All", false), "All");
+});
+
+test("resolveStoredStatusFilter falls back to All for an unrecognised, empty, or absent value", () => {
+  assert.equal(resolveStoredStatusFilter("Nonexistent", false), "All");
+  assert.equal(resolveStoredStatusFilter("", false), "All");
+  assert.equal(resolveStoredStatusFilter(null, false), "All");
+  assert.equal(resolveStoredStatusFilter(undefined, false), "All");
 });
