@@ -1,7 +1,9 @@
 import {
+  AttachFile,
   Cancel,
   CheckCircle,
   Close,
+  Delete,
   Replay,
   WarningAmber,
 } from "@mui/icons-material";
@@ -25,7 +27,12 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  getAttachmentValidationError,
+  MAX_ATTACHMENTS,
+  normalizeAttachmentSelection,
+} from "src/components/request-material/attachmentValidation.js";
 import TableLoadingRows from "src/components/common/TableLoadingRows";
 import { buildMassApprovalDetail } from "src/helper/massApprovalDetail.js";
 import {
@@ -138,6 +145,20 @@ function ItemSapStatus({ item }) {
   return chip;
 }
 
+// Seeds the per-item attachment state from the items the dialog was opened
+// with — one entry per item, each existing attachment flagged so the staged
+// list can tell a kept file apart from one just picked.
+function buildInitialItemAttachments(items = []) {
+  const initial = {};
+  (items || []).forEach(item => {
+    initial[item.itemNo] = (item.attachments || []).map(attachment => ({
+      ...attachment,
+      existing: true,
+    }));
+  });
+  return initial;
+}
+
 export default function MassApprovalFormDialog({
   open,
   row,
@@ -159,6 +180,16 @@ export default function MassApprovalFormDialog({
 
   // Per-item draft values – keyed by itemNo, contains only changed fields
   const [itemDrafts, setItemDrafts] = useState({});
+  // Staged attachment changes, keyed by itemNo — { id, name, path, type,
+  // existing }[] for kept/existing files, plain File objects for new ones.
+  // Attachments belong to the item, not the batch (see the spec's "Mass
+  // requests" decision), so each row carries its own list and its own
+  // MAX_ATTACHMENTS limit. Only sent to the server with Approve/Rework; see
+  // buildItemAttachmentChanges.
+  const [itemAttachments, setItemAttachments] = useState({});
+  const [itemAttachmentErrors, setItemAttachmentErrors] = useState({});
+  const [activeAttachmentItemNo, setActiveAttachmentItemNo] = useState(null);
+  const attachmentInputRef = useRef(null);
   // Remark dialog state
   const [remarkDialogOpen, setRemarkDialogOpen] = useState(false);
   const [currentAction, setCurrentAction] = useState("");
@@ -213,8 +244,21 @@ export default function MassApprovalFormDialog({
       setClaimedSteps(null);
       setGrabbing(false);
       setGrabError("");
+      // Discards staged attachment changes for every item — an abandoned
+      // review must leave no trace, same as itemDrafts above.
+      setItemAttachments(buildInitialItemAttachments(detail.items));
+      setItemAttachmentErrors({});
+      setActiveAttachmentItemNo(null);
     }
   }, [open]);
+
+  // Items arrive after the dialog opens (fetched separately) — (re)seed the
+  // per-item attachment state once they land, or when a different batch's
+  // items replace them.
+  useEffect(() => {
+    setItemAttachments(buildInitialItemAttachments(detail.items));
+    setItemAttachmentErrors({});
+  }, [items]);
 
   // A different batch is a different claim: whatever the last grab returned says
   // nothing about this one.
@@ -375,10 +419,10 @@ export default function MassApprovalFormDialog({
     () => detail.items.some(item => item.finalCode || item.sapPushStatus),
     [detail.items]
   );
-  // Item no + request no, one column per editable field, and the two SAP
-  // columns when they are showing. Shared by the loading and empty rows so
-  // neither can drift out of step with the header.
-  const itemColumnCount = 2 + EDITABLE_FIELD_META.length + (hasSapColumns ? 2 : 0);
+  // Item no + request no, one column per editable field, the attachments
+  // column, and the two SAP columns when they are showing. Shared by the
+  // loading and empty rows so neither can drift out of step with the header.
+  const itemColumnCount = 3 + EDITABLE_FIELD_META.length + (hasSapColumns ? 2 : 0);
 
   // Server-side rejection of the composed plan (invalid entry, duplicate code,
   // or one already taken): reopen the Final Code dialog with the server
@@ -444,6 +488,100 @@ export default function MassApprovalFormDialog({
     });
   };
 
+  const handleAttachmentBrowseClick = itemNo => {
+    if (!canAct) {
+      return;
+    }
+    setActiveAttachmentItemNo(itemNo);
+    // The click fires after the ref's target item is set, since the same
+    // hidden input is shared by every row.
+    requestAnimationFrame(() => attachmentInputRef.current?.click());
+  };
+
+  const handleAttachmentFileChange = event => {
+    const itemNo = activeAttachmentItemNo;
+    const files = Array.from(event.target.files || []);
+    if (itemNo !== null && files.length > 0) {
+      const current = itemAttachments[itemNo] || [];
+      const result = normalizeAttachmentSelection(files, current);
+      setItemAttachments(prev => ({ ...prev, [itemNo]: result.files }));
+      setItemAttachmentErrors(prev => ({ ...prev, [itemNo]: result.error || "" }));
+    }
+    if (attachmentInputRef.current) {
+      attachmentInputRef.current.value = "";
+    }
+  };
+
+  const handleRemoveItemAttachment = (itemNo, indexToRemove) => {
+    if (!canAct) {
+      return;
+    }
+    setItemAttachments(prev => ({
+      ...prev,
+      [itemNo]: (prev[itemNo] || []).filter((_, index) => index !== indexToRemove),
+    }));
+    setItemAttachmentErrors(prev => ({ ...prev, [itemNo]: "" }));
+  };
+
+  // Whether staging actually changed anything for an item — the resulting
+  // set differs from the ids it started with, or a new file was added.
+  const itemHasAttachmentChanges = item => {
+    const staged = itemAttachments[item.itemNo] || [];
+    const keepAttachmentIds = staged
+      .filter(attachment => attachment.existing)
+      .map(attachment => attachment.id)
+      .filter(id => id !== null && id !== undefined);
+    const newFiles = staged.filter(attachment => !attachment.existing);
+    const originalIds = (item.attachments || [])
+      .map(attachment => attachment.id)
+      .filter(id => id !== null && id !== undefined);
+
+    return (
+      newFiles.length > 0 ||
+      keepAttachmentIds.length !== originalIds.length ||
+      !originalIds.every(id => keepAttachmentIds.includes(id))
+    );
+  };
+
+  // Per-item keep/add set for every item whose attachments were actually
+  // touched, keyed by item id (the id the approve/rework endpoint keys rows
+  // by, not the display-only itemNo). Reject discards this entirely — see
+  // the caller.
+  const buildItemAttachmentChanges = () => {
+    const changes = [];
+    for (const item of detail.items) {
+      if (!itemHasAttachmentChanges(item)) {
+        continue;
+      }
+      const staged = itemAttachments[item.itemNo] || [];
+      changes.push({
+        id: item.id,
+        keepAttachmentIds: staged
+          .filter(attachment => attachment.existing)
+          .map(attachment => attachment.id)
+          .filter(id => id !== null && id !== undefined),
+        files: staged.filter(attachment => !attachment.existing),
+      });
+    }
+    return changes;
+  };
+
+  // Blocks the action when any item's resulting attachment set violates the
+  // shared min/max — the same rule the requester's mass form enforces per
+  // row, applied here to whatever the reviewer just staged.
+  const validateItemAttachments = () => {
+    const errors = {};
+    for (const item of detail.items) {
+      const staged = itemAttachments[item.itemNo] || [];
+      const message = getAttachmentValidationError(staged);
+      if (message) {
+        errors[item.itemNo] = message;
+      }
+    }
+    setItemAttachmentErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   // Check if any items have been edited
   const hasEdits = Object.keys(itemDrafts).length > 0;
 
@@ -472,6 +610,10 @@ export default function MassApprovalFormDialog({
   // Action button handlers — open the remark dialog
   // Action button handlers — open the remark dialog
   const handleApproveClick = () => {
+    if (!validateItemAttachments()) {
+      return;
+    }
+
     // Validate: required fields that have been edited cannot be empty
     if (hasEdits) {
       const errors = {};
@@ -564,6 +706,10 @@ export default function MassApprovalFormDialog({
   };
 
   const handleReworkClick = () => {
+    if (!validateItemAttachments()) {
+      return;
+    }
+
     setCurrentAction("Rework");
     setRemarkText("");
     setRemarkError("");
@@ -632,45 +778,55 @@ export default function MassApprovalFormDialog({
         // type; the box is what every other destination still sends.
         isReworkEmailReason ? reworkEmailReason : trimmed,
         null,
-        canChooseReworkTarget
-          ? {
-              ...buildReworkDestinationPayload({
-                selectedValue: reworkTarget,
-                newApprover: reworkNewApprover,
-                notifyVia: reworkNotifyVia,
-                emailContent: buildReworkEmailPayload({
-                  notifyVia: reworkEmailChannel,
-                  subject: reworkEmailSubject,
-                  body: reworkEmailBody,
+        {
+          ...(canChooseReworkTarget
+            ? {
+                ...buildReworkDestinationPayload({
+                  selectedValue: reworkTarget,
+                  newApprover: reworkNewApprover,
+                  notifyVia: reworkNotifyVia,
+                  emailContent: buildReworkEmailPayload({
+                    notifyVia: reworkEmailChannel,
+                    subject: reworkEmailSubject,
+                    body: reworkEmailBody,
+                  }),
                 }),
-              }),
-              // Confirmation copy only — the page strips it before POSTing.
-              reworkDestinationLabel: describeReworkDestination({
-                slots: reworkSlots,
-                selectedValue: reworkTarget,
-              }),
-              // Likewise copy-only: the "Via email" snackbar names the address
-              // the mail went to, and only the dialog holds it.
-              reworkRecipientEmail: reworkNewApprover?.email ?? "",
-            }
-          : {}
+                // Confirmation copy only — the page strips it before POSTing.
+                reworkDestinationLabel: describeReworkDestination({
+                  slots: reworkSlots,
+                  selectedValue: reworkTarget,
+                }),
+                // Likewise copy-only: the "Via email" snackbar names the address
+                // the mail went to, and only the dialog holds it.
+                reworkRecipientEmail: reworkNewApprover?.email ?? "",
+              }
+            : {}),
+          // Rework carries attachment changes too — see the spec's "which
+          // actions carry attachment changes" decision.
+          itemAttachmentChanges: buildItemAttachmentChanges(),
+        }
       );
       return;
     }
 
     if (currentAction === "Reject") {
+      // Reject discards any staged attachment changes — they never reach
+      // onAction at all.
       onAction?.("reject", trimmed, null);
       return;
     }
 
     // Approve — include edited items if any, plus the per-item running numbers
     // when this is the Master Data stage (the only stage the backend expects
-    // them on).
+    // them on), plus any staged attachment changes.
     onAction?.(
       "approve",
       trimmed,
       hasEdits ? buildEditedItemsPayload() : null,
-      isMdmStageActive ? { finalCodeSuffixes } : {}
+      {
+        ...(isMdmStageActive ? { finalCodeSuffixes } : {}),
+        itemAttachmentChanges: buildItemAttachmentChanges(),
+      }
     );
   };
 
@@ -684,6 +840,8 @@ export default function MassApprovalFormDialog({
     setFinalCodeSuffixes({});
     setFinalCodeSuffixErrors({});
     setFinalCodeGeneralError("");
+    setItemAttachments(buildInitialItemAttachments(detail.items));
+    setItemAttachmentErrors({});
     onClose?.();
   };
 
@@ -870,6 +1028,17 @@ export default function MassApprovalFormDialog({
                         {meta.label}
                       </TableCell>
                     ))}
+                    <TableCell
+                      sx={{
+                        fontWeight: 700,
+                        border: "1px solid #e0e0e0",
+                        py: 1.5,
+                        whiteSpace: "nowrap",
+                        minWidth: 220,
+                      }}
+                    >
+                      Attachments
+                    </TableCell>
                     {hasSapColumns && (
                       <TableCell
                         sx={{
@@ -975,6 +1144,65 @@ export default function MassApprovalFormDialog({
                             </TableCell>
                           );
                         })}
+                        <TableCell
+                          sx={{
+                            border: "1px solid #e0e0e0",
+                            verticalAlign: "top",
+                            p: 0.75,
+                          }}
+                        >
+                          <Stack spacing={0.5}>
+                            {(itemAttachments[item.itemNo] || []).map((attachment, index) => (
+                              <Stack
+                                key={attachment.id || `${attachment.name}-${index}`}
+                                direction="row"
+                                alignItems="center"
+                                spacing={0.5}
+                              >
+                                <Typography
+                                  variant="caption"
+                                  noWrap
+                                  sx={{ flex: 1, minWidth: 0 }}
+                                  title={attachment.name}
+                                >
+                                  {attachment.name}
+                                  {attachment.existing ? "" : " (new)"}
+                                </Typography>
+                                {canAct && (
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() =>
+                                      handleRemoveItemAttachment(item.itemNo, index)
+                                    }
+                                    aria-label={`Remove ${attachment.name}`}
+                                  >
+                                    <Delete sx={{ fontSize: 16 }} />
+                                  </IconButton>
+                                )}
+                              </Stack>
+                            ))}
+                            {canAct && (
+                              <Button
+                                size="small"
+                                startIcon={<AttachFile sx={{ fontSize: 16 }} />}
+                                onClick={() => handleAttachmentBrowseClick(item.itemNo)}
+                                disabled={
+                                  submitting ||
+                                  (itemAttachments[item.itemNo] || []).length >= MAX_ATTACHMENTS
+                                }
+                                sx={{ textTransform: "none", alignSelf: "flex-start", p: 0, minWidth: 0 }}
+                              >
+                                Add
+                              </Button>
+                            )}
+                            {itemAttachmentErrors[item.itemNo] && (
+                              <Typography variant="caption" color="error">
+                                {itemAttachmentErrors[item.itemNo]}
+                              </Typography>
+                            )}
+                          </Stack>
+                        </TableCell>
                         {hasSapColumns && (
                           <TableCell
                             sx={{
@@ -998,6 +1226,18 @@ export default function MassApprovalFormDialog({
                 </TableBody>
               </Table>
             </TableContainer>
+
+            {/* Shared by every row's "Add" button — which item a pick lands on
+                is tracked in activeAttachmentItemNo, set just before the click
+                is forwarded here. */}
+            <input
+              ref={attachmentInputRef}
+              type="file"
+              multiple
+              hidden
+              accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+              onChange={handleAttachmentFileChange}
+            />
 
             {/* Renders nothing at all unless this batch actually has rework
                 mail, so a request that never used the EMAIL channel looks

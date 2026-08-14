@@ -402,6 +402,63 @@ function AssignedToCell({ row }) {
   );
 }
 
+// Multipart body for an approve/rework action that carries a staged
+// attachment change. Every non-attachment field of `requestBody` travels
+// exactly as it would in the plain JSON call — a string as-is, anything else
+// JSON-stringified — plus the keep/remove/add attachment set, matching the
+// contract the requester's own resubmit path already uses.
+function buildRequestFormData(requestBody, { keepAttachmentIds, files }) {
+  const formPayload = new FormData();
+
+  Object.entries(requestBody || {}).forEach(([key, value]) => {
+    if (value === undefined) {
+      return;
+    }
+    formPayload.append(key, typeof value === "string" ? value : JSON.stringify(value));
+  });
+
+  formPayload.append("attachments", JSON.stringify({ keepAttachmentIds }));
+  (files || []).forEach(file => {
+    formPayload.append("files", file);
+  });
+
+  return formPayload;
+}
+
+// Multipart body for a mass approve/rework action that carries staged
+// attachment changes for one or more items. Mirrors buildRequestFormData,
+// but attachments are per item on a mass request (see the spec's "Mass
+// requests" decision) rather than one keep/add set for the whole action —
+// each item's kept ids travel together in `itemAttachments`, and each new
+// file is paired with the item id it belongs to via `fileItemId`, the same
+// way the requester's mass form pairs files with rows via fileRowIndex.
+function buildMassRequestFormData(requestBody, itemAttachmentChanges) {
+  const formPayload = new FormData();
+
+  Object.entries(requestBody || {}).forEach(([key, value]) => {
+    if (value === undefined) {
+      return;
+    }
+    formPayload.append(key, typeof value === "string" ? value : JSON.stringify(value));
+  });
+
+  formPayload.append(
+    "itemAttachments",
+    JSON.stringify(
+      itemAttachmentChanges.map(({ id, keepAttachmentIds }) => ({ id, keepAttachmentIds }))
+    )
+  );
+
+  itemAttachmentChanges.forEach(({ id, files }) => {
+    (files || []).forEach(file => {
+      formPayload.append("files", file);
+      formPayload.append("fileItemId", String(id));
+    });
+  });
+
+  return formPayload;
+}
+
 export default function AdminApprovalView() {
   const axiosPrivate = useAxiosPrivate();
   const isMdmUser = useSessionStore(isMdmMaterialUser);
@@ -1028,7 +1085,36 @@ export default function AdminApprovalView() {
                   finalCodeSuffix: payload?.finalCodeSuffix ?? null,
                   editedRequest: payload?.editedRequest ?? {},
                 };
-      const response = await axiosPrivate.post(endpoint, requestBody);
+
+      // Reject never carries attachment changes (see the dialog); Approve and
+      // Rework only do when the reviewer actually staged one. Sending the
+      // exact same JSON body as before when nothing changed is the regression
+      // guard: an approval untouched by this feature must behave exactly as
+      // it did before it existed.
+      const keepAttachmentIds =
+        action !== "Reject" && Array.isArray(payload?.keepAttachmentIds)
+          ? payload.keepAttachmentIds
+          : null;
+      const newAttachmentFiles =
+        action !== "Reject" && Array.isArray(payload?.newAttachmentFiles)
+          ? payload.newAttachmentFiles
+          : [];
+      const originalAttachmentIds = (detail.attachments || [])
+        .map(attachment => attachment.id)
+        .filter(id => id !== null && id !== undefined);
+      const hasAttachmentChanges =
+        keepAttachmentIds !== null &&
+        (newAttachmentFiles.length > 0 ||
+          keepAttachmentIds.length !== originalAttachmentIds.length ||
+          !originalAttachmentIds.every(id => keepAttachmentIds.includes(id)));
+
+      const response = hasAttachmentChanges
+        ? await axiosPrivate.post(
+            endpoint,
+            buildRequestFormData(requestBody, { keepAttachmentIds, files: newAttachmentFiles }),
+            { headers: { "Content-Type": "multipart/form-data" } }
+          )
+        : await axiosPrivate.post(endpoint, requestBody);
 
       const nextStage = response.data?.data?.next_stage;
       const emailSendFailed = isReworkEmailSendFailed(response);
@@ -1133,7 +1219,22 @@ export default function AdminApprovalView() {
               })
             : { reason: reason ?? null };
 
-      const response = await axiosPrivate.post(endpoint, requestBody);
+      // Reject discards staged attachment changes (see the dialog); approve
+      // and rework carry whichever items actually changed. No changes at all
+      // means the exact same JSON body as before — the regression guard.
+      const itemAttachmentChanges =
+        action !== "reject" && Array.isArray(options?.itemAttachmentChanges)
+          ? options.itemAttachmentChanges
+          : [];
+      const hasAttachmentChanges = itemAttachmentChanges.length > 0;
+
+      const response = hasAttachmentChanges
+        ? await axiosPrivate.post(
+            endpoint,
+            buildMassRequestFormData(requestBody, itemAttachmentChanges),
+            { headers: { "Content-Type": "multipart/form-data" } }
+          )
+        : await axiosPrivate.post(endpoint, requestBody);
 
       const massEmailSendFailed = isReworkEmailSendFailed(response);
       setMassApprovalDialogRow(null);

@@ -4,6 +4,7 @@ import {
   Cancel,
   CheckCircle,
   Close,
+  Delete,
   History,
   InfoOutlined,
   Replay,
@@ -85,6 +86,11 @@ import {
 import ReworkDestinationField from "./ReworkDestinationField";
 import ReworkEmailThreadSection from "./ReworkEmailThreadSection";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
+import {
+  getAttachmentValidationError,
+  MAX_ATTACHMENTS,
+  normalizeAttachmentSelection,
+} from "src/components/request-material/attachmentValidation.js";
 
 function firstDefined(...values) {
   return values.find(value => value !== undefined && value !== null);
@@ -413,7 +419,7 @@ const isImageFile = fileName => {
   return IMAGE_EXTENSIONS.includes(ext);
 };
 
-function AttachmentItem({ attachment, index, onView }) {
+function AttachmentItem({ attachment, index, onView, onRemove, removable = false }) {
   const fileUrl = attachment.path
     ? import.meta.env.VITE_URL_LOC + "/material/file/" + attachment.path
     : "";
@@ -485,14 +491,38 @@ function AttachmentItem({ attachment, index, onView }) {
           />
         )}
       </Box>
-      <Box sx={{ minWidth: 0 }}>
+      <Box sx={{ minWidth: 0, flex: 1 }}>
         <Typography variant="body2" noWrap sx={{ fontWeight: 800 }}>
           {attachment.name || `Attachment ${index + 1}`}
         </Typography>
         <Typography variant="caption" color="text.secondary" noWrap>
-          {attachment.type}
+          {attachment.existing ? attachment.type : "New file"}
         </Typography>
+        {attachment.uploadedBy ? (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            noWrap
+            sx={{ display: "block" }}
+          >
+            Uploaded by {attachment.uploadedBy}
+          </Typography>
+        ) : null}
       </Box>
+      {removable && (
+        <IconButton
+          size="small"
+          color="error"
+          onClick={event => {
+            event.stopPropagation();
+            onRemove?.();
+          }}
+          sx={{ flexShrink: 0 }}
+          aria-label={`Remove ${attachment.name}`}
+        >
+          <Delete fontSize="small" />
+        </IconButton>
+      )}
     </Paper>
   );
 }
@@ -596,11 +626,40 @@ export default function AdminApprovalFormDialog({
   const [reworkEmailErrors, setReworkEmailErrors] = useState({ subject: "", body: "" });
   const [finalCodeSuffix, setFinalCodeSuffix] = useState("");
   const [finalCodeSuffixError, setFinalCodeSuffixError] = useState("");
+  // Staged attachment changes — held here and only sent to the server as part
+  // of an Approve/Rework payload. Closing the dialog or rejecting discards it,
+  // since neither of those is a recorded action attachment changes should ride
+  // along with.
+  const [pendingAttachments, setPendingAttachments] = useState(() =>
+    (detail.attachments || []).map(attachment => ({ ...attachment, existing: true }))
+  );
+  const [attachmentError, setAttachmentError] = useState("");
+  const attachmentInputRef = useRef(null);
 
   const handleViewAttachment = file => {
     setPreviewFile(file);
     setPreviewImageError(false);
     setPreviewOpen(true);
+  };
+
+  const handleAttachmentBrowseClick = () => {
+    attachmentInputRef.current?.click();
+  };
+
+  const handleAttachmentFileChange = event => {
+    const files = Array.from(event.target.files || []);
+    const result = normalizeAttachmentSelection(files, pendingAttachments);
+    setPendingAttachments(result.files);
+    setAttachmentError(result.error || "");
+
+    if (attachmentInputRef.current) {
+      attachmentInputRef.current.value = "";
+    }
+  };
+
+  const handleRemovePendingAttachment = indexToRemove => {
+    setPendingAttachments(prev => prev.filter((_, index) => index !== indexToRemove));
+    setAttachmentError("");
   };
   const [remarkError, setRemarkError] = useState("");
   const [clientFieldErrors, setClientFieldErrors] = useState({});
@@ -651,6 +710,12 @@ export default function AdminApprovalFormDialog({
       setClaimedSteps(null);
       setGrabbing(false);
       setGrabError("");
+      // Discards any staged attachment add/remove — an abandoned review must
+      // leave no trace, per the same rule that governs every other field here.
+      setPendingAttachments(
+        (detail.attachments || []).map(attachment => ({ ...attachment, existing: true }))
+      );
+      setAttachmentError("");
     }
   }, [open, row]);
 
@@ -662,6 +727,10 @@ export default function AdminApprovalFormDialog({
     setHasInteracted(false);
     setClaimedSteps(null);
     setGrabError("");
+    setPendingAttachments(
+      (detail.attachments || []).map(attachment => ({ ...attachment, existing: true }))
+    );
+    setAttachmentError("");
   }, [detail]);
 
   useEffect(() => {
@@ -820,6 +889,12 @@ export default function AdminApprovalFormDialog({
       return;
     }
 
+    const attachmentValidationMessage = getAttachmentValidationError(pendingAttachments);
+    if (attachmentValidationMessage) {
+      setAttachmentError(attachmentValidationMessage);
+      return;
+    }
+
     const nextErrors = validateApprovalDraft({
       draftValues,
       formSchema,
@@ -862,6 +937,14 @@ export default function AdminApprovalFormDialog({
   };
 
   const handleReworkClick = () => {
+    if (!isScopedChangeExtendRequest) {
+      const attachmentValidationMessage = getAttachmentValidationError(pendingAttachments);
+      if (attachmentValidationMessage) {
+        setAttachmentError(attachmentValidationMessage);
+        return;
+      }
+    }
+
     setCurrentAction("Rework");
     setRemarkText("");
     // The requester is the destination every time the dialog is opened, so
@@ -1408,14 +1491,44 @@ export default function AdminApprovalFormDialog({
                 >
                   Supported formats: PDF, DOC, DOCX, PNG, JPG, JPEG
                 </Typography>
-                {detail.attachments.length > 0 ? (
+
+                {canActNow && (
+                  <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
+                    <Button
+                      variant="outlined"
+                      onClick={handleAttachmentBrowseClick}
+                      disabled={submitting || pendingAttachments.length >= MAX_ATTACHMENTS}
+                      sx={{ textTransform: "none", borderColor: "#1976d2", color: "#1976d2", px: 3 }}
+                    >
+                      Browsing File
+                    </Button>
+                    <input
+                      ref={attachmentInputRef}
+                      type="file"
+                      multiple
+                      hidden
+                      accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                      onChange={handleAttachmentFileChange}
+                    />
+                  </Box>
+                )}
+
+                {attachmentError && (
+                  <Typography variant="caption" color="error" sx={{ display: "block", mb: 2 }}>
+                    {attachmentError}
+                  </Typography>
+                )}
+
+                {pendingAttachments.length > 0 ? (
                   <Stack direction="row" spacing={1.5} useFlexGap flexWrap="wrap">
-                    {detail.attachments.map((attachment, index) => (
+                    {pendingAttachments.map((attachment, index) => (
                       <AttachmentItem
                         key={attachment.id || `${attachment.name}-${index}`}
                         attachment={attachment}
                         index={index}
                         onView={handleViewAttachment}
+                        removable={canActNow && !submitting}
+                        onRemove={() => handleRemovePendingAttachment(index)}
                       />
                     ))}
                   </Stack>
@@ -1915,6 +2028,24 @@ export default function AdminApprovalFormDialog({
                   }
                 : {};
 
+              // Reject ends the request, so pending attachment changes are
+              // dropped rather than sent — see the spec's "which actions
+              // carry attachment changes" decision. Scoped change/extend
+              // requests never show the attachment editor, so their payload
+              // stays exactly as it was before this feature.
+              const attachmentChanges =
+                currentAction !== "Reject" && !isScopedChangeExtendRequest
+                  ? {
+                      keepAttachmentIds: pendingAttachments
+                        .filter(attachment => attachment.existing)
+                        .map(attachment => attachment.id)
+                        .filter(id => id !== null && id !== undefined),
+                      newAttachmentFiles: pendingAttachments.filter(
+                        attachment => !attachment.existing
+                      ),
+                    }
+                  : {};
+
               onAction?.(
                 currentAction,
                 detail,
@@ -1928,6 +2059,7 @@ export default function AdminApprovalFormDialog({
                       remark: submittedRemark,
                       ...reworkDestination,
                       ...(isFinalStageApprove ? { finalCodeSuffix } : {}),
+                      ...attachmentChanges,
                       editedRequest: {
                         material_sub_group_id: draftValues.material_sub_group_id,
                         plant_code: draftValues.plant_code,

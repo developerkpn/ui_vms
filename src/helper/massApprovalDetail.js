@@ -108,6 +108,37 @@ function normalizeMassRequestItem(item = {}) {
     // SAP staging, filled once Master Data approved the batch: the composed
     // material code plus the Oracle write-back status/message per item.
     finalCode: item.final_code ?? item.finalCode ?? null,
+    attachments: normalizeItemAttachments(item.attachments),
     ...pickSapFields(item),
   };
+}
+
+/**
+ * Normalize an item's attachment list — mirrors adminApprovalDetail.js's
+ * normalizeAttachments so the single and mass dialogs read the same shape.
+ * Attachments belong to the item, not the batch, so this runs per item.
+ */
+function normalizeItemAttachments(attachments = []) {
+  if (!Array.isArray(attachments)) {
+    return [];
+  }
+
+  return attachments.map(attachment => ({
+    id: attachment.id ?? null,
+    name: String(
+      attachment.name ?? attachment.file_name ?? attachment.fileName ?? ""
+    ).trim() || "Attachment",
+    path: String(attachment.path ?? attachment.file_path ?? attachment.filePath ?? "").trim(),
+    type: String(attachment.type ?? attachment.file_type ?? attachment.fileType ?? "").trim(),
+    // Absent on most attachments today — see adminApprovalDetail.js for why.
+    uploadedBy: String(
+      attachment.uploadedByName ??
+        attachment.uploaded_by_name ??
+        attachment.uploadedBy ??
+        attachment.uploaded_by ??
+        attachment.actorName ??
+        attachment.actor_name ??
+        ""
+    ).trim(),
+  }));
 }

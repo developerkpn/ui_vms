@@ -227,6 +227,17 @@ function normalizeAttachments(attachments = []) {
     name: pickText(attachment.name, attachment.file_name, attachment.fileName),
     path: pickText(attachment.path, attachment.file_path, attachment.filePath),
     type: pickText(attachment.type, attachment.file_type, attachment.fileType),
+    // Absent on most attachments today — only a reviewer-added file carries an
+    // uploader distinct from the request's own creator. Left blank rather than
+    // "-" so the UI can tell "no uploader info" apart from a real dash value.
+    uploadedBy: firstNonEmpty(
+      attachment.uploadedByName,
+      attachment.uploaded_by_name,
+      attachment.uploadedBy,
+      attachment.uploaded_by,
+      attachment.actorName,
+      attachment.actor_name
+    ) ?? "",
   }));
 }
 
