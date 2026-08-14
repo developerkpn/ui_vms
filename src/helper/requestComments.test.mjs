@@ -22,8 +22,11 @@ const {
   buildRequestCommentTitle,
   normalizeRequestComments,
   resolveRequestCommentKind,
+  resolveRequesterCommentRequirement,
+  validateRequesterComment,
   REQUEST_COMMENT_KIND_MASS,
   REQUEST_COMMENT_KIND_SINGLE,
+  REQUESTER_COMMENT_REQUIRED_MESSAGE,
 } = helper;
 
 test("resolveRequestCommentKind picks the table the id belongs to", () => {
@@ -135,4 +138,41 @@ test("buildRequestCommentTitle files an entry under its stage, or its actor", ()
     "Siti Rahayu"
   );
   assert.equal(buildRequestCommentTitle({}), "-");
+});
+
+test("resolveRequesterCommentRequirement is required only on a resubmit", () => {
+  assert.equal(resolveRequesterCommentRequirement(true), "required");
+  assert.equal(resolveRequesterCommentRequirement(false), "optional");
+  assert.equal(resolveRequesterCommentRequirement(), "optional");
+});
+
+test("validateRequesterComment never rejects a new submission, comment or not", () => {
+  assert.deepEqual(validateRequesterComment(undefined, { isResubmit: false }), {
+    error: false,
+    message: "",
+  });
+  assert.deepEqual(validateRequesterComment("   ", { isResubmit: false }), {
+    error: false,
+    message: "",
+  });
+  assert.deepEqual(validateRequesterComment("Butuh stok tambahan", { isResubmit: false }), {
+    error: false,
+    message: "",
+  });
+});
+
+test("validateRequesterComment rejects empty and whitespace-only on a resubmit", () => {
+  assert.equal(validateRequesterComment(undefined, { isResubmit: true }).error, true);
+  assert.equal(validateRequesterComment("", { isResubmit: true }).error, true);
+  assert.equal(
+    validateRequesterComment("   ", { isResubmit: true }).message,
+    REQUESTER_COMMENT_REQUIRED_MESSAGE
+  );
+});
+
+test("validateRequesterComment accepts real text on a resubmit", () => {
+  assert.deepEqual(
+    validateRequesterComment("  Sudah saya perbaiki UoM-nya  ", { isResubmit: true }),
+    { error: false, message: "" }
+  );
 });

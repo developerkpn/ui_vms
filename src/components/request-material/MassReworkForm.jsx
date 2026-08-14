@@ -19,6 +19,8 @@ import {
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { normalizeMassMaterialFieldValue } from "./massMaterialFormValidation.js";
+import RequesterCommentField from "../common/RequesterCommentField";
+import { validateRequesterComment } from "src/helper/requestComments.js";
 
 const FIELD_META = [
   { key: "plantCode", dbKey: "plant_code", label: "Plant", required: true },
@@ -64,6 +66,8 @@ export default function MassReworkForm({
 }) {
   const [drafts, setDrafts] = useState({});
   const [fieldErrors, setFieldErrors] = useState({});
+  const [comment, setComment] = useState("");
+  const [commentError, setCommentError] = useState("");
 
   const requiredFields = useMemo(
     () => FIELD_META.filter(m => m.required).map(m => m.key),
@@ -75,6 +79,8 @@ export default function MassReworkForm({
     if (!open) {
       setDrafts({});
       setFieldErrors({});
+      setComment("");
+      setCommentError("");
       return;
     }
     const initial = {};
@@ -87,6 +93,8 @@ export default function MassReworkForm({
     }
     setDrafts(initial);
     setFieldErrors({});
+    setComment("");
+    setCommentError("");
   }, [open, items]);
 
   const updateDraft = (itemNo, fieldKey, value) => {
@@ -125,6 +133,13 @@ export default function MassReworkForm({
     }
 
     setFieldErrors(errors);
+
+    const commentValidation = validateRequesterComment(comment, { isResubmit: true });
+    setCommentError(commentValidation.message);
+    if (commentValidation.error) {
+      hasError = true;
+    }
+
     return !hasError;
   };
 
@@ -144,7 +159,7 @@ export default function MassReworkForm({
       return { id: item.id, ...edits };
     });
 
-    onSubmit?.(payload);
+    onSubmit?.(payload, comment.trim());
   };
 
   const resolveValue = (item, fieldKey) => {
@@ -345,6 +360,20 @@ export default function MassReworkForm({
               </TableBody>
             </Table>
           </TableContainer>
+
+          <RequesterCommentField
+            value={comment}
+            onChange={next => {
+              setComment(next);
+              if (commentError) {
+                setCommentError("");
+              }
+            }}
+            required
+            error={Boolean(commentError)}
+            helperText={commentError || "Jelaskan apa yang diubah untuk menjawab rework ini."}
+            disabled={submitting}
+          />
         </Stack>
       </DialogContent>
 
