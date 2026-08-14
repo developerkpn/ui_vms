@@ -14,7 +14,10 @@ export const APPROVAL_STATUS_BADGES = {
 };
 
 export default function ApprovalStatusCard({ item }) {
-  const badge = APPROVAL_STATUS_BADGES[item.status] || APPROVAL_STATUS_BADGES["-"];
+  // displayStatus overrides the badge only, for a rewound request's sending
+  // and receiving steps (adminApprovalDetail.js) — item.status stays the real
+  // per-step value everywhere else on this card.
+  const badge = APPROVAL_STATUS_BADGES[item.displayStatus ?? item.status] || APPROVAL_STATUS_BADGES["-"];
   const isSkipped = item.status === "SKIPPED";
   // buildApprovalHistory runs remark through pickText, which turns a blank
   // remark into the literal string "-" rather than "" — so "-" must be
