@@ -68,6 +68,7 @@ import {
   getEffectiveApprovalStatusLabel,
   isMdmMaterialUser,
   normalizeApprovalRows,
+  normalizeApprovalStatusForFilter,
   normalizeMassApprovalRows,
   paginateApprovalRows,
   filterMassApprovalRows,
@@ -148,12 +149,13 @@ const EMAIL_REPLY_CAPTION_SX = {
 function SapAwareStatusBadgeContent({ row }) {
   const sapChip = getSapStatusChip(row?.sapPushStatus);
   if (!sapChip) {
-    // Only a request still moving through the approval flow ("Submit") has a
-    // next actor to name.
-    if (row?.assignmentCaption && getEffectiveApprovalStatusLabel(row) === "Submit") {
-      return <AssignmentCaption status={row.status} caption={row.assignmentCaption} />;
+    // Gated on the raw status, not the effective label: the label now reads
+    // "Rework" for a rewound request, but that request is still raw-Submit and
+    // still has a next actor to name — the caption must not go dark under it.
+    if (row?.assignmentCaption && normalizeApprovalStatusForFilter(row?.status) === "Submit") {
+      return <AssignmentCaption status={getEffectiveApprovalStatusLabel(row)} caption={row.assignmentCaption} />;
     }
-    return <StatusBadge value={row?.status} />;
+    return <StatusBadge value={getEffectiveApprovalStatusLabel(row)} />;
   }
 
   const chip = (

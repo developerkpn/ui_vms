@@ -2,7 +2,7 @@ import {
   buildApprovalFieldHistory,
   buildTemplatePayloadFieldKey,
 } from "./adminApprovalFieldHistory.js";
-import { formatDateTime } from "./adminApprovalView.js";
+import { formatDateTime, getRewindStepLevels } from "./adminApprovalView.js";
 
 const SPEC_FIELD_LABELS = {
   part_number: "Part Number",
@@ -55,7 +55,8 @@ export function buildApprovalDetail(row = {}) {
     requestFields.base_uom
   );
   const approvalSteps = resolveApprovalSteps(row);
-  const approvalHistory = buildApprovalHistory(approvalSteps);
+  const rewindStepLevels = getRewindStepLevels(row);
+  const approvalHistory = buildApprovalHistory(approvalSteps, rewindStepLevels);
   const currentStageLevel = firstNonEmpty(row.currentStageLevel, row.current_stage_level);
   const currentStageLabel = pickText(row.currentStageLabel, row.current_stage_label);
   const currentStageKind = normalizeStageKind(
@@ -265,16 +266,34 @@ function normalizeApprovalStep(step = {}, index = 0) {
   };
 }
 
-function buildApprovalHistory(approvalSteps = []) {
+// displayStatus is the badge the card renders; status stays the real value.
+// Kept apart deliberately: no step status value is written here or anywhere
+// else. In this system a step whose *stored* status is REWORK means that
+// stage sent the request back — the comment-history backfill reads it that
+// way — so folding the receiving step's badge into `status` would make this
+// purely-derived, render-only array claim the same thing about a stage that
+// never touched the request.
+function buildApprovalHistory(approvalSteps = [], rewindStepLevels = null) {
   return approvalSteps.map(step => ({
     level: step.level,
     label: pickText(step.label),
     kind: step.kind,
     approver: pickText(step.approverName),
     status: step.status,
+    displayStatus: isRewindStepLevel(rewindStepLevels, step.level) ? "REWORK" : step.status,
     approvedAt: formatDateTime(step.actedAt),
     remark: pickText(step.remark),
   }));
+}
+
+function isRewindStepLevel(rewindStepLevels, level) {
+  if (!rewindStepLevels) {
+    return false;
+  }
+  const numericLevel = Number(level);
+  return (
+    numericLevel === rewindStepLevels.senderLevel || numericLevel === rewindStepLevels.receiverLevel
+  );
 }
 
 function resolveCurrentStep(approvalSteps = [], currentStageLevel, currentStageKind) {
