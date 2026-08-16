@@ -1330,12 +1330,13 @@ const SingleMaterialForm = ({
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               Jelaskan konteks request ini bila perlu. Kolom ini opsional.
             </Typography>
+            {/* No error props: the comment is optional on a new submission, so
+                neither the client nor the server ever rejects one here. A
+                failure on this path is a submit failure and is shown below. */}
             <RequesterCommentField
               value={comment}
               onChange={handleCommentChange}
               autoFocus
-              error={Boolean(fieldErrors.comment?.error)}
-              helperText={fieldErrors.comment?.message || ""}
               disabled={submitting}
             />
             {submitError && (
