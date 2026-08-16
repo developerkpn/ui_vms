@@ -11,15 +11,18 @@
  * Copies a plain request body into a FormData, one key at a time.
  *
  * A string is appended as-is; anything else is JSON-stringified, because
- * FormData only carries strings and blobs. undefined is skipped rather than
- * appended.
+ * FormData only carries strings and blobs. null and undefined are SKIPPED
+ * rather than appended: FormData stringifies whatever it is handed, so
+ * appending null sends the four characters "null", which the server then reads
+ * as a real value — a remark of null would land in the comment thread as the
+ * word "null".
  *
  * @param {FormData} formPayload - the payload being built, mutated in place
  * @param {object} requestBody - the JSON body this action would otherwise send
  */
 function appendRequestBodyFields(formPayload, requestBody) {
   Object.entries(requestBody || {}).forEach(([key, value]) => {
-    if (value === undefined) {
+    if (value === undefined || value === null) {
       return;
     }
     formPayload.append(

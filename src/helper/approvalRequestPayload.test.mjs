@@ -20,12 +20,13 @@ test("buildRequestFormData sends a string field unchanged and JSON-encodes the r
   assert.equal(form.get("finalCodeSuffixes"), JSON.stringify({ 1: "001" }));
 });
 
-test("buildRequestFormData omits an undefined field", () => {
+test("buildRequestFormData omits null and undefined instead of sending the word null", () => {
   const form = buildRequestFormData(
-    { reworkToLevel: undefined, keep: "yes" },
+    { remark: null, reworkToLevel: undefined, keep: "yes" },
     { keepAttachmentIds: [], files: [] }
   );
 
+  assert.equal(form.has("remark"), false);
   assert.equal(form.has("reworkToLevel"), false);
   assert.equal(form.get("keep"), "yes");
 });
