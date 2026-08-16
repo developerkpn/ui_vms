@@ -182,10 +182,9 @@ export default function MassApprovalFormDialog({
   const [itemDrafts, setItemDrafts] = useState({});
   // Staged attachment changes, keyed by itemNo — { id, name, path, type,
   // existing }[] for kept/existing files, plain File objects for new ones.
-  // Attachments belong to the item, not the batch (see the spec's "Mass
-  // requests" decision), so each row carries its own list and its own
-  // MAX_ATTACHMENTS limit. Only sent to the server with Approve/Rework; see
-  // buildItemAttachmentChanges.
+  // An attachment row is stored against the item, not the batch, so each row
+  // carries its own list and its own MAX_ATTACHMENTS limit. Only sent to the
+  // server with Approve/Rework; see buildItemAttachmentChanges.
   const [itemAttachments, setItemAttachments] = useState({});
   const [itemAttachmentErrors, setItemAttachmentErrors] = useState({});
   const [activeAttachmentItemNo, setActiveAttachmentItemNo] = useState(null);
@@ -250,15 +249,17 @@ export default function MassApprovalFormDialog({
       setItemAttachmentErrors({});
       setActiveAttachmentItemNo(null);
     }
-  }, [open]);
+  }, [open, detail]);
 
   // Items arrive after the dialog opens (fetched separately) — (re)seed the
   // per-item attachment state once they land, or when a different batch's
-  // items replace them.
+  // items replace them. Keyed on `detail` rather than the raw `items` prop
+  // because that is what the body actually reads, and detail is memoised on
+  // both row and items.
   useEffect(() => {
     setItemAttachments(buildInitialItemAttachments(detail.items));
     setItemAttachmentErrors({});
-  }, [items]);
+  }, [detail]);
 
   // A different batch is a different claim: whatever the last grab returned says
   // nothing about this one.
@@ -566,12 +567,20 @@ export default function MassApprovalFormDialog({
     return changes;
   };
 
-  // Blocks the action when any item's resulting attachment set violates the
-  // shared min/max — the same rule the requester's mass form enforces per
-  // row, applied here to whatever the reviewer just staged.
+  // Blocks the action when an item the reviewer ACTUALLY TOUCHED ends up with
+  // an attachment set that violates the shared min/max — the same rule the
+  // requester's mass form enforces per row.
+  //
+  // Only touched items are checked. An item the reviewer left alone keeps
+  // whatever it arrived with, and re-validating it here would block approving
+  // a batch for a state the reviewer did not create and cannot fix from this
+  // dialog.
   const validateItemAttachments = () => {
     const errors = {};
     for (const item of detail.items) {
+      if (!itemHasAttachmentChanges(item)) {
+        continue;
+      }
       const staged = itemAttachments[item.itemNo] || [];
       const message = getAttachmentValidationError(staged);
       if (message) {
@@ -607,7 +616,6 @@ export default function MassApprovalFormDialog({
     return edited;
   };
 
-  // Action button handlers — open the remark dialog
   // Action button handlers — open the remark dialog
   const handleApproveClick = () => {
     if (!validateItemAttachments()) {
@@ -801,8 +809,8 @@ export default function MassApprovalFormDialog({
                 reworkRecipientEmail: reworkNewApprover?.email ?? "",
               }
             : {}),
-          // Rework carries attachment changes too — see the spec's "which
-          // actions carry attachment changes" decision.
+          // Rework carries attachment changes too: like Approve, it is a
+          // recorded action, so a change made here has a reason attached to it.
           itemAttachmentChanges: buildItemAttachmentChanges(),
         }
       );
@@ -1154,7 +1162,13 @@ export default function MassApprovalFormDialog({
                           <Stack spacing={0.5}>
                             {(itemAttachments[item.itemNo] || []).map((attachment, index) => (
                               <Stack
-                                key={attachment.id || `${attachment.name}-${index}`}
+                                // A staged file has no id yet, so it is keyed by
+                                // its own identity rather than its position —
+                                // removing a row shifts every index after it.
+                                key={
+                                  attachment.id ??
+                                  `new-${attachment.name}-${attachment.size}-${attachment.lastModified}`
+                                }
                                 direction="row"
                                 alignItems="center"
                                 spacing={0.5}
