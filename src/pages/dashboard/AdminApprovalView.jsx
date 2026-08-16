@@ -59,6 +59,10 @@ import {
 } from "src/helper/adminApprovalRework.js";
 import { mapApprovalServerErrors } from "src/helper/adminApprovalValidation.js";
 import {
+  buildRequestFormData,
+  buildMassRequestFormData,
+} from "src/helper/approvalRequestPayload.js";
+import {
   APPROVAL_STATUS_FILTER_OPTIONS,
   ASSIGNMENT_FILTER_ASSIGNED_TO_ME,
   ASSIGNMENT_FILTER_REQUEST_ALL,
@@ -400,63 +404,6 @@ function AssignedToCell({ row }) {
       {row.assignedTo}
     </Typography>
   );
-}
-
-// Multipart body for an approve/rework action that carries a staged
-// attachment change. Every non-attachment field of `requestBody` travels
-// exactly as it would in the plain JSON call — a string as-is, anything else
-// JSON-stringified — plus the keep/remove/add attachment set, matching the
-// contract the requester's own resubmit path already uses.
-function buildRequestFormData(requestBody, { keepAttachmentIds, files }) {
-  const formPayload = new FormData();
-
-  Object.entries(requestBody || {}).forEach(([key, value]) => {
-    if (value === undefined) {
-      return;
-    }
-    formPayload.append(key, typeof value === "string" ? value : JSON.stringify(value));
-  });
-
-  formPayload.append("attachments", JSON.stringify({ keepAttachmentIds }));
-  (files || []).forEach(file => {
-    formPayload.append("files", file);
-  });
-
-  return formPayload;
-}
-
-// Multipart body for a mass approve/rework action that carries staged
-// attachment changes for one or more items. Mirrors buildRequestFormData,
-// but attachments are per item on a mass request (see the spec's "Mass
-// requests" decision) rather than one keep/add set for the whole action —
-// each item's kept ids travel together in `itemAttachments`, and each new
-// file is paired with the item id it belongs to via `fileItemId`, the same
-// way the requester's mass form pairs files with rows via fileRowIndex.
-function buildMassRequestFormData(requestBody, itemAttachmentChanges) {
-  const formPayload = new FormData();
-
-  Object.entries(requestBody || {}).forEach(([key, value]) => {
-    if (value === undefined) {
-      return;
-    }
-    formPayload.append(key, typeof value === "string" ? value : JSON.stringify(value));
-  });
-
-  formPayload.append(
-    "itemAttachments",
-    JSON.stringify(
-      itemAttachmentChanges.map(({ id, keepAttachmentIds }) => ({ id, keepAttachmentIds }))
-    )
-  );
-
-  itemAttachmentChanges.forEach(({ id, files }) => {
-    (files || []).forEach(file => {
-      formPayload.append("files", file);
-      formPayload.append("fileItemId", String(id));
-    });
-  });
-
-  return formPayload;
 }
 
 export default function AdminApprovalView() {
