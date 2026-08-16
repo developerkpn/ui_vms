@@ -42,6 +42,10 @@ export const REQUEST_COMMENT_EVENT_LABELS = {
   APPROVE: "Approve",
   REWORK: "Rework",
   REJECT: "Reject",
+  // A rework sent "Via email" is correspondence: a message went out and the
+  // request stayed where it was. Labelled separately from Rework so the thread
+  // never claims a request moved when it did not.
+  CORRESPONDENCE: "Correspondence",
 };
 
 /**
