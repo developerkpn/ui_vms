@@ -1496,9 +1496,10 @@ export default function AdminApprovalFormDialog({
                   <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
                     <Button
                       variant="outlined"
+                      color="primary"
                       onClick={handleAttachmentBrowseClick}
                       disabled={submitting || pendingAttachments.length >= MAX_ATTACHMENTS}
-                      sx={{ textTransform: "none", borderColor: "#1976d2", color: "#1976d2", px: 3 }}
+                      sx={{ textTransform: "none", px: 3 }}
                     >
                       Browsing File
                     </Button>
@@ -2029,10 +2030,11 @@ export default function AdminApprovalFormDialog({
                 : {};
 
               // Reject ends the request, so pending attachment changes are
-              // dropped rather than sent — see the spec's "which actions
-              // carry attachment changes" decision. Scoped change/extend
-              // requests never show the attachment editor, so their payload
-              // stays exactly as it was before this feature.
+              // dropped rather than sent: editing a request on its way out
+              // leaves an audit line nobody who could still act on it will
+              // read. Scoped change/extend requests never show the attachment
+              // editor, so their payload stays exactly as it was before this
+              // feature.
               const attachmentChanges =
                 currentAction !== "Reject" && !isScopedChangeExtendRequest
                   ? {
