@@ -5,6 +5,17 @@ const MAX_ATTACHMENTS = 3;
 const MAX_ATTACHMENT_SIZE_MB = 5;
 const MAX_ATTACHMENT_SIZE_BYTES = MAX_ATTACHMENT_SIZE_MB * 1024 * 1024;
 
+// The two caption lines every attachment surface shows above its Browse
+// control. Kept verbatim from the requester's single form — the one surface
+// that already showed both — and single-sourced here so the requester's mass
+// form and both approver forms show the same sentences rather than their own
+// near-miss variants.
+const ATTACHMENT_SUPPORTED_FORMATS_TEXT = `supported formats: ${ALLOWED_ATTACHMENT_EXTENSIONS.map(
+  ext => ext.toUpperCase()
+).join(", ")}`;
+
+const ATTACHMENT_SIZE_LIMIT_TEXT = `file size limit: ${MAX_ATTACHMENT_SIZE_MB}MB`;
+
 const getAttachmentExtension = fileName => {
   const normalizedName = String(fileName || "")
     .trim()
@@ -36,7 +47,7 @@ const normalizeAttachmentSelection = (selectedFiles = [], existingFiles = []) =>
   if (hasInvalidFile) {
     return {
       files: currentFiles,
-      error: "Format file tidak didukung. Gunakan PDF, DOC, DOCX, PNG, JPG, atau JPEG.",
+      error: `Unsupported file format. Use ${ALLOWED_ATTACHMENT_EXTENSIONS.map(ext => ext.toUpperCase()).join(", ")}.`,
     };
   }
 
@@ -46,14 +57,14 @@ const normalizeAttachmentSelection = (selectedFiles = [], existingFiles = []) =>
   if (hasOversizedFile) {
     return {
       files: currentFiles,
-      error: `Ukuran file maksimal ${MAX_ATTACHMENT_SIZE_MB}MB.`,
+      error: `File is too large. Maximum size is ${MAX_ATTACHMENT_SIZE_MB}MB.`,
     };
   }
 
   if (currentFiles.length >= MAX_ATTACHMENTS) {
     return {
       files: currentFiles.slice(0, MAX_ATTACHMENTS),
-      error: `Maksimal ${MAX_ATTACHMENTS} attachment.`,
+      error: `You can attach at most ${MAX_ATTACHMENTS} files.`,
     };
   }
 
@@ -63,7 +74,10 @@ const normalizeAttachmentSelection = (selectedFiles = [], existingFiles = []) =>
 
   return {
     files,
-    error: incomingFiles.length > availableSlots ? `Maksimal ${MAX_ATTACHMENTS} attachment.` : "",
+    error:
+      incomingFiles.length > availableSlots
+        ? `You can attach at most ${MAX_ATTACHMENTS} files.`
+        : "",
   };
 };
 
@@ -71,11 +85,11 @@ const getAttachmentValidationError = files => {
   const totalFiles = Array.isArray(files) ? files.length : 0;
 
   if (totalFiles < MIN_ATTACHMENTS) {
-    return `Minimal ${MIN_ATTACHMENTS} attachment.`;
+    return `Attach at least ${MIN_ATTACHMENTS} file.`;
   }
 
   if (totalFiles > MAX_ATTACHMENTS) {
-    return `Maksimal ${MAX_ATTACHMENTS} attachment.`;
+    return `You can attach at most ${MAX_ATTACHMENTS} files.`;
   }
 
   return "";
@@ -83,6 +97,8 @@ const getAttachmentValidationError = files => {
 
 export {
   ALLOWED_ATTACHMENT_EXTENSIONS,
+  ATTACHMENT_SIZE_LIMIT_TEXT,
+  ATTACHMENT_SUPPORTED_FORMATS_TEXT,
   MIN_ATTACHMENTS,
   MAX_ATTACHMENTS,
   MAX_ATTACHMENT_SIZE_MB,

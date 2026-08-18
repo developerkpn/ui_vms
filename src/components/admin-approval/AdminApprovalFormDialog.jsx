@@ -87,6 +87,8 @@ import ReworkDestinationField from "./ReworkDestinationField";
 import ReworkEmailThreadSection from "./ReworkEmailThreadSection";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 import {
+  ATTACHMENT_SIZE_LIMIT_TEXT,
+  ATTACHMENT_SUPPORTED_FORMATS_TEXT,
   getAttachmentValidationError,
   MAX_ATTACHMENTS,
   normalizeAttachmentSelection,
@@ -1487,9 +1489,16 @@ export default function AdminApprovalFormDialog({
                 <Typography
                   variant="caption"
                   color="text.secondary"
+                  sx={{ display: "block" }}
+                >
+                  {ATTACHMENT_SUPPORTED_FORMATS_TEXT}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
                   sx={{ display: "block", mb: 2 }}
                 >
-                  Supported formats: PDF, DOC, DOCX, PNG, JPG, JPEG
+                  {ATTACHMENT_SIZE_LIMIT_TEXT}
                 </Typography>
 
                 {canActNow && (

@@ -13,7 +13,7 @@
 export const MASS_FINAL_CODE_SUFFIX_LENGTH = 3;
 
 export const MASS_FINAL_CODE_SUFFIX_HELPER_TEXT =
-  "Masukkan running number untuk setiap item satu per satu (3 karakter huruf/angka, unik per material group & sub group).";
+  "Enter a running number for each item one by one (3 letters/digits, unique per material group & sub group).";
 
 const SUFFIX_PATTERN = /^[A-Z0-9]{3}$/;
 
@@ -68,14 +68,14 @@ export function validateMassFinalCodeSuffixes({ finalCodeSuffixes = {}, items = 
     const suffix = String(finalCodeSuffixes?.[itemId] ?? "").trim().toUpperCase();
 
     if (!isValidMassFinalCodeSuffix(suffix)) {
-      errors[itemId] = `Running number harus ${MASS_FINAL_CODE_SUFFIX_LENGTH} karakter huruf/angka.`;
+      errors[itemId] = `Running number must be ${MASS_FINAL_CODE_SUFFIX_LENGTH} letters/digits.`;
       continue;
     }
 
     const identity = buildMassFinalCodeIdentity(item?.materialGroup, item?.materialSubGroup, suffix);
 
     if (itemNoByIdentity.has(identity)) {
-      errors[itemId] = `Running number ${suffix} sudah dipakai item ${itemNoByIdentity.get(identity)}.`;
+      errors[itemId] = `Running number ${suffix} is already used by item ${itemNoByIdentity.get(identity)}.`;
     } else {
       itemNoByIdentity.set(identity, item?.itemNo ?? itemId);
     }
@@ -117,4 +117,70 @@ export function splitMassGroupLabel(value) {
     code: raw.slice(0, separatorIndex).trim(),
     name: raw.slice(separatorIndex + 3).trim(),
   };
+}
+
+/**
+ * Display parts for one group / sub group cell in the running-number table.
+ *
+ * Mass items carry whatever the Excel import put in the column, which for a
+ * group is normally the bare code ("901") — unlike the single form, whose
+ * select stores the composed "CODE - NAME". So the split alone cannot produce
+ * the name caption the design asks for, and a lookup fills it in when the
+ * value did not carry one. The lookup is a fallback, never an override: a
+ * value that already spells out its own name keeps that name, so a renamed
+ * master record can never silently relabel a request that was filed under the
+ * old wording.
+ *
+ * @param {string} value - The stored group / sub group value.
+ * @param {Map<string, string>|Record<string, string>} [nameByCode] - code -> name.
+ * @returns {{code: string, name: string}} name is empty when neither source has one.
+ */
+export function resolveMassGroupLabel(value, nameByCode) {
+  const { code, name } = splitMassGroupLabel(value);
+
+  if (name || !code) {
+    return { code, name };
+  }
+
+  return { code, name: lookupName(nameByCode, code) };
+}
+
+// Accepts a Map or a plain object so a caller can build whichever is handier.
+// Codes are matched case-insensitively and trimmed, the same way
+// buildMassFinalCodeIdentity normalizes them.
+function lookupName(nameByCode, code) {
+  if (!nameByCode) {
+    return "";
+  }
+
+  const key = code.trim().toUpperCase();
+  const raw =
+    nameByCode instanceof Map
+      ? nameByCode.get(key)
+      : nameByCode[key];
+
+  return String(raw ?? "").trim();
+}
+
+/**
+ * code -> name map for resolveMassGroupLabel, from any list of records that
+ * carry a code and a name (the groups dropdown and a form schema's subgroups
+ * both do). Keys are uppercased so lookup is case-insensitive.
+ *
+ * @param {{code?: string, name?: string}[]} records
+ * @returns {Map<string, string>}
+ */
+export function buildMassGroupNameMap(records) {
+  const map = new Map();
+
+  for (const record of Array.isArray(records) ? records : []) {
+    const code = String(record?.code ?? "").trim().toUpperCase();
+    const name = String(record?.name ?? "").trim();
+
+    if (code && name && !map.has(code)) {
+      map.set(code, name);
+    }
+  }
+
+  return map;
 }

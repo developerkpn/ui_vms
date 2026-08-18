@@ -17,11 +17,11 @@ export const REQUEST_COMMENTS_TITLE = "Comments";
 
 /** Shown when the request has no comment rows at all. */
 export const REQUEST_COMMENTS_EMPTY_TEXT =
-  "Belum ada komentar untuk request ini.";
+  "No comments on this request yet.";
 
 /** Shown in place of the thread when the endpoint fails. */
 export const REQUEST_COMMENTS_ERROR_TEXT =
-  "Gagal memuat komentar request. Silakan coba lagi.";
+  "Failed to load this request's comments. Please try again.";
 
 /**
  * Stands in for the comment text on an event that carries none. Half the events
@@ -147,7 +147,7 @@ export function buildRequestCommentTitle(comment = {}) {
  * Message shown under the comment field when a resubmit is missing one.
  */
 export const REQUESTER_COMMENT_REQUIRED_MESSAGE =
-  "Komentar wajib diisi saat resubmit setelah rework.";
+  "Comment is required when resubmitting after rework.";
 
 /**
  * Whether the requester's comment is required, per the rule that only a

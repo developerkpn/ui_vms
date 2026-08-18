@@ -8,6 +8,7 @@ import {
   WarningAmber,
 } from "@mui/icons-material";
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -29,6 +30,8 @@ import {
 } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ATTACHMENT_SIZE_LIMIT_TEXT,
+  ATTACHMENT_SUPPORTED_FORMATS_TEXT,
   getAttachmentValidationError,
   MAX_ATTACHMENTS,
   normalizeAttachmentSelection,
@@ -36,9 +39,11 @@ import {
 import TableLoadingRows from "src/components/common/TableLoadingRows";
 import { buildMassApprovalDetail } from "src/helper/massApprovalDetail.js";
 import {
+  buildMassGroupNameMap,
   joinMassItemDescription,
   MASS_FINAL_CODE_SUFFIX_HELPER_TEXT,
   MASS_FINAL_CODE_SUFFIX_LENGTH,
+  resolveMassGroupLabel,
   sanitizeMassFinalCodeSuffix,
   splitMassGroupLabel,
   validateMassFinalCodeSuffixes,
@@ -97,6 +102,17 @@ const EDITABLE_FIELD_META = [
   { key: "spesifikasiTambahan", label: "Spesifikasi Tambahan", dbKey: "spesifikasi_tambahan", required: true },
 ];
 const REQUIRED_FIELD_KEYS = EDITABLE_FIELD_META.filter(m => m.required).map(m => m.key);
+
+// Columns of the Final Code (running number) table, in order. Kept as data so
+// the header row is one centred cell definition rather than five hand-aligned
+// copies that drift apart.
+const FINAL_CODE_COLUMNS = [
+  { label: "#", width: 56 },
+  { label: "Description & PO Text" },
+  { label: "Material Group", width: 180 },
+  { label: "Sub Material Group", width: 180 },
+  { label: "Running Number", width: 150 },
+];
 
 // Per-item SAP staging status, same chips the single request shows in the
 // approval list — plus the SAP write-back message on hover when it errored.
@@ -212,6 +228,11 @@ export default function MassApprovalFormDialog({
   // Server-side rejection of the composed plan (duplicate code, unresolved
   // group, …) — not tied to one item's box, shown as a banner instead.
   const [finalCodeGeneralError, setFinalCodeGeneralError] = useState("");
+  // Group / sub group names for the running-number table's captions, keyed by
+  // code. Mass items store the bare code, so the names have to be looked up —
+  // see resolveMassGroupLabel. Empty maps simply mean no caption yet.
+  const [groupNameMap, setGroupNameMap] = useState(() => new Map());
+  const [subGroupNameMap, setSubGroupNameMap] = useState(() => new Map());
   // Holds the freshly-claimed approval steps returned by the claim-mdm endpoint
   // so the dialog reflects the grab without waiting for a parent refresh.
   const [claimedSteps, setClaimedSteps] = useState(null);
@@ -240,6 +261,8 @@ export default function MassApprovalFormDialog({
       setFinalCodeSuffixes({});
       setFinalCodeSuffixErrors({});
       setFinalCodeGeneralError("");
+      setGroupNameMap(new Map());
+      setSubGroupNameMap(new Map());
       setClaimedSteps(null);
       setGrabbing(false);
       setGrabError("");
@@ -448,6 +471,80 @@ export default function MassApprovalFormDialog({
     },
     [itemDrafts]
   );
+
+  // Distinct material group codes in this batch, as a sorted string. The codes
+  // are read through resolveField so a group edited in the items table above is
+  // the one looked up, but the *key* only changes when a group actually
+  // changes — an unrelated draft edit must not refire the requests below.
+  const finalCodeGroupCodesKey = useMemo(() => {
+    const codes = new Set();
+
+    for (const item of detail.items) {
+      const { code } = splitMassGroupLabel(resolveField(item, "materialGroup"));
+      if (code) {
+        codes.add(code.toUpperCase());
+      }
+    }
+
+    return [...codes].sort().join(",");
+  }, [detail.items, resolveField]);
+
+  // Group / sub group names for the running-number captions, fetched only once
+  // the Final Code dialog is actually opened — every approver stage renders this
+  // component, but only Master Data ever reaches that step.
+  //
+  // Cost: one dropdown request plus one form-schema request per DISTINCT group
+  // in the batch. A batch normally spans one or two groups, so this stays a
+  // couple of requests no matter how many items it carries.
+  useEffect(() => {
+    if (!finalCodeDialogOpen) {
+      return undefined;
+    }
+
+    let active = true;
+    const groupCodes = finalCodeGroupCodesKey ? finalCodeGroupCodesKey.split(",") : [];
+
+    const loadGroupNames = async () => {
+      const [groupsResult, ...schemaResults] = await Promise.allSettled([
+        axiosPrivate.get("/material/groups/dropdown"),
+        ...groupCodes.map(code =>
+          axiosPrivate.get(`/material/groups/${encodeURIComponent(code)}/form-schema`)
+        ),
+      ]);
+
+      if (!active) {
+        return;
+      }
+
+      // A caption is decoration: when a lookup fails the cell still shows its
+      // code, so a failed request must never block running-number entry. Logged
+      // rather than surfaced for the same reason.
+      if (groupsResult.status === "fulfilled") {
+        const groups = groupsResult.value?.data?.data;
+        setGroupNameMap(buildMassGroupNameMap(groups));
+      } else {
+        console.error("Failed to load material group names:", groupsResult.reason);
+      }
+
+      const subgroups = schemaResults.flatMap(result => {
+        if (result.status !== "fulfilled") {
+          console.error("Failed to load sub group names:", result.reason);
+          return [];
+        }
+        const payload = result.value?.data?.data?.subgroups;
+        return Array.isArray(payload) ? payload : [];
+      });
+
+      setSubGroupNameMap(buildMassGroupNameMap(subgroups));
+    };
+
+    loadGroupNames();
+
+    return () => {
+      active = false;
+    };
+    // finalCodeGroupCodesKey stands in for the codes themselves — see its memo.
+  }, [finalCodeDialogOpen, finalCodeGroupCodesKey, axiosPrivate]);
 
   const updateDraft = (itemNo, fieldKey, value) => {
     if (!canAct) {
@@ -1041,11 +1138,27 @@ export default function MassApprovalFormDialog({
                         fontWeight: 700,
                         border: "1px solid #e0e0e0",
                         py: 1.5,
-                        whiteSpace: "nowrap",
                         minWidth: 220,
                       }}
                     >
                       Attachments
+                      {/* Limits sit under the column header rather than beside each
+                          row's Add button: every row carries the same rule, and
+                          repeating it per item would fill the column with copy. */}
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: "block", fontWeight: 400 }}
+                      >
+                        {ATTACHMENT_SUPPORTED_FORMATS_TEXT}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: "block", fontWeight: 400 }}
+                      >
+                        {ATTACHMENT_SIZE_LIMIT_TEXT}
+                      </Typography>
                     </TableCell>
                     {hasSapColumns && (
                       <TableCell
@@ -1349,57 +1462,59 @@ export default function MassApprovalFormDialog({
       <Dialog
         open={finalCodeDialogOpen}
         onClose={handleFinalCodeDialogClose}
-        maxWidth="sm"
+        // Five columns, two of which now carry a name caption under the code.
+        // "sm" wrapped them into an unreadable stack.
+        maxWidth="md"
         fullWidth
+        PaperProps={{ sx: { borderRadius: 2 } }}
       >
-        <Box sx={{ p: 2, display: "flex", alignItems: "center", gap: 1 }}>
-          <WarningAmber sx={{ color: "#f59e0b" }} />
-          <Typography variant="h6" sx={{ fontWeight: 900, color: "#1e3a5f" }}>
+        <Stack alignItems="center" spacing={1} sx={{ pt: 3, px: 3 }}>
+          <WarningAmber sx={{ color: "warning.main", fontSize: 40 }} />
+          <Typography variant="h6" sx={{ fontWeight: 900 }}>
             Final Code Required
           </Typography>
-        </Box>
-        <DialogContent sx={{ pt: 0 }}>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            align="center"
+            sx={{ maxWidth: 560 }}
+          >
             {MASS_FINAL_CODE_SUFFIX_HELPER_TEXT}
           </Typography>
+        </Stack>
+
+        <DialogContent sx={{ pt: 3 }}>
           {finalCodeGeneralError && (
-            <Typography
-              variant="body2"
-              color="error"
-              sx={{ mb: 2, fontWeight: 700 }}
-            >
+            <Alert severity="error" sx={{ mb: 2, borderRadius: 1 }}>
               {finalCodeGeneralError}
-            </Typography>
+            </Alert>
           )}
           <TableContainer
             component={Paper}
             variant="outlined"
-            sx={{ borderRadius: 2, maxHeight: 360 }}
+            sx={{ borderRadius: 2, maxHeight: 420 }}
           >
-            <Table size="small" sx={{ borderCollapse: "collapse" }}>
+            {/* stickyHeader so the column names stay put while Master Data
+                works down a long batch one running number at a time. */}
+            <Table size="small" stickyHeader>
               <TableHead>
-                <TableRow sx={{ bgcolor: "#f5f7f9" }}>
-                  <TableCell
-                    align="center"
-                    sx={{ fontWeight: 700, border: "1px solid", borderColor: "divider", width: 40 }}
-                  >
-                    #
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, border: "1px solid", borderColor: "divider" }}>
-                    Description
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, border: "1px solid", borderColor: "divider" }}>
-                    Material Group
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, border: "1px solid", borderColor: "divider" }}>
-                    Sub Material Group
-                  </TableCell>
-                  <TableCell
-                    align="center"
-                    sx={{ fontWeight: 700, border: "1px solid", borderColor: "divider", width: 160 }}
-                  >
-                    Running Number
-                  </TableCell>
+                <TableRow>
+                  {FINAL_CODE_COLUMNS.map(column => (
+                    <TableCell
+                      key={column.label}
+                      align="center"
+                      sx={{
+                        fontWeight: 700,
+                        bgcolor: "background.neutral",
+                        borderBottom: "1px solid",
+                        borderColor: "divider",
+                        width: column.width,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {column.label}
+                    </TableCell>
+                  ))}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -1408,11 +1523,13 @@ export default function MassApprovalFormDialog({
                   // table uses, so a group/description edited elsewhere in
                   // this dialog shows up here immediately rather than the
                   // stale original value.
-                  const materialGroup = splitMassGroupLabel(
-                    resolveField(item, "materialGroup")
+                  const materialGroup = resolveMassGroupLabel(
+                    resolveField(item, "materialGroup"),
+                    groupNameMap
                   );
-                  const materialSubGroup = splitMassGroupLabel(
-                    resolveField(item, "materialSubGroup")
+                  const materialSubGroup = resolveMassGroupLabel(
+                    resolveField(item, "materialSubGroup"),
+                    subGroupNameMap
                   );
                   const description = joinMassItemDescription(
                     resolveField(item, "materialDescription"),
@@ -1420,19 +1537,20 @@ export default function MassApprovalFormDialog({
                   );
 
                   return (
-                    <TableRow key={item.itemNo}>
-                      <TableCell
-                        align="center"
-                        sx={{ border: "1px solid", borderColor: "divider", fontWeight: 600 }}
-                      >
+                    <TableRow
+                      key={item.itemNo}
+                      sx={{
+                        "&:nth-of-type(odd)": { bgcolor: "action.hover" },
+                        "& > td": { borderBottom: "none" },
+                      }}
+                    >
+                      <TableCell align="center" sx={{ fontWeight: 700 }}>
                         {item.itemNo}
                       </TableCell>
-                      <TableCell
-                        sx={{ border: "1px solid", borderColor: "divider", color: "text.secondary" }}
-                      >
-                        {description}
+                      <TableCell align="center" sx={{ color: "text.secondary" }}>
+                        {description || "-"}
                       </TableCell>
-                      <TableCell sx={{ border: "1px solid", borderColor: "divider" }}>
+                      <TableCell align="center">
                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
                           {materialGroup.code || "-"}
                         </Typography>
@@ -1442,7 +1560,7 @@ export default function MassApprovalFormDialog({
                           </Typography>
                         )}
                       </TableCell>
-                      <TableCell sx={{ border: "1px solid", borderColor: "divider" }}>
+                      <TableCell align="center">
                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
                           {materialSubGroup.code || "-"}
                         </Typography>
@@ -1452,10 +1570,9 @@ export default function MassApprovalFormDialog({
                           </Typography>
                         )}
                       </TableCell>
-                      <TableCell sx={{ border: "1px solid", borderColor: "divider", p: 0.5 }}>
+                      <TableCell align="center" sx={{ p: 1 }}>
                         <TextField
                           size="small"
-                          fullWidth
                           value={finalCodeSuffixes[String(item.id)] || ""}
                           placeholder="A01"
                           disabled={submitting}
@@ -1464,8 +1581,14 @@ export default function MassApprovalFormDialog({
                           inputProps={{
                             maxLength: MASS_FINAL_CODE_SUFFIX_LENGTH,
                             "aria-label": `Running Number item ${item.itemNo}`,
-                            style: { textAlign: "center", fontWeight: 700 },
+                            style: {
+                              textAlign: "center",
+                              fontWeight: 700,
+                              letterSpacing: "0.15em",
+                            },
                           }}
+                          sx={{ width: 110, bgcolor: "background.paper" }}
+                          FormHelperTextProps={{ sx: { textAlign: "center", mx: 0 } }}
                           onChange={event =>
                             handleFinalCodeSuffixChange(
                               String(item.id),
@@ -1481,12 +1604,13 @@ export default function MassApprovalFormDialog({
             </Table>
           </TableContainer>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+        <DialogActions sx={{ px: 3, pb: 3, pt: 0, gap: 1, justifyContent: "center" }}>
           <Button
-            variant="contained"
+            variant="outlined"
+            color="inherit"
             onClick={handleFinalCodeDialogClose}
             disabled={submitting}
-            sx={{ bgcolor: "#757575", textTransform: "none", fontWeight: 800 }}
+            sx={{ textTransform: "none", fontWeight: 800, minWidth: 120 }}
           >
             Back
           </Button>
@@ -1494,7 +1618,7 @@ export default function MassApprovalFormDialog({
             variant="contained"
             onClick={handleFinalCodeNext}
             disabled={submitting}
-            sx={{ textTransform: "none", fontWeight: 800 }}
+            sx={{ textTransform: "none", fontWeight: 800, minWidth: 120 }}
           >
             Next
           </Button>

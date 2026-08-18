@@ -50,6 +50,8 @@ import {
 } from "./massMaterialExcel.js";
 import {
   ALLOWED_ATTACHMENT_EXTENSIONS,
+  ATTACHMENT_SIZE_LIMIT_TEXT,
+  ATTACHMENT_SUPPORTED_FORMATS_TEXT,
   normalizeAttachmentSelection,
 } from "./attachmentValidation.js";
 
@@ -688,6 +690,20 @@ const MassMaterialForm = ({ onBack }) => {
                     sx={{ color: "error.main", ml: 0.25 }}
                   >
                     *
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: "block", fontWeight: 400 }}
+                  >
+                    {ATTACHMENT_SUPPORTED_FORMATS_TEXT}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: "block", fontWeight: 400 }}
+                  >
+                    {ATTACHMENT_SIZE_LIMIT_TEXT}
                   </Typography>
                 </TableCell>
               </TableRow>

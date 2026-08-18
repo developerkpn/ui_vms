@@ -28,8 +28,9 @@ import { validateRequesterComment } from "../../helper/requestComments.js";
 import { getValidationHint } from "./specFieldValidation.js";
 import { formatIdrInput, parseIdrInput } from "../../helper/idrFormat.js";
 import {
+  ATTACHMENT_SIZE_LIMIT_TEXT,
+  ATTACHMENT_SUPPORTED_FORMATS_TEXT,
   MAX_ATTACHMENTS,
-  MAX_ATTACHMENT_SIZE_MB,
   getAttachmentExtension,
   getAttachmentValidationError,
   normalizeAttachmentSelection,
@@ -1098,11 +1099,11 @@ const SingleMaterialForm = ({
             </Typography>
             {!isViewMode && (
               <>
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
-                  supported formats: PDF, DOC, DOCX, PNG, JPG, JPEG
+                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                  {ATTACHMENT_SUPPORTED_FORMATS_TEXT}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 2 }}>
-                  file size limit: {MAX_ATTACHMENT_SIZE_MB}MB
+                  {ATTACHMENT_SIZE_LIMIT_TEXT}
                 </Typography>
 
                 <Box sx={{ display: "flex", gap: 2, mb: 4 }}>
