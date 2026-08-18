@@ -42,6 +42,10 @@ export const REQUEST_COMMENT_EVENT_LABELS = {
   APPROVE: "Approve",
   REWORK: "Rework",
   REJECT: "Reject",
+  // A rework sent "Via email" is correspondence: a message went out and the
+  // request stayed where it was. Labelled separately from Rework so the thread
+  // never claims a request moved when it did not.
+  CORRESPONDENCE: "Correspondence",
 };
 
 /**
@@ -137,6 +141,46 @@ export function buildRequestCommentEventLabel(comment = {}) {
  */
 export function buildRequestCommentTitle(comment = {}) {
   return comment.stage || comment.actorName || "-";
+}
+
+/**
+ * Message shown under the comment field when a resubmit is missing one.
+ */
+export const REQUESTER_COMMENT_REQUIRED_MESSAGE =
+  "Komentar wajib diisi saat resubmit setelah rework.";
+
+/**
+ * Whether the requester's comment is required, per the rule that only a
+ * resubmit-after-rework demands an answer — a new submission never does.
+ *
+ * @param {boolean} [isResubmit] - True for any of the three resubmit surfaces
+ *   (mass, Change/Extend, single Create); false for a brand-new submission.
+ * @returns {"required"|"optional"}
+ */
+export function resolveRequesterCommentRequirement(isResubmit) {
+  return isResubmit ? "required" : "optional";
+}
+
+/**
+ * Validates a requester's comment draft against that requirement. Whitespace
+ * is not content: a resubmit comment of only spaces fails the same as an
+ * empty one, so the requirement cannot be defeated by a space.
+ *
+ * @param {string} [value] - The comment as typed so far.
+ * @param {object} [options]
+ * @param {boolean} [options.isResubmit] - See resolveRequesterCommentRequirement.
+ * @returns {{error: boolean, message: string}}
+ */
+export function validateRequesterComment(value, { isResubmit } = {}) {
+  if (resolveRequesterCommentRequirement(isResubmit) !== "required") {
+    return { error: false, message: "" };
+  }
+
+  if (asText(value) === "") {
+    return { error: true, message: REQUESTER_COMMENT_REQUIRED_MESSAGE };
+  }
+
+  return { error: false, message: "" };
 }
 
 // Peel the axios response / {success, data} envelope off a payload. Written as

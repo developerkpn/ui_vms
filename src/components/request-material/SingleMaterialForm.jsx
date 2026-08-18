@@ -22,7 +22,9 @@ import { Delete, InfoOutlined } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import SearchableSelect from "../common/SearchableSelect";
 import SectionLoadingSkeleton from "../common/SectionLoadingSkeleton";
+import RequesterCommentField from "../common/RequesterCommentField";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
+import { validateRequesterComment } from "../../helper/requestComments.js";
 import { getValidationHint } from "./specFieldValidation.js";
 import { formatIdrInput, parseIdrInput } from "../../helper/idrFormat.js";
 import {
@@ -403,6 +405,12 @@ const SingleMaterialForm = ({
   const [attachments, setAttachments] = useState([]);
   const [attachmentError, setAttachmentError] = useState("");
 
+  // Requester's comment: optional on a new submission (collected via a dialog
+  // on Save, mirroring the mass request reason dialog), required on a resubmit
+  // (collected inline, since this rework surface is a full page, not a dialog).
+  const [comment, setComment] = useState("");
+  const [commentDialogOpen, setCommentDialogOpen] = useState(false);
+
   useEffect(() => {
     if (prefetchedGroups.length > 0) {
       setMaterialGroups(prefetchedGroups);
@@ -471,6 +479,7 @@ const SingleMaterialForm = ({
           Array.isArray(row?.attachments) ? row.attachments.map(normalizeExistingAttachment) : []
         );
         setFieldErrors({});
+        setComment("");
       } catch (error) {
         console.error("Failed to load existing single request", error);
         if (active) {
@@ -610,6 +619,16 @@ const SingleMaterialForm = ({
     }));
   };
 
+  const handleCommentChange = value => {
+    setComment(value);
+    setFieldErrors(prev => {
+      if (!prev.comment?.error) {
+        return prev;
+      }
+      return { ...prev, comment: validateRequesterComment(value, { isResubmit: true }) };
+    });
+  };
+
   const formatAttachmentSize = size => `${(size / 1024 / 1024).toFixed(2)}MB`;
 
   const handleBrowseClick = () => {
@@ -652,32 +671,10 @@ const SingleMaterialForm = ({
     [formData, formState.materialGroup, formState.requestFieldValues, formState.templateFieldValues]
   );
 
-  const handleSave = async () => {
-    const validationMessage = getAttachmentValidationError(attachments);
-    setAttachmentError(validationMessage);
-    setSubmitError("");
-
-    if (validationMessage) {
-      return;
-    }
-
-    const nextFieldErrors = validateRequesterDraft({ formState });
-    if (isReworkMode) {
-      if (!formState.requestFieldValues.plant) {
-        nextFieldErrors.plant = { error: true, message: "Plant wajib diisi" };
-      }
-      if (!formState.requestFieldValues.storage_location) {
-        nextFieldErrors.storage_location = {
-          error: true,
-          message: "Storage Location wajib diisi",
-        };
-      }
-    }
-    if (Object.values(nextFieldErrors).some(error => error?.error)) {
-      setFieldErrors(nextFieldErrors);
-      return;
-    }
-
+  // Does the actual write. Called directly for a rework save (the comment is
+  // already validated inline, no dialog to confirm first) and from the
+  // Submit Comment dialog's own button for a new submission.
+  const performSubmit = async () => {
     try {
       setSubmitting(true);
       const payload = buildRequestPayload();
@@ -693,6 +690,7 @@ const SingleMaterialForm = ({
       formPayload.append("requestFields", JSON.stringify(payload.requestFields));
       formPayload.append("templateValues", JSON.stringify(payload.templateValues));
       formPayload.append("attachments", JSON.stringify({ keepAttachmentIds }));
+      formPayload.append("comment", comment.trim());
 
       newAttachments.forEach(file => {
         formPayload.append("files", file);
@@ -712,6 +710,7 @@ const SingleMaterialForm = ({
         });
       }
 
+      setCommentDialogOpen(false);
       setSaveSuccessOpen(true);
     } catch (error) {
       const mappedFieldErrors = mapRequesterServerErrors(error?.response?.data?.errors);
@@ -728,6 +727,45 @@ const SingleMaterialForm = ({
       setSubmitError(Object.keys(mappedFieldErrors).length > 0 ? "" : message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSave = () => {
+    const validationMessage = getAttachmentValidationError(attachments);
+    setAttachmentError(validationMessage);
+    setSubmitError("");
+
+    if (validationMessage) {
+      return;
+    }
+
+    const nextFieldErrors = validateRequesterDraft({ formState });
+    if (isReworkMode) {
+      if (!formState.requestFieldValues.plant) {
+        nextFieldErrors.plant = { error: true, message: "Plant wajib diisi" };
+      }
+      if (!formState.requestFieldValues.storage_location) {
+        nextFieldErrors.storage_location = {
+          error: true,
+          message: "Storage Location wajib diisi",
+        };
+      }
+      const commentValidation = validateRequesterComment(comment, { isResubmit: true });
+      if (commentValidation.error) {
+        nextFieldErrors.comment = commentValidation;
+      }
+    }
+    if (Object.values(nextFieldErrors).some(error => error?.error)) {
+      setFieldErrors(nextFieldErrors);
+      return;
+    }
+
+    if (isReworkMode) {
+      performSubmit();
+    } else {
+      // New submission: the comment is optional, so there is nothing left to
+      // validate — the dialog just collects it before the same write fires.
+      setCommentDialogOpen(true);
     }
   };
 
@@ -1200,6 +1238,23 @@ const SingleMaterialForm = ({
               ))}
             </Stack>
           </Grid>
+
+          {isReworkMode && (
+            <Grid item xs={12}>
+              <Divider sx={{ mb: 4 }} />
+              <RequesterCommentField
+                value={comment}
+                onChange={handleCommentChange}
+                required
+                error={Boolean(fieldErrors.comment?.error)}
+                helperText={
+                  fieldErrors.comment?.message ||
+                  "Jelaskan apa yang diubah untuk menjawab rework ini."
+                }
+                disabled={submitting}
+              />
+            </Grid>
+          )}
         </Grid>
       </CardContent>
 
@@ -1257,6 +1312,49 @@ const SingleMaterialForm = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {!isExistingRequestMode && (
+        <Dialog
+          open={commentDialogOpen}
+          onClose={(_, reason) => {
+            if (reason === "backdropClick" || reason === "escapeKeyDown") {
+              return;
+            }
+            setCommentDialogOpen(false);
+          }}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>Submit Comment</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Jelaskan konteks request ini bila perlu. Kolom ini opsional.
+            </Typography>
+            {/* No error props: the comment is optional on a new submission, so
+                neither the client nor the server ever rejects one here. A
+                failure on this path is a submit failure and is shown below. */}
+            <RequesterCommentField
+              value={comment}
+              onChange={handleCommentChange}
+              autoFocus
+              disabled={submitting}
+            />
+            {submitError && (
+              <Typography variant="caption" color="error" sx={{ display: "block", mt: 2 }}>
+                {submitError}
+              </Typography>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setCommentDialogOpen(false)} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button variant="contained" onClick={performSubmit} disabled={submitting}>
+              {submitting ? "Saving..." : "Submit"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
     </Card>
   );
 };

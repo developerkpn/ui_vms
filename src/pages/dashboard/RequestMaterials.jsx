@@ -29,7 +29,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
-import { resolveRequestCommentKind } from "src/helper/requestComments.js";
+import { resolveRequestCommentKind, validateRequesterComment } from "src/helper/requestComments.js";
 import { buildEmailReplyCaption } from "src/helper/reworkEmailThread.js";
 import { getSapStatusChip, getStagedMaterialCode, isSapError, pickSapFields } from "src/helper/sapStatus.js";
 import {
@@ -58,6 +58,7 @@ import TableLoadingRows, { TableEmptyRow } from "src/components/common/TableLoad
 import SectionLoadingSkeleton from "src/components/common/SectionLoadingSkeleton";
 import ApprovalStatusCard from "src/components/common/ApprovalStatusCard";
 import RequestCommentsDialog from "src/components/common/RequestCommentsDialog";
+import RequesterCommentField from "src/components/common/RequesterCommentField";
 
 // Stable reference: SingleMaterialForm's load-existing-request effect depends
 // on prefetchedGroups, so a fresh [] literal on every render (the component's
@@ -455,6 +456,8 @@ function ChangeExtendReworkForm({
   // Starts true: the fetch is kicked off on the very first render, so the field
   // is never briefly "loaded with nothing in it".
   const [uomLoading, setUomLoading] = useState(true);
+  const [comment, setComment] = useState("");
+  const [commentError, setCommentError] = useState("");
   const axiosPrivate = useAxiosPrivate();
 
   useEffect(() => {
@@ -478,6 +481,8 @@ function ChangeExtendReworkForm({
       plantCode: row?.plantCode || "",
       storageLocation: row?.slocCode || "",
     });
+    setComment("");
+    setCommentError("");
   }, [row]);
 
   const plantOptions = useMemo(() => buildPlantOptions(locations), [locations]);
@@ -490,6 +495,12 @@ function ChangeExtendReworkForm({
   const originalReason = row?.changeExtendReason || row?.reworkReason || "";
 
   const submit = () => {
+    const commentValidation = validateRequesterComment(comment, { isResubmit: true });
+    if (commentValidation.error) {
+      setCommentError(commentValidation.message);
+      return;
+    }
+
     onSubmit({
       editedRequest: isExtend
         ? {
@@ -502,6 +513,7 @@ function ChangeExtendReworkForm({
             base_uom: draft.baseUom,
             change_extend_reason: originalReason,
           },
+      comment: comment.trim(),
     });
   };
 
@@ -582,6 +594,19 @@ function ChangeExtendReworkForm({
           />
         </>
       )}
+      <RequesterCommentField
+        value={comment}
+        onChange={next => {
+          setComment(next);
+          if (commentError) {
+            setCommentError("");
+          }
+        }}
+        required
+        error={Boolean(commentError)}
+        helperText={commentError || "Jelaskan apa yang diubah untuk menjawab rework ini."}
+        disabled={submitting}
+      />
       <Stack direction="row" spacing={1}>
         <Button variant="contained" onClick={submit} disabled={submitting || optionsLoading}>
           {submitting ? "Saving..." : "Submit"}
@@ -1009,14 +1034,14 @@ export default function RequestMaterials() {
     }
   };
 
-  const handleMassReworkSubmit = async payload => {
+  const handleMassReworkSubmit = async (payload, comment) => {
     if (!selectedRequest?.id) return;
 
     try {
       setMassReworkSubmitting(true);
       await axiosPrivate.put(
         `/material/requests/mass/${selectedRequest.id}/rework`,
-        { items: payload }
+        { items: payload, comment }
       );
       setReviseMassOpen(false);
       setMassReworkItems([]);

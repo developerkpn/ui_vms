@@ -22,8 +22,11 @@ const {
   buildRequestCommentTitle,
   normalizeRequestComments,
   resolveRequestCommentKind,
+  resolveRequesterCommentRequirement,
+  validateRequesterComment,
   REQUEST_COMMENT_KIND_MASS,
   REQUEST_COMMENT_KIND_SINGLE,
+  REQUESTER_COMMENT_REQUIRED_MESSAGE,
 } = helper;
 
 test("resolveRequestCommentKind picks the table the id belongs to", () => {
@@ -135,4 +138,107 @@ test("buildRequestCommentTitle files an entry under its stage, or its actor", ()
     "Siti Rahayu"
   );
   assert.equal(buildRequestCommentTitle({}), "-");
+});
+
+test("resolveRequesterCommentRequirement is required only on a resubmit", () => {
+  assert.equal(resolveRequesterCommentRequirement(true), "required");
+  assert.equal(resolveRequesterCommentRequirement(false), "optional");
+  assert.equal(resolveRequesterCommentRequirement(), "optional");
+});
+
+test("validateRequesterComment never rejects a new submission, comment or not", () => {
+  assert.deepEqual(validateRequesterComment(undefined, { isResubmit: false }), {
+    error: false,
+    message: "",
+  });
+  assert.deepEqual(validateRequesterComment("   ", { isResubmit: false }), {
+    error: false,
+    message: "",
+  });
+  assert.deepEqual(validateRequesterComment("Butuh stok tambahan", { isResubmit: false }), {
+    error: false,
+    message: "",
+  });
+});
+
+test("validateRequesterComment rejects empty and whitespace-only on a resubmit", () => {
+  assert.equal(validateRequesterComment(undefined, { isResubmit: true }).error, true);
+  assert.equal(validateRequesterComment("", { isResubmit: true }).error, true);
+  assert.equal(
+    validateRequesterComment("   ", { isResubmit: true }).message,
+    REQUESTER_COMMENT_REQUIRED_MESSAGE
+  );
+});
+
+test("validateRequesterComment accepts real text on a resubmit", () => {
+  assert.deepEqual(
+    validateRequesterComment("  Sudah saya perbaiki UoM-nya  ", { isResubmit: true }),
+    { error: false, message: "" }
+  );
+});
+
+// ---------------------------------------------------------------------------
+// The thread as one conversation. Both tickets write into this history — the
+// requester's submit/resubmit comments and the reviewer's attachment-removal
+// audit line — so what matters is that a mixed thread keeps its order and
+// labels every row either ticket can produce.
+// ---------------------------------------------------------------------------
+
+test("a mixed requester/approver thread keeps the order it arrived in and labels every row", () => {
+  const thread = normalizeRequestComments([
+    { id: 1, event_type: "SUBMIT", actor_name: "Rio", comment: "Butuh untuk maintenance" },
+    { id: 2, event_type: "APPROVE", stage: "Approval 1", comment: "Oke" },
+    { id: 3, event_type: "REWORK", stage: "Approval 2", comment: "UoM salah" },
+    { id: 4, event_type: "RESUBMIT", actor_name: "Rio", comment: "Sudah saya perbaiki" },
+    {
+      id: 5,
+      event_type: "APPROVE",
+      stage: "Master Data",
+      comment: "Oke\nRemoved attachment: draft.pdf",
+    },
+  ]);
+
+  assert.deepEqual(
+    thread.map(buildRequestCommentEventLabel),
+    ["Submit", "Approve", "Rework", "Resubmit", "Approve"]
+  );
+
+  // Submit and resubmit carry no stage by design, so they file under the
+  // requester's own name; every approver row files under its stage.
+  assert.deepEqual(
+    thread.map(buildRequestCommentTitle),
+    ["Rio", "Approval 1", "Approval 2", "Rio", "Master Data"]
+  );
+
+  // Oldest first, exactly as the endpoint returned them.
+  assert.deepEqual(thread.map(entry => entry.id), ["1", "2", "3", "4", "5"]);
+});
+
+test("a thread with no requester comments still builds, for requests predating this change", () => {
+  const thread = normalizeRequestComments([
+    { id: 1, event_type: "SUBMIT", actor_name: "Rio", comment: null },
+    { id: 2, event_type: "APPROVE", stage: "Approval 1", comment: null },
+  ]);
+
+  assert.deepEqual(thread.map(buildRequestCommentEventLabel), ["Submit", "Approve"]);
+  assert.deepEqual(thread.map(entry => entry.comment), [null, null]);
+});
+
+test("an attachment removal made on the email-only channel is labelled as correspondence, not rework", () => {
+  const [entry] = normalizeRequestComments([
+    {
+      id: 9,
+      event_type: "CORRESPONDENCE",
+      stage: "Master Data",
+      comment: "Removed attachment: wrong-drawing.pdf",
+    },
+  ]);
+
+  assert.equal(buildRequestCommentEventLabel(entry), "Correspondence");
+  assert.equal(buildRequestCommentTitle(entry), "Master Data");
+});
+
+test("an event type the client does not know is shown as it arrived rather than dropped", () => {
+  const [entry] = normalizeRequestComments([{ id: 1, event_type: "SOMETHING_NEW" }]);
+  assert.equal(buildRequestCommentEventLabel(entry), "SOMETHING_NEW");
 });
