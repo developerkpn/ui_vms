@@ -378,7 +378,7 @@ export default function SearchMaterials() {
   const [error, setError] = useState(null);
   const [pagination, setPagination] = useState({
     page: 1,
-    pageSize: 5,
+    pageSize: 10,
     totalCount: 0,
     totalPages: 0,
   });
@@ -432,7 +432,7 @@ export default function SearchMaterials() {
 
   const fetchMaterials = useCallback(
     async (pageNumber = 1) => {
-      if (searchMode !== "selected") {
+      if (searchMode === "idle") {
         setMaterials([]);
         setPagination(prev => ({
           ...prev,
@@ -458,25 +458,40 @@ export default function SearchMaterials() {
         });
 
         const data = response.data.data || [];
-        const normalizedQuery = (searchQuery || "").toLowerCase().trim();
-        const exactMatches = data.filter(item => {
-          const code = (item.code || "").toLowerCase();
-          const name = (item.name || "").toLowerCase();
-          return code === normalizedQuery || name === normalizedQuery;
-        });
-        const singleRow = exactMatches.length > 0 ? [exactMatches[0]] : data.slice(0, 1);
+        let rows = data;
 
-        setMaterials(singleRow);
-        setPagination(prev => ({
-          ...prev,
-          totalCount: singleRow.length,
-          totalPages: singleRow.length ? 1 : 0,
-          page: 1,
-        }));
+        if (searchMode === "selected") {
+          // A picked suggestion already identifies one material, so the table
+          // collapses to that single row instead of the whole result set.
+          const normalizedQuery = (searchQuery || "").toLowerCase().trim();
+          const exactMatches = data.filter(item => {
+            const code = (item.code || "").toLowerCase();
+            const name = (item.name || "").toLowerCase();
+            return code === normalizedQuery || name === normalizedQuery;
+          });
+          rows = exactMatches.length > 0 ? [exactMatches[0]] : data.slice(0, 1);
+
+          setPagination(prev => ({
+            ...prev,
+            totalCount: rows.length,
+            totalPages: rows.length ? 1 : 0,
+            page: 1,
+          }));
+        } else {
+          const meta = response.data.pagination || {};
+          setPagination(prev => ({
+            ...prev,
+            totalCount: meta.totalCount ?? rows.length,
+            totalPages: meta.totalPages ?? (rows.length ? 1 : 0),
+            page: meta.page ?? pageNumber,
+          }));
+        }
+
+        setMaterials(rows);
 
         // Fetch attachments for found materials (non-blocking)
-        if (singleRow.length > 0) {
-          const codes = singleRow.map(m => m.code).filter(Boolean);
+        if (rows.length > 0) {
+          const codes = rows.map(m => m.code).filter(Boolean);
           if (codes.length > 0) {
             axiosPrivate.post("/material/by-codes", { codes })
               .then(attRes => {
@@ -515,23 +530,23 @@ export default function SearchMaterials() {
   const handleSearchChange = payload => {
     if (!payload) return;
 
-    if (payload.type === "select" || payload.type === "enter-top" || payload.type === "icon-top") {
+    if (payload.type === "select") {
       setSearchMode("selected");
       setSearchQuery(payload.keyword || "");
       setPagination(prev => ({ ...prev, page: 1 }));
       return;
     }
 
-    if (payload.type === "not-found") {
-      setSearchMode("no-match");
-      setSearchQuery("");
-      resetTableState();
+    if (payload.type === "enter" || payload.type === "icon") {
+      setSearchMode("query");
+      setSearchQuery(payload.query || "");
+      setPagination(prev => ({ ...prev, page: 1 }));
       return;
     }
   };
 
   const handleSearchInputChange = value => {
-    if (searchMode === "selected" || searchMode === "no-match") {
+    if (searchMode !== "idle") {
       setSearchMode("idle");
       setSearchQuery("");
       resetTableState();
@@ -937,9 +952,9 @@ export default function SearchMaterials() {
     }
   }, [materialActionDialog.open, materialActionDialog.mode, plantOptions, initialLocations]);
 
-  const isSearchActive = searchMode === "selected" || searchMode === "no-match";
+  const isSearchActive = searchMode === "selected" || searchMode === "query";
   const emptyMessage = !isSearchActive
-    ? "Silakan pilih material dari suggestion untuk menampilkan data"
+    ? "Silakan pilih material dari suggestion, atau tekan Enter untuk mencari"
     : "Maaf, data material tidak ditemukan. Coba gunakan kata kunci atau filter lain.";
 
   return (

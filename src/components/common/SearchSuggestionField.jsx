@@ -12,6 +12,16 @@ import { useState, useCallback, useMemo } from "react";
 import { debounce } from "lodash";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 
+/**
+ * Search input with a suggestion dropdown. Reports two different intents through `onSearch`:
+ * `{ type: "select", option, keyword }` when a suggestion is picked, and
+ * `{ type: "enter" | "icon", query }` when the raw text is submitted as a free-text search.
+ *
+ * @param {(payload: object) => void} [onSearch] - Called with the intent payload described above.
+ * @param {(value: string) => void} [onInputValueChange] - Called on every keystroke with the raw input.
+ * @param {string} [placeholder] - Placeholder text for the input.
+ * @param {string} [apiEndpoint] - Endpoint the suggestion dropdown reads from.
+ */
 export default function SearchSuggestionField({
   onSearch,
   onInputValueChange,
@@ -22,6 +32,7 @@ export default function SearchSuggestionField({
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState([]);
   const [selectedOption, setSelectedOption] = useState(null);
+  const [highlightedOption, setHighlightedOption] = useState(null);
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
   const axiosPrivate = useAxiosPrivate();
@@ -67,16 +78,16 @@ export default function SearchSuggestionField({
     [getOptionLabel, onSearch]
   );
 
-  const commitTopSuggestion = useCallback(
-    (type = "enter-top") => {
-      if (!options.length) {
-        onSearch?.({ type: "not-found", query: inputValue });
-        return false;
-      }
-
-      return commitSelectedOption(options[0], type);
+  const submitQuery = useCallback(
+    (type = "enter") => {
+      const query = inputValue.trim();
+      if (!query) return false;
+      setSelectedOption(null);
+      setOpen(false);
+      onSearch?.({ type, query });
+      return true;
     },
-    [commitSelectedOption, onSearch, options, inputValue]
+    [inputValue, onSearch]
   );
 
   const highlightMatch = (text, query) => {
@@ -112,6 +123,10 @@ export default function SearchSuggestionField({
       open={open}
       onOpen={() => setOpen(true)}
       onClose={() => setOpen(false)}
+      onHighlightChange={(event, option) => setHighlightedOption(option)}
+      // Autocomplete wipes the input on blur whenever no option is selected, which would
+      // empty the box right after a free-text search. Keep whatever was searched for.
+      clearOnBlur={false}
       value={selectedOption}
       inputValue={inputValue}
       isOptionEqualToValue={(option, value) => option.code === value.code}
@@ -263,10 +278,12 @@ export default function SearchSuggestionField({
           {...params}
           placeholder={placeholder}
           onKeyDown={e => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              commitTopSuggestion("enter-top");
-            }
+            if (e.key !== "Enter") return;
+            // An option the user arrowed onto stays MUI's to commit; a bare Enter
+            // submits whatever was typed as a free-text search instead.
+            if (open && highlightedOption) return;
+            e.preventDefault();
+            submitQuery("enter");
           }}
           sx={{
             width: "100%",
@@ -280,7 +297,7 @@ export default function SearchSuggestionField({
             ...params.InputProps,
             endAdornment: (
               <InputAdornment position="end">
-                <IconButton onClick={() => commitTopSuggestion("icon-top")} size="small" edge="end">
+                <IconButton onClick={() => submitQuery("icon")} size="small" edge="end">
                   <Search />
                 </IconButton>
                 {params.InputProps.endAdornment}
