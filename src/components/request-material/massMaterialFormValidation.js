@@ -43,6 +43,17 @@ const createFieldError = (message = "") => ({ error: true, message });
 
 const isNonEmptyString = value => toTrimmedString(value) !== "";
 
+// Uppercase rule for a mass row's material fields (IBE-022). The single
+// definition every entry route calls: direct typing, Excel import, rework
+// re-edit, and the approval dialog's edit. Never applied to the mass request
+// reason (IBE-031) — that field is prose, not a material field.
+export function normalizeMassMaterialFieldValue(value) {
+  if (value === undefined || value === null) {
+    return "";
+  }
+  return String(value).toUpperCase();
+}
+
 // Returns true iff any of the row's 8 text fields has a non-blank value (after trim).
 export function isMassRowFilled(row) {
   if (!row || typeof row !== "object") {

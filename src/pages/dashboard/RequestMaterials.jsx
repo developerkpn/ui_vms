@@ -39,7 +39,7 @@ import {
   computeMassAssignmentCaption,
   formatDateTime,
   formatOptionalDateTime,
-  getEffectiveApprovalStatusLabel,
+  normalizeApprovalStatusForFilter,
   normalizeApprovalSteps,
 } from "src/helper/adminApprovalView.js";
 import {
@@ -138,9 +138,12 @@ const EMAIL_REPLY_CAPTION_SX = {
 function SapAwareStatusContent({ row }) {
   const sapChip = getSapStatusChip(row?.sapPushStatus);
   if (!sapChip) {
-    // Only a request still moving through the approval flow ("Submit") has a
-    // next actor to name.
-    if (row?.assignmentCaption && getEffectiveApprovalStatusLabel(row) === "Submit") {
+    // Gated on the raw status, not the effective label: a rewound request's
+    // pill on this page deliberately stays "Submit" (it is not the
+    // requester's to act on), but the label would read "Rework" — so the gate
+    // reads the raw status directly rather than the label that now diverges
+    // from it.
+    if (row?.assignmentCaption && normalizeApprovalStatusForFilter(row?.status) === "Submit") {
       return <AssignmentCaption status={row.status} caption={row.assignmentCaption} />;
     }
     return <StatusPill status={row?.status} />;

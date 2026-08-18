@@ -18,6 +18,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
+import { normalizeMassMaterialFieldValue } from "./massMaterialFormValidation.js";
 
 const FIELD_META = [
   { key: "plantCode", dbKey: "plant_code", label: "Plant", required: true },
@@ -91,7 +92,10 @@ export default function MassReworkForm({
   const updateDraft = (itemNo, fieldKey, value) => {
     setDrafts(prev => ({
       ...prev,
-      [itemNo]: { ...(prev[itemNo] ?? {}), [fieldKey]: value },
+      [itemNo]: {
+        ...(prev[itemNo] ?? {}),
+        [fieldKey]: normalizeMassMaterialFieldValue(value),
+      },
     }));
     // Clear error for this field on change
     setFieldErrors(prev => {

@@ -68,11 +68,14 @@ import {
   getEffectiveApprovalStatusLabel,
   isMdmMaterialUser,
   normalizeApprovalRows,
+  normalizeApprovalStatusForFilter,
   normalizeMassApprovalRows,
   paginateApprovalRows,
   filterMassApprovalRows,
   filterMassApprovalRowsByStatus,
   paginateMassApprovalRows,
+  resolveStoredStatusFilter,
+  STATUS_FILTER_PREFERENCE_KEY,
 } from "src/helper/adminApprovalView.js";
 import PageHeader from "src/components/common/PageHeader";
 import PageTablePaper, { PAGE_TABLE_HEADER_SX } from "src/components/common/PageTablePaper";
@@ -148,12 +151,13 @@ const EMAIL_REPLY_CAPTION_SX = {
 function SapAwareStatusBadgeContent({ row }) {
   const sapChip = getSapStatusChip(row?.sapPushStatus);
   if (!sapChip) {
-    // Only a request still moving through the approval flow ("Submit") has a
-    // next actor to name.
-    if (row?.assignmentCaption && getEffectiveApprovalStatusLabel(row) === "Submit") {
-      return <AssignmentCaption status={row.status} caption={row.assignmentCaption} />;
+    // Gated on the raw status, not the effective label: the label now reads
+    // "Rework" for a rewound request, but that request is still raw-Submit and
+    // still has a next actor to name — the caption must not go dark under it.
+    if (row?.assignmentCaption && normalizeApprovalStatusForFilter(row?.status) === "Submit") {
+      return <AssignmentCaption status={getEffectiveApprovalStatusLabel(row)} caption={row.assignmentCaption} />;
     }
-    return <StatusBadge value={row?.status} />;
+    return <StatusBadge value={getEffectiveApprovalStatusLabel(row)} />;
   }
 
   const chip = (
@@ -406,7 +410,9 @@ export default function AdminApprovalView() {
   const [approvalRows, setApprovalRows] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
-  const [statusFilter, setStatusFilter] = useState("Submit");
+  // Corrected to the actor's stored preference (or left on All, the no-preference
+  // default) before the table's first paint — see the initial load effect below.
+  const [statusFilter, setStatusFilter] = useState("All");
   const [page, setPage] = useState(0);
   const [rowsPerPage] = useState(10);
   const [loading, setLoading] = useState(false);
@@ -440,6 +446,14 @@ export default function AdminApprovalView() {
   const [massApprovalItems, setMassApprovalItems] = useState([]);
   const [massApprovalItemsLoading, setMassApprovalItemsLoading] = useState(false);
 
+  // Raw status-filter preference from the server, kept for the isMdmUser
+  // correction effect below — undefined until the initial fetch settles,
+  // then either the stored value or null (no preference / fetch failed).
+  const storedStatusFilterRef = useRef(undefined);
+  // Set by handleStatusFilterChange, so a late isMdmUser correction below
+  // never overwrites a choice the actor already made themselves.
+  const hasUserChangedStatusFilterRef = useRef(false);
+
   // "Request All" scope: every request any Master Data user has ever grabbed, not just
   // this actor's own inbox. Fetched lazily on first selection and cached here, so
   // switching filters doesn't re-fetch. "idle" -> "loading" -> "loaded"; anything short
@@ -461,6 +475,25 @@ export default function AdminApprovalView() {
     const response = await axiosPrivate.get("/material/requests/single/approval-inbox");
     const rows = normalizeApprovalRows(response.data?.data);
     setApprovalRows(rows);
+  };
+
+  // Never throws: a stored preference is a convenience, not a requirement for
+  // the page to work, so anything that goes wrong reading it — no row yet, the
+  // table not existing, a network failure — resolves to the same All a first
+  // visit gets.
+  const fetchStatusFilterPreference = async () => {
+    try {
+      const response = await axiosPrivate.get(
+        `/material/preferences/${STATUS_FILTER_PREFERENCE_KEY}`
+      );
+      const rawValue = response.data?.data?.value ?? null;
+      storedStatusFilterRef.current = rawValue;
+      return resolveStoredStatusFilter(rawValue, isMdmUser);
+    } catch (error) {
+      console.error("Failed to fetch status filter preference:", error);
+      storedStatusFilterRef.current = null;
+      return "All";
+    }
   };
 
   const fetchMdmAllApprovalRows = async () => {
@@ -566,10 +599,15 @@ export default function AdminApprovalView() {
     const run = async () => {
       try {
         setLoading(true);
-        await Promise.all([
+        // Fetched alongside the data the page already loads, and applied
+        // before setLoading(false) lets the table render its first rows —
+        // never a default that gets corrected a beat later.
+        const [, , resolvedStatusFilter] = await Promise.all([
           fetchApprovalRows(),
           fetchMassApprovalRows(),
+          fetchStatusFilterPreference(),
         ]);
+        setStatusFilter(resolvedStatusFilter);
       } catch (error) {
         console.error("Failed to fetch approval data:", error);
         setApprovalRows([]);
@@ -626,6 +664,20 @@ export default function AdminApprovalView() {
 
     loadMdmAllRows();
   }, [isMdmUser, statusFilter, axiosPrivate]);
+
+  // isMdmUser is read from the session store, which the dashboard shell
+  // populates via its own async session call — it can still read false at
+  // the moment fetchStatusFilterPreference's Promise.all above resolves. If
+  // it flips true afterwards, re-resolve the same raw stored value against
+  // it so a Master Data-only preference isn't left stuck on the All it
+  // incorrectly fell back to. No-ops once the actor has picked a filter
+  // themselves, so this never overwrites a deliberate choice.
+  useEffect(() => {
+    if (hasUserChangedStatusFilterRef.current || storedStatusFilterRef.current === undefined) {
+      return;
+    }
+    setStatusFilter(resolveStoredStatusFilter(storedStatusFilterRef.current, isMdmUser));
+  }, [isMdmUser]);
 
   useEffect(() => {
     if (!approvalDialogRow) {
@@ -761,8 +813,21 @@ export default function AdminApprovalView() {
   );
 
   const handleStatusFilterChange = event => {
-    setStatusFilter(event.target.value);
+    const nextStatusFilter = event.target.value;
+    hasUserChangedStatusFilterRef.current = true;
+    setStatusFilter(nextStatusFilter);
     setPage(0);
+
+    // Fire-and-forget: the filter is already applied above, over rows already
+    // in hand, so a slow or failed save is never something the actor waits on
+    // or is blocked by.
+    axiosPrivate
+      .put(`/material/preferences/${STATUS_FILTER_PREFERENCE_KEY}`, {
+        value: nextStatusFilter,
+      })
+      .catch(error =>
+        console.error("Failed to save status filter preference:", error)
+      );
   };
 
   const handleChangePage = (event, newPage) => {

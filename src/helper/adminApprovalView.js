@@ -51,6 +51,28 @@ export function isAssignmentFilter(value) {
   return MDM_ASSIGNMENT_FILTER_OPTIONS.some(option => option.value === normalized);
 }
 
+// Namespaced to this page, matching mst_user_preference.pref_key, so a future
+// page's preference cannot collide with this one.
+export const STATUS_FILTER_PREFERENCE_KEY = "my_approval.status_filter";
+
+// A stored value is only ever applied after being checked against the options
+// actually offered to this user, falling back to All otherwise. Master Data
+// users see two extra options that other roles do not, so a value that was
+// valid when it was saved can stop being valid when access changes — that
+// reads the same as a user who has never saved anything.
+export function resolveStoredStatusFilter(storedValue, isMdmUser = false) {
+  const value = String(storedValue ?? "").trim();
+  if (!value) {
+    return "All";
+  }
+
+  const validOptions = isMdmUser
+    ? [...APPROVAL_STATUS_FILTER_OPTIONS, ...MDM_ASSIGNMENT_FILTER_OPTIONS]
+    : APPROVAL_STATUS_FILTER_OPTIONS;
+
+  return validOptions.some(option => option.value === value) ? value : "All";
+}
+
 /**
  * Every MDM step this row has ever had grabbed, whatever its status. Backs both
  * assignment filters.
@@ -98,6 +120,51 @@ export function matchesAssignmentFilter(row = {}, assignmentFilter, currentUserI
   );
 }
 
+// A request is rewound when it carries rework metadata *and* the Master Data
+// step — the only stage that can send a request backwards, per IBE-025 — sits
+// at a level higher than the request's currently active step. Comparing
+// against the active step, rather than reading the rework columns alone, is
+// what makes the predicate turn itself off the moment the receiving stage
+// re-approves: those columns record the most recent rework and are never
+// cleared, so a predicate reading them in isolation would stay true forever.
+//
+// Single source of truth for both the request-level label below and the
+// step-level rendering in adminApprovalDetail.js, so the two can never
+// disagree.
+//
+// @param {object} row - Normalized approval row.
+// @returns {{ senderLevel: number, receiverLevel: number } | null}
+function resolveRewind(row) {
+  const hasReworkTimestamp = Boolean(row?.reworkAt ?? row?.rework_at);
+  if (!hasReworkTimestamp) {
+    return null;
+  }
+
+  const steps = normalizeApprovalSteps(row);
+  const mdmStep = steps.find(step => step.kind === "MDM");
+  const activeStep = findActiveStep(steps);
+
+  if (!mdmStep || !activeStep) {
+    return null;
+  }
+
+  const senderLevel = Number(mdmStep.level);
+  const receiverLevel = Number(activeStep.level);
+
+  return senderLevel > receiverLevel ? { senderLevel, receiverLevel } : null;
+}
+
+export function isRewoundRequest(row) {
+  return resolveRewind(row) !== null;
+}
+
+// The two step levels a rewound request should render as "Rework": the
+// Master Data step that sent it back, and the step it landed back on. Neither
+// level is written anywhere — this is a display derivation only.
+export function getRewindStepLevels(row) {
+  return resolveRewind(row);
+}
+
 // The status shown to the user (and therefore what to filter on): once a request
 // is pushed, the SAP staging state — "Waiting SAP" / "Done" (created in SAP) /
 // "SAP Error" — replaces the bare approval "Done", matching the table chip. This
@@ -106,6 +173,9 @@ export function getEffectiveApprovalStatusLabel(row) {
   const sapChip = getSapStatusChip(row?.sapPushStatus);
   if (sapChip) {
     return sapChip.label;
+  }
+  if (isRewoundRequest(row)) {
+    return "Rework";
   }
   return normalizeApprovalStatusForFilter(row?.status);
 }
