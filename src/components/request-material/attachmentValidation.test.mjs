@@ -38,7 +38,7 @@ test("normalizeAttachmentSelection rejects unsupported formats", () => {
   const result = normalizeAttachmentSelection([makeFile("bad.exe", 100)], existing);
 
   assert.deepEqual(result.files, existing);
-  assert.match(result.error, /Format file tidak didukung/);
+  assert.match(result.error, /Unsupported file format/);
 });
 
 test("normalizeAttachmentSelection rejects files larger than 5MB", () => {
@@ -47,7 +47,7 @@ test("normalizeAttachmentSelection rejects files larger than 5MB", () => {
   const result = normalizeAttachmentSelection([oversized], existing);
 
   assert.deepEqual(result.files, existing);
-  assert.equal(result.error, "Ukuran file maksimal 5MB.");
+  assert.equal(result.error, "File is too large. Maximum size is 5MB.");
 });
 
 test("normalizeAttachmentSelection accepts files at the size limit", () => {
@@ -67,7 +67,7 @@ test("normalizeAttachmentSelection enforces the max attachment count", () => {
   const result = normalizeAttachmentSelection([makeFile("d.pdf", 100)], existing);
 
   assert.equal(result.files.length, MAX_ATTACHMENTS);
-  assert.match(result.error, /Maksimal 3 attachment/);
+  assert.match(result.error, /at most 3 files/);
 });
 
 test("normalizeAttachmentSelection accepts adding after a removal frees a slot", () => {
@@ -92,7 +92,7 @@ test("normalizeAttachmentSelection composes removals and additions into the expe
 });
 
 test("getAttachmentValidationError still enforces min and max counts on submit", () => {
-  assert.match(getAttachmentValidationError([]), /Minimal 1 attachment/);
+  assert.match(getAttachmentValidationError([]), /at least 1 file/);
   assert.match(
     getAttachmentValidationError([
       makeFile("a.pdf", 100),
@@ -100,7 +100,7 @@ test("getAttachmentValidationError still enforces min and max counts on submit",
       makeFile("c.pdf", 100),
       makeFile("d.pdf", 100),
     ]),
-    /Maksimal 3 attachment/
+    /at most 3 files/
   );
   assert.equal(
     getAttachmentValidationError([
