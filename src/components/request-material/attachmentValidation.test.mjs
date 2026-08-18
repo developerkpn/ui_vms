@@ -70,6 +70,27 @@ test("normalizeAttachmentSelection enforces the max attachment count", () => {
   assert.match(result.error, /Maksimal 3 attachment/);
 });
 
+test("normalizeAttachmentSelection accepts adding after a removal frees a slot", () => {
+  const atLimit = [makeFile("a.pdf", 100), makeFile("b.pdf", 100), makeFile("c.pdf", 100)];
+  const afterRemoval = atLimit.slice(1); // simulates removing "a.pdf"
+  const result = normalizeAttachmentSelection([makeFile("d.pdf", 100)], afterRemoval);
+
+  assert.equal(result.files.length, MAX_ATTACHMENTS);
+  assert.equal(result.error, "");
+});
+
+test("normalizeAttachmentSelection composes removals and additions into the expected resulting set", () => {
+  const existing = [makeFile("a.pdf", 100), makeFile("b.pdf", 100), makeFile("c.pdf", 100)];
+  const afterRemovingB = existing.filter(file => file.name !== "b.pdf");
+  const result = normalizeAttachmentSelection([makeFile("d.pdf", 100)], afterRemovingB);
+
+  assert.deepEqual(
+    result.files.map(file => file.name),
+    ["a.pdf", "c.pdf", "d.pdf"]
+  );
+  assert.equal(result.error, "");
+});
+
 test("getAttachmentValidationError still enforces min and max counts on submit", () => {
   assert.match(getAttachmentValidationError([]), /Minimal 1 attachment/);
   assert.match(

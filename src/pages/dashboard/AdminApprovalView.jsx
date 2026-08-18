@@ -59,6 +59,10 @@ import {
 } from "src/helper/adminApprovalRework.js";
 import { mapApprovalServerErrors } from "src/helper/adminApprovalValidation.js";
 import {
+  buildRequestFormData,
+  buildMassRequestFormData,
+} from "src/helper/approvalRequestPayload.js";
+import {
   APPROVAL_STATUS_FILTER_OPTIONS,
   ASSIGNMENT_FILTER_ASSIGNED_TO_ME,
   ASSIGNMENT_FILTER_REQUEST_ALL,
@@ -1028,7 +1032,36 @@ export default function AdminApprovalView() {
                   finalCodeSuffix: payload?.finalCodeSuffix ?? null,
                   editedRequest: payload?.editedRequest ?? {},
                 };
-      const response = await axiosPrivate.post(endpoint, requestBody);
+
+      // Reject never carries attachment changes (see the dialog); Approve and
+      // Rework only do when the reviewer actually staged one. Sending the
+      // exact same JSON body as before when nothing changed is the regression
+      // guard: an approval untouched by this feature must behave exactly as
+      // it did before it existed.
+      const keepAttachmentIds =
+        action !== "Reject" && Array.isArray(payload?.keepAttachmentIds)
+          ? payload.keepAttachmentIds
+          : null;
+      const newAttachmentFiles =
+        action !== "Reject" && Array.isArray(payload?.newAttachmentFiles)
+          ? payload.newAttachmentFiles
+          : [];
+      const originalAttachmentIds = (detail.attachments || [])
+        .map(attachment => attachment.id)
+        .filter(id => id !== null && id !== undefined);
+      const hasAttachmentChanges =
+        keepAttachmentIds !== null &&
+        (newAttachmentFiles.length > 0 ||
+          keepAttachmentIds.length !== originalAttachmentIds.length ||
+          !originalAttachmentIds.every(id => keepAttachmentIds.includes(id)));
+
+      const response = hasAttachmentChanges
+        ? await axiosPrivate.post(
+            endpoint,
+            buildRequestFormData(requestBody, { keepAttachmentIds, files: newAttachmentFiles }),
+            { headers: { "Content-Type": "multipart/form-data" } }
+          )
+        : await axiosPrivate.post(endpoint, requestBody);
 
       const nextStage = response.data?.data?.next_stage;
       const emailSendFailed = isReworkEmailSendFailed(response);
@@ -1133,7 +1166,22 @@ export default function AdminApprovalView() {
               })
             : { reason: reason ?? null };
 
-      const response = await axiosPrivate.post(endpoint, requestBody);
+      // Reject discards staged attachment changes (see the dialog); approve
+      // and rework carry whichever items actually changed. No changes at all
+      // means the exact same JSON body as before — the regression guard.
+      const itemAttachmentChanges =
+        action !== "reject" && Array.isArray(options?.itemAttachmentChanges)
+          ? options.itemAttachmentChanges
+          : [];
+      const hasAttachmentChanges = itemAttachmentChanges.length > 0;
+
+      const response = hasAttachmentChanges
+        ? await axiosPrivate.post(
+            endpoint,
+            buildMassRequestFormData(requestBody, itemAttachmentChanges),
+            { headers: { "Content-Type": "multipart/form-data" } }
+          )
+        : await axiosPrivate.post(endpoint, requestBody);
 
       const massEmailSendFailed = isReworkEmailSendFailed(response);
       setMassApprovalDialogRow(null);
