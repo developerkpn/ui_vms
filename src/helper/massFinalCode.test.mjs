@@ -72,14 +72,14 @@ test("a missing or malformed entry is flagged on that item only", () => {
       finalCodeSuffixes: { 11: "005", 13: "007" },
       items,
     }),
-    { 12: "Running number harus 3 karakter huruf/angka." }
+    { 12: "Running number must be 3 letters/digits." }
   );
   assert.deepEqual(
     validateMassFinalCodeSuffixes({
       finalCodeSuffixes: { 11: "005", 12: "1234", 13: "007" },
       items,
     }),
-    { 12: "Running number harus 3 karakter huruf/angka." }
+    { 12: "Running number must be 3 letters/digits." }
   );
 });
 
