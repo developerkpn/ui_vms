@@ -19,8 +19,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
-  Divider,
   Grid,
   IconButton,
   Paper,
@@ -32,6 +30,10 @@ import {
   Typography,
 } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import AttachmentPreviewDialog, {
+  buildAttachmentUrl,
+  isImageFile,
+} from "src/components/common/AttachmentPreviewDialog";
 import SectionLoadingSkeleton from "src/components/common/SectionLoadingSkeleton";
 import useSessionStore from "src/store/useSessionStore";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
@@ -414,17 +416,8 @@ function ApprovalHistoryItem({ item }) {
   );
 }
 
-const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp"];
-const isImageFile = fileName => {
-  if (!fileName || !fileName.includes(".")) return false;
-  const ext = fileName.split(".").pop().toLowerCase();
-  return IMAGE_EXTENSIONS.includes(ext);
-};
-
 function AttachmentItem({ attachment, index, onView, onRemove, removable = false }) {
-  const fileUrl = attachment.path
-    ? import.meta.env.VITE_URL_LOC + "/material/file/" + attachment.path
-    : "";
+  const fileUrl = buildAttachmentUrl(attachment);
   const isImage = isImageFile(attachment.name);
   const extension = attachment.name.includes(".")
     ? attachment.name.split(".").pop().toUpperCase()
@@ -611,7 +604,6 @@ export default function AdminApprovalFormDialog({
   const [finalCodeDialogOpen, setFinalCodeDialogOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
-  const [previewImageError, setPreviewImageError] = useState(false);
   const [currentAction, setCurrentAction] = useState("");
   const [remarkText, setRemarkText] = useState("");
   const [reworkTarget, setReworkTarget] = useState(REWORK_TO_REQUESTER);
@@ -640,7 +632,6 @@ export default function AdminApprovalFormDialog({
 
   const handleViewAttachment = file => {
     setPreviewFile(file);
-    setPreviewImageError(false);
     setPreviewOpen(true);
   };
 
@@ -1561,83 +1552,12 @@ export default function AdminApprovalFormDialog({
       </DialogContent>
 
 
-      <Dialog
+      {/* Attachment preview — the shared viewer. */}
+      <AttachmentPreviewDialog
         open={previewOpen}
+        file={previewFile}
         onClose={() => setPreviewOpen(false)}
-        maxWidth="lg"
-        fullWidth
-      >
-        <DialogTitle>
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <Typography variant="h6">{previewFile?.name || "File Preview"}</Typography>
-            <IconButton onClick={() => setPreviewOpen(false)}>
-              <Close />
-            </IconButton>
-          </Box>
-        </DialogTitle>
-        <Divider />
-        <DialogContent
-          sx={{
-            height: "70vh",
-            p: 0,
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          {previewFile &&
-            (previewFile.type?.includes("image") ? (
-              previewImageError ? (
-                <Box sx={{ textAlign: "center", p: 3 }}>
-                  <Typography variant="body1" gutterBottom color="error">
-                    Unable to load image preview.
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    The file may have been moved or deleted.
-                  </Typography>
-                  <Button variant="contained" href={previewFile.url} target="_blank" sx={{ mt: 1 }}>
-                    Open File
-                  </Button>
-                </Box>
-              ) : (
-                <img
-                  src={previewFile.url}
-                  alt={previewFile.name}
-                  onError={() => setPreviewImageError(true)}
-                  style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
-                />
-              )
-            ) : previewFile.type?.includes("pdf") ? (
-              <iframe
-                src={previewFile.url}
-                title={previewFile.name}
-                width="100%"
-                height="100%"
-                style={{ border: "none" }}
-              />
-            ) : (
-              <Box sx={{ textAlign: "center", p: 3 }}>
-                <Typography variant="body1" gutterBottom>
-                  This file type cannot be previewed directly.
-                </Typography>
-                <Button variant="contained" href={previewFile.url} target="_blank" sx={{ mt: 2 }}>
-                  Open File
-                </Button>
-              </Box>
-            ))}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPreviewOpen(false)}>Close</Button>
-          <Button
-            variant="contained"
-            href={previewFile?.url}
-            download={previewFile?.name}
-            disabled={!previewFile}
-          >
-            Download
-          </Button>
-        </DialogActions>
-      </Dialog>
+      />
       <DialogActions
         sx={{
           px: { xs: 2, md: 3 },
