@@ -178,7 +178,7 @@ function createApprovalDraft(detail = {}) {
 const approvalStatusColors = {
   APPROVED: { bgcolor: "#e8f5e9", color: "#1b5e20" },
   WAITING: { bgcolor: "#eef2f7", color: "#546e7a" },
-  REWORK: { bgcolor: "#fff7ed", color: "#c2410c" },
+  REWORK: { bgcolor: "#f3e5f5", color: "#6a1b9a" },
   REJECT: { bgcolor: "#fee2e2", color: "#b91c1c" },
   REJECTED: { bgcolor: "#fee2e2", color: "#b91c1c" },
   SKIPPED: { bgcolor: "#f3f4f6", color: "#9ca3af" },
@@ -1695,7 +1695,7 @@ export default function AdminApprovalFormDialog({
             startIcon={<Replay />}
             disabled={submitting || !canActNow}
             onClick={handleReworkClick}
-            sx={{ bgcolor: "#fb8c00", textTransform: "none", fontWeight: 800 }}
+            sx={{ bgcolor: "#9c27b0", textTransform: "none", fontWeight: 800 }}
           >
             Rework
           </Button>

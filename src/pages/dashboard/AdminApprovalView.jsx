@@ -90,7 +90,7 @@ import TableLoadingRows, { TableEmptyRow } from "src/components/common/TableLoad
 const statusStyleMap = {
   Submit: { bgcolor: "#2f62d6", color: "common.white" },
   Approved: { bgcolor: "#2f62d6", color: "common.white" },
-  Rework: { bgcolor: "#f59e0b", color: "common.white" },
+  Rework: { bgcolor: "#9c27b0", color: "common.white" },
   Reject: { bgcolor: "#dc2626", color: "common.white" },
   Cancel: { bgcolor: "#dc2626", color: "common.white" },
   Waiting: { bgcolor: "#8f96a3", color: "common.white" },

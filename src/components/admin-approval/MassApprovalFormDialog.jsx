@@ -1441,7 +1441,7 @@ export default function MassApprovalFormDialog({
               startIcon={<Replay />}
               onClick={handleReworkClick}
               disabled={!canAct || submitting}
-              sx={{ bgcolor: "#fb8c00", textTransform: "none", fontWeight: 800 }}
+              sx={{ bgcolor: "#9c27b0", textTransform: "none", fontWeight: 800 }}
             >
               Rework All
             </Button>

@@ -74,7 +74,7 @@ function StatusPill({ status }) {
     SUBMIT: { bgcolor: "#2f62d6", color: "#ffffff" },
     APPROVE: { bgcolor: "#2f62d6", color: "#ffffff" },
     APPROVED: { bgcolor: "#2f62d6", color: "#ffffff" },
-    REWORK: { bgcolor: "#f59e0b", color: "#ffffff" },
+    REWORK: { bgcolor: "#9c27b0", color: "#ffffff" },
     REJECT: { bgcolor: "#dc2626", color: "#ffffff" },
     REJECTED: { bgcolor: "#dc2626", color: "#ffffff" },
     CANCEL: { bgcolor: "#dc2626", color: "#ffffff" },
