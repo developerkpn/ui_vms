@@ -36,6 +36,9 @@ import {
   MAX_ATTACHMENTS,
   normalizeAttachmentSelection,
 } from "src/components/request-material/attachmentValidation.js";
+import AttachmentPreviewDialog, {
+  buildAttachmentUrl,
+} from "src/components/common/AttachmentPreviewDialog";
 import TableLoadingRows from "src/components/common/TableLoadingRows";
 import { buildMassApprovalDetail } from "src/helper/massApprovalDetail.js";
 import {
@@ -205,6 +208,10 @@ export default function MassApprovalFormDialog({
   const [itemAttachmentErrors, setItemAttachmentErrors] = useState({});
   const [activeAttachmentItemNo, setActiveAttachmentItemNo] = useState(null);
   const attachmentInputRef = useRef(null);
+  // File preview modal, mirroring the single request dialog so an approver or
+  // Master Data can open each item's attachment without leaving the batch.
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewFile, setPreviewFile] = useState(null);
   // Remark dialog state
   const [remarkDialogOpen, setRemarkDialogOpen] = useState(false);
   const [currentAction, setCurrentAction] = useState("");
@@ -271,6 +278,8 @@ export default function MassApprovalFormDialog({
       setItemAttachments(buildInitialItemAttachments(detail.items));
       setItemAttachmentErrors({});
       setActiveAttachmentItemNo(null);
+      setPreviewOpen(false);
+      setPreviewFile(null);
     }
   }, [open, detail]);
 
@@ -584,6 +593,15 @@ export default function MassApprovalFormDialog({
         },
       };
     });
+  };
+
+  const handleViewAttachment = attachment => {
+    const url = buildAttachmentUrl(attachment);
+    if (!url) {
+      return;
+    }
+    setPreviewFile({ name: attachment.name, url, type: attachment.type || "" });
+    setPreviewOpen(true);
   };
 
   const handleAttachmentBrowseClick = itemNo => {
@@ -1273,54 +1291,83 @@ export default function MassApprovalFormDialog({
                           }}
                         >
                           <Stack spacing={0.5}>
-                            {(itemAttachments[item.itemNo] || []).map((attachment, index) => (
-                              <Stack
-                                // A staged file has no id yet, so it is keyed by
-                                // its own identity rather than its position —
-                                // removing a row shifts every index after it.
-                                key={
-                                  attachment.id ??
-                                  `new-${attachment.name}-${attachment.size}-${attachment.lastModified}`
-                                }
-                                direction="row"
-                                alignItems="center"
-                                spacing={0.5}
-                              >
-                                <Box sx={{ flex: 1, minWidth: 0 }}>
-                                  <Typography
-                                    variant="caption"
-                                    noWrap
-                                    sx={{ display: "block" }}
-                                    title={attachment.name}
-                                  >
-                                    {attachment.name}
-                                    {attachment.existing ? "" : " (new)"}
-                                  </Typography>
-                                  {attachment.uploadedBy ? (
+                            {(itemAttachments[item.itemNo] || []).map((attachment, index) => {
+                              const fileUrl = buildAttachmentUrl(attachment);
+                              return (
+                                <Stack
+                                  // A staged file has no id yet, so it is keyed by
+                                  // its own identity rather than its position —
+                                  // removing a row shifts every index after it.
+                                  key={
+                                    attachment.id ??
+                                    `new-${attachment.name}-${attachment.size}-${attachment.lastModified}`
+                                  }
+                                  direction="row"
+                                  alignItems="center"
+                                  spacing={0.5}
+                                >
+                                  <Box sx={{ flex: 1, minWidth: 0 }}>
                                     <Typography
                                       variant="caption"
-                                      color="text.secondary"
                                       noWrap
-                                      sx={{ display: "block", fontSize: "0.65rem" }}
+                                      // Rendered as a real button when there is
+                                      // something to open, so the preview is
+                                      // reachable by keyboard as well as click.
+                                      {...(fileUrl
+                                        ? {
+                                            component: "button",
+                                            type: "button",
+                                            onClick: () => handleViewAttachment(attachment),
+                                            title: `${attachment.name} — click to view file`,
+                                          }
+                                        : { title: attachment.name })}
+                                      sx={{
+                                        display: "block",
+                                        maxWidth: "100%",
+                                        ...(fileUrl && {
+                                          width: "100%",
+                                          p: 0,
+                                          border: "none",
+                                          bgcolor: "transparent",
+                                          textAlign: "left",
+                                          color: "inherit",
+                                          cursor: "pointer",
+                                          "&:hover": {
+                                            textDecoration: "underline",
+                                            color: "primary.main",
+                                          },
+                                        }),
+                                      }}
                                     >
-                                      By {attachment.uploadedBy}
+                                      {attachment.name}
+                                      {attachment.existing ? "" : " (new)"}
                                     </Typography>
-                                  ) : null}
-                                </Box>
-                                {canAct && (
-                                  <IconButton
-                                    size="small"
-                                    color="error"
-                                    onClick={() =>
-                                      handleRemoveItemAttachment(item.itemNo, index)
-                                    }
-                                    aria-label={`Remove ${attachment.name}`}
-                                  >
-                                    <Delete sx={{ fontSize: 16 }} />
-                                  </IconButton>
-                                )}
-                              </Stack>
-                            ))}
+                                    {attachment.uploadedBy ? (
+                                      <Typography
+                                        variant="caption"
+                                        color="text.secondary"
+                                        noWrap
+                                        sx={{ display: "block", fontSize: "0.65rem" }}
+                                      >
+                                        By {attachment.uploadedBy}
+                                      </Typography>
+                                    ) : null}
+                                  </Box>
+                                  {canAct && (
+                                    <IconButton
+                                      size="small"
+                                      color="error"
+                                      onClick={() =>
+                                        handleRemoveItemAttachment(item.itemNo, index)
+                                      }
+                                      aria-label={`Remove ${attachment.name}`}
+                                    >
+                                      <Delete sx={{ fontSize: 16 }} />
+                                    </IconButton>
+                                  )}
+                                </Stack>
+                              );
+                            })}
                             {canAct && (
                               <Button
                                 size="small"
@@ -1457,6 +1504,15 @@ export default function MassApprovalFormDialog({
           </Stack>
         </Box>
       </Dialog>
+
+      {/* Attachment preview — the shared viewer, so an approver / Master Data
+          reads a batch's files without downloading them first. Opened per item
+          from the Attachments column above. */}
+      <AttachmentPreviewDialog
+        open={previewOpen}
+        file={previewFile}
+        onClose={() => setPreviewOpen(false)}
+      />
 
       {/* Final Code dialog — Master Data stage only, ahead of the remark step */}
       <Dialog
