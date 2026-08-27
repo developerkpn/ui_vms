@@ -29,6 +29,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
+import { normalizeItemAttachments } from "src/helper/massApprovalDetail.js";
 import { resolveRequestCommentKind, validateRequesterComment } from "src/helper/requestComments.js";
 import { buildEmailReplyCaption } from "src/helper/reworkEmailThread.js";
 import { getSapStatusChip, getStagedMaterialCode, isSapError, pickSapFields } from "src/helper/sapStatus.js";
@@ -57,6 +58,9 @@ import PageTabs from "src/components/common/PageTabs";
 import TableLoadingRows, { TableEmptyRow } from "src/components/common/TableLoadingRows";
 import SectionLoadingSkeleton from "src/components/common/SectionLoadingSkeleton";
 import ApprovalStatusCard from "src/components/common/ApprovalStatusCard";
+import AttachmentPreviewDialog, {
+  buildAttachmentUrl,
+} from "src/components/common/AttachmentPreviewDialog";
 import RequestCommentsDialog from "src/components/common/RequestCommentsDialog";
 import RequesterCommentField from "src/components/common/RequesterCommentField";
 
@@ -322,7 +326,20 @@ function DetailInfoRow({ label, value }) {
 // grid with no load-existing-data path), so they keep an items table.
 function RequestDetailDialog({ open, request, onClose, massItems, massItemsLoading }) {
   const detail = useMemo(() => buildApprovalDetail(request || {}), [request]);
+  // Declared before the single-request early return below so the hook order is
+  // the same on both branches.
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewFile, setPreviewFile] = useState(null);
   const isMass = request?.mode === "mass";
+
+  const handleViewAttachment = attachment => {
+    const url = buildAttachmentUrl(attachment);
+    if (!url) {
+      return;
+    }
+    setPreviewFile({ name: attachment.name, url, type: attachment.type || "" });
+    setPreviewOpen(true);
+  };
 
   if (!isMass) {
     return (
@@ -341,6 +358,7 @@ function RequestDetailDialog({ open, request, onClose, massItems, massItemsLoadi
   }
 
   return (
+    <>
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <Box
         sx={{
@@ -392,12 +410,15 @@ function RequestDetailDialog({ open, request, onClose, massItems, massItemsLoadi
                   <TableCell sx={{ fontWeight: 800 }}>Plant</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Sloc</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>PO Text</TableCell>
+                  <TableCell sx={{ fontWeight: 800 }}>Attachments</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Status</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {massItemsLoading && <TableLoadingRows columns={9} />}
-                {!massItemsLoading && (massItems || []).map((item, index) => (
+                {massItemsLoading && <TableLoadingRows columns={10} />}
+                {!massItemsLoading && (massItems || []).map((item, index) => {
+                  const attachments = normalizeItemAttachments(item.attachments);
+                  return (
                   <TableRow key={item.id ?? index}>
                     <TableCell>{item.item_no ?? index + 1}</TableCell>
                     <TableCell sx={{ whiteSpace: "nowrap" }}>{item.request_no || "-"}</TableCell>
@@ -410,6 +431,52 @@ function RequestDetailDialog({ open, request, onClose, massItems, massItemsLoadi
                     <TableCell>{item.sloc_code || "-"}</TableCell>
                     <TableCell>{item.po_text || "-"}</TableCell>
                     <TableCell>
+                      {attachments.length === 0 ? (
+                        "-"
+                      ) : (
+                        <Stack spacing={0.25}>
+                          {attachments.map((attachment, attachmentIndex) => {
+                            const fileUrl = buildAttachmentUrl(attachment);
+                            return (
+                              <Typography
+                                key={attachment.id ?? `${attachment.name}-${attachmentIndex}`}
+                                variant="caption"
+                                noWrap
+                                // A real button when there is something stored to
+                                // open, so the preview is reachable by keyboard.
+                                {...(fileUrl
+                                  ? {
+                                      component: "button",
+                                      type: "button",
+                                      onClick: () => handleViewAttachment(attachment),
+                                      title: `${attachment.name} — click to view file`,
+                                    }
+                                  : { title: attachment.name })}
+                                sx={{
+                                  display: "block",
+                                  maxWidth: 180,
+                                  ...(fileUrl && {
+                                    p: 0,
+                                    border: "none",
+                                    bgcolor: "transparent",
+                                    textAlign: "left",
+                                    color: "inherit",
+                                    cursor: "pointer",
+                                    "&:hover": {
+                                      textDecoration: "underline",
+                                      color: "primary.main",
+                                    },
+                                  }),
+                                }}
+                              >
+                                {attachment.name}
+                              </Typography>
+                            );
+                          })}
+                        </Stack>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       {/* Once the item has been pushed, its SAP staging status
                           is the meaningful one — same chips the single request
                           list shows. */}
@@ -418,9 +485,10 @@ function RequestDetailDialog({ open, request, onClose, massItems, massItemsLoadi
                       />
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
                 {!massItemsLoading && (massItems || []).length === 0 && (
-                  <TableEmptyRow columns={9} title="No items found" />
+                  <TableEmptyRow columns={10} title="No items found" />
                 )}
               </TableBody>
             </Table>
@@ -431,6 +499,15 @@ function RequestDetailDialog({ open, request, onClose, massItems, massItemsLoadi
         <Button onClick={onClose}>Close</Button>
       </DialogActions>
     </Dialog>
+
+    {/* Attachment preview — the same shared viewer the approval dialogs use, so
+        the requester reads a batch's files without downloading them first. */}
+    <AttachmentPreviewDialog
+      open={previewOpen}
+      file={previewFile}
+      onClose={() => setPreviewOpen(false)}
+    />
+    </>
   );
 }
 

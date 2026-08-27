@@ -117,8 +117,15 @@ function normalizeMassRequestItem(item = {}) {
  * Normalize an item's attachment list — mirrors adminApprovalDetail.js's
  * normalizeAttachments so the single and mass dialogs read the same shape.
  * Attachments belong to the item, not the batch, so this runs per item.
+ *
+ * Exported because the requester's mass detail dialog reads the raw item rows
+ * straight from the API rather than through buildMassApprovalDetail, but still
+ * needs the same attachment shape.
+ *
+ * @param {object[]} [attachments=[]] - raw attachment rows from the API
+ * @returns {object[]} attachments as { id, name, path, type, uploadedBy }
  */
-function normalizeItemAttachments(attachments = []) {
+export function normalizeItemAttachments(attachments = []) {
   if (!Array.isArray(attachments)) {
     return [];
   }
