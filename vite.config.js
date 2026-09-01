@@ -9,7 +9,10 @@ export default defineConfig(() => {
       include: ["@emotion/react", "@emotion/styled", "@mui/icons-material", "lodash"],
     },
     build: {
-      outDir: "../vms-backend/public/build",
+      // The backend serves the built SPA from its own public/build
+      // (server.js: express.static(__dirname + "/public/build")), so the
+      // build has to land in the sibling vendor_ms_kpn checkout.
+      outDir: "../vendor_ms_kpn/public/build",
       emptyOutDir: true,
     },
     server: {
