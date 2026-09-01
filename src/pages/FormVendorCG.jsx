@@ -45,6 +45,7 @@ import useTogglePanel, { FormTab } from "src/hooks/useTogglePanel";
 import { useMasterFetcher } from "src/hooks/MasterFetcher";
 
 import RejectLog from "src/components/common/RejectLog";
+import AiValidationPanel from "src/components/FormVendor/AiValidationPanel";
 import VenBankTableRefactor from "src/components/FormVendor/VenBankTableRefactorCG";
 import usePermissionStore from "src/store/userPermissionStore";
 import { useFormCreateNew } from "./create_new/DirectFormCreateNew";
@@ -2059,6 +2060,19 @@ function FormVendorCG() {
                   </Grid>
                 </AccordionDetails>
               </Accordion>
+            )}
+            {/* Advisory AI check of the uploaded documents against the typed
+                values — Master Data only.
+                Procurement raises the request and would be reading a verdict on
+                their own submission, and the manager and C-Level approve from an
+                e-mail link without opening this form at all; they get the summary
+                block in that e-mail instead. Master Data is the stage that
+                actually reconciles documents against the record, so this is the
+                stage that gets the detail. `emp_role_id` here is the signed-in
+                user's role, not the ticket's current step, so an MDM user sees it
+                whenever they open the form. */}
+            {emp_role_id === "MDM" && loader_data.ven_id && (
+              <AiValidationPanel ven_id={loader_data.ven_id} />
             )}
             {loader_data.logrej_counter !== null && (
               <Accordion

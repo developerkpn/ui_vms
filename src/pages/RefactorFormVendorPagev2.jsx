@@ -44,6 +44,7 @@ import { v4 } from "uuid";
 import useTogglePanel, { FormTab } from "src/hooks/useTogglePanel";
 
 import RejectLog from "src/components/common/RejectLog";
+import AiValidationPanel from "src/components/FormVendor/AiValidationPanel";
 import VenBankTableRefactor from "src/components/FormVendor/VenBankTableRefactor";
 import usePermissionStore from "src/store/userPermissionStore";
 import { useFormCreateNew } from "./create_new/DirectFormCreateNew";
@@ -2666,6 +2667,14 @@ function RefactorFormVendorPage() {
                 </Grid>
               </AccordionDetails>
             </Accordion>
+          )}
+          {/* Advisory AI check of the uploaded documents against the typed
+              values — Master Data only. Procurement raises the request, and the
+              manager / C-Level approve from an e-mail link without opening this
+              form; they get the summary block in that e-mail instead. See the
+              matching comment in FormVendorCG.jsx. */}
+          {emp_role_id === "MDM" && loader_data.ven_id && (
+            <AiValidationPanel ven_id={loader_data.ven_id} />
           )}
           {loader_data.logrej_counter !== null && (
             <Accordion
