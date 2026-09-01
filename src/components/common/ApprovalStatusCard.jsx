@@ -6,7 +6,7 @@ import { Box, Paper, Stack, Typography } from "@mui/material";
 // (when present) the remark/reason typed at that step.
 export const APPROVAL_STATUS_BADGES = {
   APPROVED: { label: "Approve", bgcolor: "#2146d8", color: "#ffffff" },
-  REWORK: { label: "Rework", bgcolor: "#f59e0b", color: "#ffffff" },
+  REWORK: { label: "Rework", bgcolor: "#9c27b0", color: "#ffffff" },
   REJECTED: { label: "Reject", bgcolor: "#d93025", color: "#ffffff" },
   WAITING: { label: "Waiting", bgcolor: "#8a9099", color: "#ffffff" },
   SKIPPED: { label: "Skipped", bgcolor: "#e5e7eb", color: "#6b7280" },
