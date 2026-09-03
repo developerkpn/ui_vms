@@ -375,6 +375,7 @@ export default function SearchMaterials() {
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState("");
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState(null);
   const [pagination, setPagination] = useState({
     page: 1,
@@ -562,6 +563,40 @@ export default function SearchMaterials() {
   const handleGroupChange = e => {
     setSelectedGroup(e.target.value);
     setPagination(prev => ({ ...prev, page: 1 }));
+  };
+
+  // The export endpoint re-runs the same search server-side, so the file holds
+  // every match for the current filters, not just the page shown in the table.
+  const handleExportToExcel = async () => {
+    setExporting(true);
+    try {
+      const response = await axiosPrivate.get("/material/export/materials", {
+        params: { q: searchQuery, groupId: selectedGroup },
+        responseType: "blob",
+      });
+
+      // The backend names the file after the filters that produced it and
+      // exposes the header for cross-origin reads (server.js corsOption).
+      const disposition = response.headers["content-disposition"] || "";
+      const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
+      const fileName = match ? decodeURIComponent(match[1].trim()) : "materials.xlsx";
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", fileName);
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+
+      showSnackbar("Materials exported successfully");
+    } catch (err) {
+      console.error("Export failed:", err);
+      showSnackbar("Failed to export materials", "error");
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handlePageChange = (event, value) => {
@@ -963,7 +998,14 @@ export default function SearchMaterials() {
         title="Material Search"
         subtitle="Search and manage materials across all groups"
         actions={
-          <Button variant="contained" startIcon={<Download />} color="primary" sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 600, px: 3 }}>
+          <Button
+            variant="contained"
+            startIcon={exporting ? <CircularProgress size={16} color="inherit" /> : <Download />}
+            color="primary"
+            onClick={handleExportToExcel}
+            disabled={!isSearchActive || exporting}
+            sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 600, px: 3 }}
+          >
             Download To Excel
           </Button>
         }
