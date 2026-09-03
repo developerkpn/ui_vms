@@ -58,12 +58,14 @@ import {
 import {
   buildApprovalFieldHints,
   buildApprovalSpecificationFields,
+  getTemplateFieldKeys,
   normalizeApprovalInputValue,
   validateApprovalDraft,
 } from "src/helper/adminApprovalValidation.js";
 import {
   buildApprovalSubGroupOptions,
   findSubGroupOptionById,
+  formatMaterialGroupOptionLabel,
   formatSubGroupOptionLabel,
 } from "src/helper/adminApprovalSubGroup.js";
 import {
@@ -96,6 +98,10 @@ import {
   normalizeAttachmentSelection,
 } from "src/components/request-material/attachmentValidation.js";
 
+// Stable identity for "no row to fall back to" — an inline {} would be a new
+// object every render and defeat the memo it feeds.
+const EMPTY_ROW = {};
+
 function firstDefined(...values) {
   return values.find(value => value !== undefined && value !== null);
 }
@@ -127,6 +133,16 @@ function createApprovalDraft(detail = {}) {
   const requestFields = raw.requestFields ?? raw.request_fields ?? {};
 
   const draft = {
+    material_group_id: firstDefined(
+      raw.material_group_id,
+      raw.materialGroupId,
+      null
+    ),
+    // Carried alongside the id because the save endpoint resolves a changed
+    // group by code, and the Final Code dialog prints the code as the first
+    // segment of the material code.
+    material_group_code:
+      firstDefined(raw.material_group_code, raw.materialGroupCode, "") || "",
     material_sub_group_id: firstDefined(
       raw.material_sub_group_id,
       raw.materialSubGroupId,
@@ -187,6 +203,7 @@ const approvalStatusColors = {
 };
 
 const EDITABLE_FIELD_KEYS = [
+  "material_group_id",
   "material_sub_group_id",
   "plant_code",
   "sloc_code",
@@ -529,7 +546,9 @@ export default function AdminApprovalFormDialog({
   onAction,
   onGrabbed,
   submitting = false,
+  materialGroups = [],
   subGroups = [],
+  onMaterialGroupChange,
   formSchema = null,
   // True while the page is still fetching the sub-group list and the material
   // group's form schema — both start only once this dialog is already open, so
@@ -539,10 +558,6 @@ export default function AdminApprovalFormDialog({
   onClearServerValidationErrors,
 }) {
   const detail = useMemo(() => buildApprovalDetail(row || {}), [row]);
-  const subGroupOptions = useMemo(
-    () => buildApprovalSubGroupOptions(subGroups, row || {}),
-    [subGroups, row]
-  );
   const requestFieldIndex = useMemo(() => {
     const fields = Array.isArray(formSchema?.sections)
       ? formSchema.sections.flatMap(section => section.fields || [])
@@ -567,14 +582,6 @@ export default function AdminApprovalFormDialog({
     }, {});
   }, [formSchema]);
   const fieldHints = useMemo(() => buildApprovalFieldHints(formSchema), [formSchema]);
-  const specificationFields = useMemo(
-    () =>
-      buildApprovalSpecificationFields({
-        detailFields: detail.specificationFields,
-        formSchema,
-      }),
-    [detail.specificationFields, formSchema]
-  );
   // The four description columns are now one combined box, so fold the
   // long_text_1/2/3 change history into the material_description popover —
   // otherwise approver edits that landed past the first 40 chars would have no
@@ -592,6 +599,115 @@ export default function AdminApprovalFormDialog({
   const isScopedChangeExtendRequest = isChangeExtendRequest(row);
 
   const [draftValues, setDraftValues] = useState(() => createApprovalDraft(detail));
+  // The material group the request was submitted with. Everything the group
+  // decides — the sub group list, the specification template — is only still
+  // valid for the request's own data while the draft still points at it.
+  const originalMaterialGroupId = firstDefined(
+    detail.rawRow?.material_group_id,
+    detail.rawRow?.materialGroupId,
+    null
+  );
+  const isMaterialGroupChanged =
+    String(draftValues.material_group_id ?? "") !==
+    String(originalMaterialGroupId ?? "");
+  // buildApprovalSubGroupOptions/findSubGroupOptionById fall back to the sub
+  // group stored on the row so the current selection still renders when it is
+  // missing from the fetched list. Once the group is swapped that stored sub
+  // group belongs to the previous group, so it must neither be offered as an
+  // option nor resolved as the selection.
+  const subGroupFallbackRow = isMaterialGroupChanged ? EMPTY_ROW : row || EMPTY_ROW;
+  const subGroupOptions = useMemo(
+    () => buildApprovalSubGroupOptions(subGroups, subGroupFallbackRow),
+    [subGroups, subGroupFallbackRow]
+  );
+  // The dropdown is fetched by the page and can land after the dialog opens, so
+  // the request's own group has to stand in as the selection until it does.
+  const rowMaterialGroupOption = useMemo(() => {
+    const raw = detail.rawRow || {};
+    const id = firstDefined(raw.material_group_id, raw.materialGroupId, null);
+
+    if (id === null) {
+      return null;
+    }
+
+    return {
+      id,
+      code: firstDefined(raw.material_group_code, raw.materialGroupCode, "") || "",
+      name: firstDefined(raw.material_group_name, raw.materialGroupName, "") || "",
+    };
+  }, [detail.rawRow]);
+  // Mirrors buildApprovalSubGroupOptions: the current selection has to be in the
+  // list or MUI treats the value as invalid while the dropdown is still loading.
+  const materialGroupOptions = useMemo(() => {
+    const options = Array.isArray(materialGroups) ? [...materialGroups] : [];
+
+    if (!rowMaterialGroupOption) {
+      return options;
+    }
+
+    const exists = options.some(
+      option => String(option?.id ?? "") === String(rowMaterialGroupOption.id)
+    );
+
+    return exists ? options : [rowMaterialGroupOption, ...options];
+  }, [materialGroups, rowMaterialGroupOption]);
+  const selectedMaterialGroup = useMemo(() => {
+    const selectedId = draftValues.material_group_id;
+
+    if (selectedId === undefined || selectedId === null || selectedId === "") {
+      return null;
+    }
+
+    const fromOptions = materialGroupOptions.find(
+      group => String(group?.id ?? "") === String(selectedId)
+    );
+
+    if (fromOptions) {
+      return fromOptions;
+    }
+
+    if (
+      rowMaterialGroupOption &&
+      String(rowMaterialGroupOption.id) === String(selectedId)
+    ) {
+      return rowMaterialGroupOption;
+    }
+
+    return { id: selectedId, code: draftValues.material_group_code || "", name: "" };
+  }, [
+    materialGroupOptions,
+    rowMaterialGroupOption,
+    draftValues.material_group_id,
+    draftValues.material_group_code,
+  ]);
+  // After a group swap, the request's stored specification still describes the
+  // previous group's template, so it can no longer decide which fields exist —
+  // the new schema does. The fields the two templates share are kept, with
+  // their values and their change history, and the rest fall away. While the
+  // new schema is still in flight formSchema is the previous group's, but the
+  // section renders its loading skeleton over that window rather than the
+  // fields themselves.
+  const carriedSpecificationFields = useMemo(() => {
+    const detailFields = Array.isArray(detail.specificationFields)
+      ? detail.specificationFields
+      : [];
+
+    if (!isMaterialGroupChanged) {
+      return detailFields;
+    }
+
+    const schemaFieldKeys = getTemplateFieldKeys(formSchema);
+
+    return detailFields.filter(field => schemaFieldKeys.has(field.key));
+  }, [detail.specificationFields, formSchema, isMaterialGroupChanged]);
+  const specificationFields = useMemo(
+    () =>
+      buildApprovalSpecificationFields({
+        detailFields: carriedSpecificationFields,
+        formSchema,
+      }),
+    [carriedSpecificationFields, formSchema]
+  );
   // Raw text shown in the Material Description box — may contain a Shift+Enter
   // newline the approver typed for readability. Kept separate from
   // draftValues so a newline is purely visual: it's collapsed to a space (via
@@ -735,9 +851,10 @@ export default function AdminApprovalFormDialog({
       validateApprovalDraft({
         draftValues,
         formSchema,
+        requireMaterialSubGroup: isMaterialGroupChanged,
       })
     );
-  }, [draftValues, formSchema, hasInteracted]);
+  }, [draftValues, formSchema, hasInteracted, isMaterialGroupChanged]);
 
   const normalizedDetailStatus = String(detail.status || "").trim().toUpperCase();
   const canSubmitApprovalAction = normalizedDetailStatus === "SUBMIT";
@@ -873,6 +990,42 @@ export default function AdminApprovalFormDialog({
     setDraftValues(current => updater(current));
   };
 
+  // A sub group belongs to exactly one group, so it is dropped and re-asked.
+  // The specification values are NOT: template field keys come from a shared
+  // field master, so a key the new group's template also defines is the same
+  // field, and the approver should not retype what they already had. Values for
+  // keys the new template does not define simply stop being rendered here, and
+  // the server drops them anyway — validateTemplateValues rebuilds
+  // normalizedTemplateValues strictly from the new template's own fields.
+  // (This is the one place the approval dialog deliberately diverges from
+  // SingleMaterialForm's resetForMaterialGroupChange, which wipes every
+  // template value: the requester is composing a request, the approver is
+  // correcting one that already has data worth keeping.)
+  // The page is told separately so it can refetch the sub group list and the
+  // form schema.
+  const handleMaterialGroupChange = newGroup => {
+    if (!canActNow) {
+      return;
+    }
+
+    const nextGroupId = newGroup?.id ?? null;
+
+    if (
+      String(nextGroupId ?? "") === String(draftValues.material_group_id ?? "")
+    ) {
+      return;
+    }
+
+    updateDraftValues(current => ({
+      ...current,
+      material_group_id: nextGroupId,
+      material_group_code: newGroup?.code ?? "",
+      material_sub_group_id: null,
+    }));
+
+    onMaterialGroupChange?.(newGroup || null);
+  };
+
   const handleApproveClick = () => {
     if (isScopedChangeExtendRequest) {
       setCurrentAction("Approve");
@@ -891,6 +1044,7 @@ export default function AdminApprovalFormDialog({
     const nextErrors = validateApprovalDraft({
       draftValues,
       formSchema,
+      requireMaterialSubGroup: isMaterialGroupChanged,
     });
 
     setHasInteracted(true);
@@ -1241,18 +1395,46 @@ export default function AdminApprovalFormDialog({
                 <SectionLabel>Basic Info</SectionLabel>
                 <Grid container spacing={2.5}>
               <Grid item xs={12} md={6}>
-                <ReadOnlyField label="Material Group *" value={detail.basicInfo.materialGroup} />
+                <FieldHistoryLabel
+                  label="Material Group *"
+                  sections={detail.fieldHistory?.material_group_id || []}
+                />
+                <Autocomplete
+                  fullWidth
+                  size="small"
+                  disabled={!canActNow}
+                  value={selectedMaterialGroup}
+                  options={materialGroupOptions}
+                  isOptionEqualToValue={(option, value) =>
+                    String(option?.id ?? "") === String(value?.id ?? "")
+                  }
+                  getOptionLabel={option => formatMaterialGroupOptionLabel(option)}
+                  onChange={(_, newValue) => handleMaterialGroupChange(newValue)}
+                  renderInput={params => (
+                    <TextField
+                      {...params}
+                      size="small"
+                      placeholder="Select material group"
+                      error={Boolean(displayFieldErrors.material_group_id?.error)}
+                      helperText={displayFieldErrors.material_group_id?.message || ""}
+                    />
+                  )}
+                />
               </Grid>
               <Grid item xs={12} md={6}>
                 <FieldHistoryLabel
-                  label="Sub Material Group"
+                  label={`Sub Material Group${isMaterialGroupChanged ? " *" : ""}`}
                   sections={detail.fieldHistory?.material_sub_group_id || []}
                 />
                 <Autocomplete
                   fullWidth
                   size="small"
                   disabled={!canActNow}
-                  value={findSubGroupOptionById(subGroupOptions, draftValues.material_sub_group_id, row)}
+                  value={findSubGroupOptionById(
+                    subGroupOptions,
+                    draftValues.material_sub_group_id,
+                    subGroupFallbackRow
+                  )}
                   options={subGroupOptions}
                   isOptionEqualToValue={(option, value) =>
                     String(option?.id ?? "") === String(value?.id ?? "")
@@ -1650,30 +1832,47 @@ export default function AdminApprovalFormDialog({
           <Stack direction="row" spacing={2} alignItems="flex-start">
             {(() => {
               const rawRow = detail?.rawRow || row || {};
-              const materialGroupCode = String(rawRow.materialGroupCode || rawRow.material_group_code || "").trim();
-              const materialGroupName = String(rawRow.materialGroupName || rawRow.material_group_name || "").trim();
-              // The sub material group is still editable on this stage, so the
-              // code that makes up the material code comes from the current
-              // selection, not from what the request was submitted with.
+              // Both halves of the material code are still editable on this
+              // stage, so each segment comes from the current selection rather
+              // than from what the request was submitted with.
+              const materialGroupCode = String(
+                selectedMaterialGroup?.code ||
+                  rawRow.materialGroupCode ||
+                  rawRow.material_group_code ||
+                  ""
+              ).trim();
+              const materialGroupName = String(
+                selectedMaterialGroup?.name ||
+                  rawRow.materialGroupName ||
+                  rawRow.material_group_name ||
+                  ""
+              ).trim();
               const selectedSubGroup = findSubGroupOptionById(
                 subGroupOptions,
                 draftValues.material_sub_group_id,
-                row
+                subGroupFallbackRow
               );
+              // The row's own sub group is only a valid fallback while the
+              // group it belongs to is still the selected one — after a group
+              // change it would print a segment the approver just replaced.
               const subGroupCode = String(
                 selectedSubGroup?.code ||
                   selectedSubGroup?.subGroupCode ||
-                  rawRow.subMaterialGroupCode ||
-                  rawRow.material_sub_group_code ||
-                  rawRow.sub_material_group_code ||
+                  (isMaterialGroupChanged
+                    ? ""
+                    : rawRow.subMaterialGroupCode ||
+                      rawRow.material_sub_group_code ||
+                      rawRow.sub_material_group_code) ||
                   ""
               ).trim();
               const subGroupName = String(
                 selectedSubGroup?.name ||
                   selectedSubGroup?.subGroupName ||
-                  rawRow.subMaterialGroupName ||
-                  rawRow.material_sub_group_name ||
-                  rawRow.sub_material_group_name ||
+                  (isMaterialGroupChanged
+                    ? ""
+                    : rawRow.subMaterialGroupName ||
+                      rawRow.material_sub_group_name ||
+                      rawRow.sub_material_group_name) ||
                   ""
               ).trim();
 
@@ -1992,6 +2191,10 @@ export default function AdminApprovalFormDialog({
                       ...(isFinalStageApprove ? { finalCodeSuffix } : {}),
                       ...attachmentChanges,
                       editedRequest: {
+                        material_group_id: draftValues.material_group_id,
+                        // Sent unconditionally: the endpoint resolves a changed
+                        // group by code and rejects the edit without one.
+                        material_group_code: draftValues.material_group_code,
                         material_sub_group_id: draftValues.material_sub_group_id,
                         plant_code: draftValues.plant_code,
                         sloc_code: draftValues.sloc_code,
