@@ -1,10 +1,14 @@
 import {
+  BrokenImage,
   Close,
+  Delete,
+  Description,
   Download,
   Edit,
   Visibility,
   MoreHoriz,
   InsertDriveFile,
+  PictureAsPdf,
   Image as ImageIcon,
 } from "@mui/icons-material";
 import {
@@ -28,6 +32,7 @@ import {
   MenuItem,
   Pagination,
   Select,
+  Skeleton,
   Snackbar,
   Stack,
   TextField,
@@ -47,9 +52,15 @@ import {
   buildStorageOptionsForPlant,
   extractChangeTemplateValues,
 } from "src/helper/materialChangeExtendRequest.js";
+import {
+  ATTACHMENT_SIZE_LIMIT_TEXT,
+  ATTACHMENT_SUPPORTED_FORMATS_TEXT,
+  getAttachmentExtension,
+  MAX_ATTACHMENTS,
+  normalizeAttachmentSelection,
+} from "src/components/request-material/attachmentValidation.js";
 import TableSorting from "src/components/table/TableSorting";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
-import attachmentPlaceholder from "src/images/material-attachment-placeholder.svg";
 import PageHeader from "src/components/common/PageHeader";
 import PageTablePaper from "src/components/common/PageTablePaper";
 import usePermissionStore from "src/store/userPermissionStore";
@@ -59,6 +70,30 @@ const MAX_ATTACHMENT_PREVIEW = 3;
 const DEFAULT_PLANT_LABEL = "EU73 - EUP GENERAL KIJING";
 const DEFAULT_STORAGE_LOCATION = "ST01 - Main Store";
 const DEFAULT_BASE_UOM = "PC - Pieces";
+const IMAGE_ATTACHMENT_EXTENSIONS = ["jpg", "jpeg", "png", "gif", "webp"];
+
+// Which icon or thumbnail a file name gets, in the three places that ask: the
+// table's preview strip, the files queued for upload, and the material's saved
+// list.
+const isImageAttachment = fileName =>
+  IMAGE_ATTACHMENT_EXTENSIONS.includes(getAttachmentExtension(fileName));
+
+// A non-image attachment shows what it actually is. Anything generic in this
+// slot reads as "no attachment" to someone scanning the column, which is the
+// one thing it must never mean.
+function AttachmentTypeIcon({ fileName }) {
+  const extension = getAttachmentExtension(fileName);
+
+  if (extension === "pdf") {
+    return <PictureAsPdf sx={{ fontSize: 24, color: "error.main" }} />;
+  }
+
+  if (extension === "doc" || extension === "docx") {
+    return <Description sx={{ fontSize: 24, color: "info.dark" }} />;
+  }
+
+  return <InsertDriveFile sx={{ fontSize: 24, color: "text.secondary" }} />;
+}
 const MATERIAL_ACTION_DIALOG_CONFIG = {
   extend: {
     title: "Extend Material",
@@ -352,10 +387,16 @@ const AuthenticatedImage = ({ src, sx, onClick }) => {
 
   if (loading) return <CircularProgress size={16} thickness={5} sx={{ color: "grey.300" }} />;
 
+  // An image the browser could not fetch or decode says so. Standing in a
+  // picture-shaped graphic here would make a missing file look like a file.
+  if (error) {
+    return <BrokenImage sx={{ fontSize: 24, color: "text.disabled" }} />;
+  }
+
   return (
     <Box
       component="img"
-      src={error ? attachmentPlaceholder : imgSrc}
+      src={imgSrc}
       sx={{
         ...sx,
         transition: "transform 0.2s",
@@ -385,6 +426,10 @@ export default function SearchMaterials() {
   const [sorting, setSorting] = useState([]);
   const [attachmentsDialogOpen, setAttachmentsDialogOpen] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState(null);
+  const attachmentInputRef = useRef(null);
+  const [pendingAttachments, setPendingAttachments] = useState([]);
+  const [attachmentError, setAttachmentError] = useState("");
+  const [attachmentsUploading, setAttachmentsUploading] = useState(false);
   const [materialActionDialog, setMaterialActionDialog] = useState({
     open: false,
     mode: "change",
@@ -489,24 +534,29 @@ export default function SearchMaterials() {
 
         setMaterials(rows);
 
-        // Fetch attachments for found materials (non-blocking)
-        if (rows.length > 0) {
-          const codes = rows.map(m => m.code).filter(Boolean);
-          if (codes.length > 0) {
-            axiosPrivate.post("/material/by-codes", { codes })
-              .then(attRes => {
-                const byCode = {};
-                (attRes.data?.data || []).forEach(m => {
-                  byCode[m.code] = m.attachments || [];
-                });
-                setMaterials(prev =>
-                  prev.map(m => ({ ...m, attachments: byCode[m.code] || [] }))
-                );
-              })
-              .catch(() => {
-                // Attachments are optional; keep materials without them
+        // Fetch attachments for found materials (non-blocking). Rows land here
+        // with `attachments` undefined and the column shows a skeleton until
+        // this settles it to an array — so every path below has to settle it,
+        // including the ones that fetch nothing.
+        const codes = rows.map(m => m.code).filter(Boolean);
+        if (codes.length === 0) {
+          setMaterials(prev => prev.map(m => ({ ...m, attachments: m.attachments || [] })));
+        } else {
+          axiosPrivate.post("/material/by-codes", { codes })
+            .then(attRes => {
+              const byCode = {};
+              (attRes.data?.data || []).forEach(m => {
+                byCode[m.code] = m.attachments || [];
               });
-          }
+              setMaterials(prev =>
+                prev.map(m => ({ ...m, attachments: byCode[m.code] || [] }))
+              );
+            })
+            .catch(() => {
+              // Attachments are optional; the column settles on "none" rather
+              // than waiting forever on a call that already failed.
+              setMaterials(prev => prev.map(m => ({ ...m, attachments: m.attachments || [] })));
+            });
         }
       } catch (error) {
         console.error("Failed to fetch materials:", error);
@@ -599,14 +649,104 @@ export default function SearchMaterials() {
     setMenuMaterial(null);
   };
 
+  // Re-reads one material's attachment list and writes it into both the open
+  // dialog and the row behind it. The row's copy came from the batched
+  // /material/by-codes prefetch, which is only as fresh as the last search, so
+  // without this the table's thumbnail strip keeps showing the list from before
+  // an upload.
+  const refreshMaterialAttachments = async materialId => {
+    if (!materialId) {
+      return;
+    }
+
+    try {
+      const response = await axiosPrivate.get(`/material/${materialId}/attachments`);
+      const attachments = response.data?.data || [];
+
+      setSelectedMaterial(prev =>
+        prev?.id === materialId ? { ...prev, attachments } : prev
+      );
+      setMaterials(prev =>
+        prev.map(row => (row.id === materialId ? { ...row, attachments } : row))
+      );
+    } catch (error) {
+      // The dialog falls back to the prefetched list rather than emptying out,
+      // so a failed refresh costs freshness, not the whole section.
+      console.error("Failed to load material attachments:", error?.message);
+    }
+  };
+
   const handleOpenAttachmentsDialog = material => {
     setSelectedMaterial(material);
+    setPendingAttachments([]);
+    setAttachmentError("");
     setAttachmentsDialogOpen(true);
+    refreshMaterialAttachments(material?.id);
   };
 
   const handleCloseAttachmentsDialog = () => {
     setAttachmentsDialogOpen(false);
     setSelectedMaterial(null);
+    setPendingAttachments([]);
+    setAttachmentError("");
+  };
+
+  const handleAttachmentBrowseClick = () => {
+    attachmentInputRef.current?.click();
+  };
+
+  const handleAttachmentFileChange = event => {
+    const { files, error } = normalizeAttachmentSelection(
+      event.target.files,
+      pendingAttachments
+    );
+
+    setPendingAttachments(files);
+    setAttachmentError(error);
+    // Cleared so picking the same file again after removing it still fires a
+    // change event.
+    event.target.value = "";
+  };
+
+  const handleRemovePendingAttachment = index => {
+    setPendingAttachments(prev => prev.filter((_, position) => position !== index));
+    setAttachmentError("");
+  };
+
+  const handleUploadAttachments = async () => {
+    const materialId = selectedMaterial?.id;
+    if (!materialId || pendingAttachments.length === 0) {
+      return;
+    }
+
+    setAttachmentsUploading(true);
+    setAttachmentError("");
+
+    try {
+      const formData = new FormData();
+      // "files" is the field the upload endpoint parses; anything else arrives
+      // as an empty upload.
+      pendingAttachments.forEach(file => formData.append("files", file));
+
+      await axiosPrivate.post(`/material/${materialId}/attachments`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      setPendingAttachments([]);
+      await refreshMaterialAttachments(materialId);
+      showSnackbar("Attachments uploaded successfully");
+    } catch (error) {
+      // Only the message: an axios error carries the request config, and that
+      // config carries the Authorization header this client attaches to every
+      // call. A browser console is user-visible and often screen-shared.
+      const message =
+        error?.response?.data?.message || "Failed to upload attachments. Please try again.";
+      console.error("Failed to upload attachments:", error?.message);
+      setAttachmentError(message);
+      showSnackbar(message, "error");
+    } finally {
+      setAttachmentsUploading(false);
+    }
   };
 
   const handleOpenMaterialActionDialog = (mode, material) => {
@@ -807,19 +947,31 @@ export default function SearchMaterials() {
         id: "attachment",
         size: 160,
         cell: ({ row }) => {
-          const attachments = row.original.attachments || [];
-          const isImage = file => {
-            if (!file) return false;
-            const ext = file.split(".").pop().toLowerCase();
-            return ["jpg", "jpeg", "png", "gif", "webp"].includes(ext);
-          };
-          const previewItems =
-            attachments.length > 0
-              ? attachments.slice(0, MAX_ATTACHMENT_PREVIEW)
-              : Array.from({ length: MAX_ATTACHMENT_PREVIEW }, (_, idx) => ({
-                  attachment: `placeholder-${idx}`,
-                  isPlaceholder: true,
-                }));
+          // Undefined means the attachment call has not answered for this row
+          // yet; an empty array means it has, and there are none. The two used
+          // to render identically, which is what made an empty row look like it
+          // held three files.
+          const attachments = row.original.attachments;
+
+          if (attachments === undefined) {
+            return (
+              <Box sx={{ display: "flex", gap: 0.75, minWidth: 140 }}>
+                {Array.from({ length: MAX_ATTACHMENT_PREVIEW }, (_, idx) => (
+                  <Skeleton key={idx} variant="rounded" width={42} height={42} />
+                ))}
+              </Box>
+            );
+          }
+
+          if (attachments.length === 0) {
+            return (
+              <Typography variant="body2" color="text.secondary" sx={{ minWidth: 140 }}>
+                -
+              </Typography>
+            );
+          }
+
+          const previewItems = attachments.slice(0, MAX_ATTACHMENT_PREVIEW);
 
           return (
             <Box
@@ -832,14 +984,9 @@ export default function SearchMaterials() {
               }}
             >
               {previewItems.map((att, idx) => {
-                const isPlaceholder = Boolean(att.isPlaceholder);
-                const isImg = isImage(att.attachment);
+                const isImg = isImageAttachment(att.attachment);
                 return (
-                  <Tooltip
-                    key={idx}
-                    title={isPlaceholder ? "Attachment placeholder" : att.attachment}
-                    arrow
-                  >
+                  <Tooltip key={idx} title={att.attachment} arrow>
                     <Box
                       sx={{
                         width: 42,
@@ -860,36 +1007,16 @@ export default function SearchMaterials() {
                           boxShadow: "0 4px 8px rgba(0,0,0,0.1)",
                           transform: "translateY(-2px)",
                         },
-                        ...(isPlaceholder && {
-                          cursor: "default",
-                          "&:hover": {
-                            borderColor: "divider",
-                            boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-                            transform: "none",
-                          },
-                        }),
                       }}
-                      onClick={isPlaceholder ? undefined : () => handleViewAttachment(att)}
+                      onClick={() => handleViewAttachment(att)}
                     >
-                      {isPlaceholder ? (
-                        <Box
-                          component="img"
-                          src={attachmentPlaceholder}
-                          alt="Attachment placeholder"
-                          sx={{ width: "100%", height: "100%", objectFit: "cover" }}
-                        />
-                      ) : isImg ? (
+                      {isImg ? (
                         <AuthenticatedImage
                           src={`/material/file/${att.attachment}`}
                           sx={{ width: "100%", height: "100%", objectFit: "cover" }}
                         />
                       ) : (
-                        <Box
-                          component="img"
-                          src={attachmentPlaceholder}
-                          alt="Attachment placeholder"
-                          sx={{ width: "100%", height: "100%", objectFit: "cover" }}
-                        />
+                        <AttachmentTypeIcon fileName={att.attachment} />
                       )}
                     </Box>
                   </Tooltip>
@@ -1090,33 +1217,133 @@ export default function SearchMaterials() {
       >
         <DialogTitle>Attachments</DialogTitle>
         <DialogContent dividers>
-          <List>
-            {selectedMaterial?.attachments?.map((att, index) => (
-              <ListItem
-                key={index}
-                secondaryAction={
-                  <IconButton edge="end" onClick={() => handleViewAttachment(att)}>
-                    <Visibility />
-                  </IconButton>
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 900, mb: 0.5 }}>
+              Add Attachment
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+              {ATTACHMENT_SUPPORTED_FORMATS_TEXT}
+            </Typography>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block", mb: 2 }}
+            >
+              {ATTACHMENT_SIZE_LIMIT_TEXT}
+            </Typography>
+
+            <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={handleAttachmentBrowseClick}
+                disabled={
+                  attachmentsUploading || pendingAttachments.length >= MAX_ATTACHMENTS
                 }
+                sx={{ textTransform: "none", px: 3 }}
               >
-                <ListItemIcon>
-                  {att.attachment
-                    .split(".")
-                    .pop()
-                    .match(/(jpg|jpeg|png|gif)$/i) ? (
-                    <ImageIcon color="primary" />
-                  ) : (
-                    <InsertDriveFile />
-                  )}
-                </ListItemIcon>
-                <ListItemText primary={att.attachment} />
-              </ListItem>
-            ))}
-          </List>
+                Browsing File
+              </Button>
+              <input
+                ref={attachmentInputRef}
+                type="file"
+                multiple
+                hidden
+                accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                onChange={handleAttachmentFileChange}
+              />
+              <Button
+                variant="contained"
+                onClick={handleUploadAttachments}
+                disabled={attachmentsUploading || pendingAttachments.length === 0}
+                startIcon={
+                  attachmentsUploading ? (
+                    <CircularProgress size={18} color="inherit" />
+                  ) : undefined
+                }
+                sx={{ textTransform: "none", px: 3 }}
+              >
+                {attachmentsUploading ? "Uploading..." : "Upload"}
+              </Button>
+            </Box>
+
+            {attachmentError && (
+              <Typography variant="caption" color="error" sx={{ display: "block", mb: 2 }}>
+                {attachmentError}
+              </Typography>
+            )}
+
+            {pendingAttachments.length > 0 && (
+              <List dense>
+                {pendingAttachments.map((file, index) => (
+                  <ListItem
+                    key={`${file.name}-${index}`}
+                    secondaryAction={
+                      <IconButton
+                        edge="end"
+                        color="error"
+                        disabled={attachmentsUploading}
+                        onClick={() => handleRemovePendingAttachment(index)}
+                        aria-label={`Remove ${file.name}`}
+                      >
+                        <Delete />
+                      </IconButton>
+                    }
+                  >
+                    <ListItemIcon>
+                      {isImageAttachment(file.name) ? (
+                        <ImageIcon color="primary" />
+                      ) : (
+                        <AttachmentTypeIcon fileName={file.name} />
+                      )}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={file.name}
+                      secondary={`${(file.size / 1024 / 1024).toFixed(2)} MB`}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            )}
+          </Box>
+
+          <Divider sx={{ mb: 2 }} />
+
+          <Typography variant="subtitle2" sx={{ fontWeight: 900, mb: 1 }}>
+            Existing Attachments
+          </Typography>
+          {selectedMaterial?.attachments?.length > 0 ? (
+            <List>
+              {selectedMaterial.attachments.map((att, index) => (
+                <ListItem
+                  key={att.id || index}
+                  secondaryAction={
+                    <IconButton edge="end" onClick={() => handleViewAttachment(att)}>
+                      <Visibility />
+                    </IconButton>
+                  }
+                >
+                  <ListItemIcon>
+                    {isImageAttachment(att.attachment) ? (
+                      <ImageIcon color="primary" />
+                    ) : (
+                      <AttachmentTypeIcon fileName={att.attachment} />
+                    )}
+                  </ListItemIcon>
+                  <ListItemText primary={att.attachment} />
+                </ListItem>
+              ))}
+            </List>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              No attachments available for this material.
+            </Typography>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseAttachmentsDialog}>Close</Button>
+          <Button onClick={handleCloseAttachmentsDialog} disabled={attachmentsUploading}>
+            Close
+          </Button>
         </DialogActions>
       </Dialog>
 

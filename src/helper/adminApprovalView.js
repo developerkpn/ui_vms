@@ -317,9 +317,16 @@ export function normalizeApprovalRows(rows = []) {
       uom: stringOrFallback(row.uom, row.base_uom, row.baseUom, "-"),
       status: normalizeApprovalStatusForFilter(row.status || "Submit"),
       ...pickSapFields(row),
-      // Replies the picked approver sent back on a "via email" rework; 0 when
-      // the request never had one, and on a deployment still missing the
-      // rework-email tables (the query falls back to a constant 0 there).
+      // Rework mails sent on the "via email" channel and the replies that came
+      // back; both 0 when the request never had one, and on a deployment still
+      // missing the rework-email tables (the query falls back to constant 0s
+      // there). The sent count separates "waiting on the approver's inbox" from
+      // "no mail was ever sent"; the count of sent mails with no reply is what
+      // says whether the request is still waiting, since every mail that went
+      // out is owed an answer of its own.
+      emailSentCount: row.email_sent_count ?? row.emailSentCount ?? 0,
+      emailUnansweredCount:
+        row.email_unanswered_count ?? row.emailUnansweredCount ?? 0,
       emailReplyCount: row.email_reply_count ?? row.emailReplyCount ?? 0,
       createdBy: stringOrFallback(row.created_by, row.createdBy, "-"),
       createdAt: formatDateTime(row.created_at || row.createdAt),
@@ -817,7 +824,10 @@ export function normalizeMassApprovalRows(rows = []) {
       // Batch-level SAP staging status: the backend rolls the per-item
       // sap_push_status up worst-first, so the row reads like a single one.
       ...pickSapFields(row),
-      // Replies counted across the whole batch's rework mail thread.
+      // Mails and replies counted across the whole batch's rework mail thread.
+      emailSentCount: row.email_sent_count ?? row.emailSentCount ?? 0,
+      emailUnansweredCount:
+        row.email_unanswered_count ?? row.emailUnansweredCount ?? 0,
       emailReplyCount: row.email_reply_count ?? row.emailReplyCount ?? 0,
       createdBy: stringOrFallback(row.created_by_username, row.created_by, row.createdBy, "-"),
       createdAt: formatDateTime(row.created_at || row.createdAt),

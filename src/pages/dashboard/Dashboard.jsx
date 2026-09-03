@@ -186,7 +186,7 @@ export default function MiniDrawer() {
             />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            Vendor Management System App
+            Material Management System App
           </Typography>
           <AvatarComp />
         </Toolbar>

@@ -31,7 +31,10 @@ import { useNavigate } from "react-router-dom";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
 import { normalizeItemAttachments } from "src/helper/massApprovalDetail.js";
 import { resolveRequestCommentKind, validateRequesterComment } from "src/helper/requestComments.js";
-import { buildEmailReplyCaption } from "src/helper/reworkEmailThread.js";
+import {
+  buildEmailApprovalCaption,
+  resolveReworkEmailKind,
+} from "src/helper/reworkEmailThread.js";
 import { getSapStatusChip, getStagedMaterialCode, isSapError, pickSapFields } from "src/helper/sapStatus.js";
 import {
   computeAssignedToDisplay,
@@ -61,6 +64,7 @@ import ApprovalStatusCard from "src/components/common/ApprovalStatusCard";
 import AttachmentPreviewDialog, {
   buildAttachmentUrl,
 } from "src/components/common/AttachmentPreviewDialog";
+import ReworkEmailThreadSection from "src/components/admin-approval/ReworkEmailThreadSection";
 import RequestCommentsDialog from "src/components/common/RequestCommentsDialog";
 import RequesterCommentField from "src/components/common/RequesterCommentField";
 
@@ -127,11 +131,13 @@ function AssignmentCaption({ status, caption }) {
 }
 
 // Same caption slot the SAP error message and the assignment caption already
-// occupy under the Status chip, in a distinct colour: a reply landing is news,
-// not a fault, so it must not read like the red SAP error line above it.
-const EMAIL_REPLY_CAPTION_SX = {
-  color: "success.main",
-  fontWeight: 600,
+// occupy under the Status chip. Colour is the state: an unanswered mail is
+// something still owed, an answered one is settled. The two shades are the
+// dark ends of their ramps rather than the mains, which clear 4.5:1 on the
+// table's white background where error.main does not — and the wording says
+// which state it is on its own, so the colour is reinforcement, not the signal.
+const EMAIL_APPROVAL_CAPTION_SX = {
+  fontWeight: 700,
   display: "-webkit-box",
   WebkitLineClamp: 2,
   WebkitBoxOrient: "vertical",
@@ -189,22 +195,29 @@ function SapAwareStatusContent({ row }) {
   return chip;
 }
 
-// The status cell: the chip (or chip + its own caption) plus, when the approver
-// answered the rework mail, a line saying so. Nothing is rendered for a request
-// with no replies, so every row that has none looks exactly as it did.
+// The status cell: the chip (or chip + its own caption) plus, once a rework
+// mail has gone out, a line saying whether the approver has answered it.
+// Nothing is rendered for a request that never had one, so every row without a
+// mailed rework looks exactly as it did.
 function SapAwareStatus({ row }) {
-  const replyCaption = buildEmailReplyCaption(row?.emailReplyCount);
+  const emailApproval = buildEmailApprovalCaption(row);
   const statusContent = <SapAwareStatusContent row={row} />;
 
-  if (replyCaption === "") {
+  if (emailApproval.text === "") {
     return statusContent;
   }
 
   return (
     <Stack spacing={0.5} alignItems="flex-start" sx={{ maxWidth: 220 }}>
       {statusContent}
-      <Typography variant="caption" sx={EMAIL_REPLY_CAPTION_SX}>
-        {replyCaption}
+      <Typography
+        variant="caption"
+        sx={{
+          ...EMAIL_APPROVAL_CAPTION_SX,
+          color: emailApproval.confirmed ? "success.darker" : "error.dark",
+        }}
+      >
+        {emailApproval.text}
       </Typography>
     </Stack>
   );
@@ -280,6 +293,18 @@ function RequestActionDialog({ open, mode, request, onClose, onReviseRequest }) 
                 {detail.reworkSummary.reason || "-"}
               </Typography>
             </Paper>
+          )}
+
+          {/* The mail correspondence behind a rework the requester was told
+              about only as "Dikirim via email: <subject>". Renders nothing at
+              all unless this request actually has rework mail, so a request
+              reworked in-app looks exactly as it did before. */}
+          {isReworkMode && (
+            <ReworkEmailThreadSection
+              enabled={open}
+              requestKind={resolveReworkEmailKind(request?.mode === "mass")}
+              requestId={request?.id}
+            />
           )}
         </Stack>
       </DialogContent>
@@ -760,7 +785,11 @@ export default function RequestMaterials() {
             templatePayload: item.template_payload,
             attachments: item.attachments,
             ...pickSapFields(item),
-            // Replies the picked approver sent back on a "via email" rework.
+            // Rework mails sent on the "via email" channel: how many went out,
+            // how many are still unanswered, and the thread's reply total.
+            emailSentCount: item.email_sent_count ?? item.emailSentCount ?? 0,
+            emailUnansweredCount:
+              item.email_unanswered_count ?? item.emailUnansweredCount ?? 0,
             emailReplyCount: item.email_reply_count ?? item.emailReplyCount ?? 0,
             createdBy: item.created_by,
             createdAt: formatDateTime(item.created_at),
@@ -846,7 +875,10 @@ export default function RequestMaterials() {
               // Batch-level SAP staging status: the backend rolls the per-item
               // sap_push_status up worst-first, so the row reads like a single one.
               ...pickSapFields(item),
-              // Replies counted across the whole batch's rework mail thread.
+              // Mails and replies counted across the whole batch's rework mail thread.
+              emailSentCount: item.email_sent_count ?? item.emailSentCount ?? 0,
+              emailUnansweredCount:
+                item.email_unanswered_count ?? item.emailUnansweredCount ?? 0,
               emailReplyCount: item.email_reply_count ?? item.emailReplyCount ?? 0,
               // N-stage approval data: pass through so buildApprovalDetail renders
               // every stage from approvalSteps instead of probing _1/_2/_3 fields.

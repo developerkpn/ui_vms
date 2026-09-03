@@ -43,7 +43,7 @@ import RequestCommentsDialog from "src/components/common/RequestCommentsDialog";
 import { buildApprovalDetail } from "src/helper/adminApprovalDetail.js";
 import { resolveRequestCommentKind } from "src/helper/requestComments.js";
 import {
-  buildEmailReplyCaption,
+  buildEmailApprovalCaption,
   buildReworkEmailSentMessage,
   isReworkEmailOnlyResult,
   isReworkEmailSendFailed,
@@ -138,11 +138,13 @@ function AssignmentCaption({ status, caption }) {
 }
 
 // Same caption slot the SAP error message and the assignment caption already
-// occupy under the Status chip, in a distinct colour: a reply landing is news,
-// not a fault, so it must not read like the red SAP error line above it.
-const EMAIL_REPLY_CAPTION_SX = {
-  color: "success.main",
-  fontWeight: 600,
+// occupy under the Status chip. Colour is the state: an unanswered mail is
+// something still owed, an answered one is settled. The two shades are the
+// dark ends of their ramps rather than the mains, which clear 4.5:1 on the
+// table's white background where error.main does not — and the wording says
+// which state it is on its own, so the colour is reinforcement, not the signal.
+const EMAIL_APPROVAL_CAPTION_SX = {
+  fontWeight: 700,
   textAlign: "left",
   display: "-webkit-box",
   WebkitLineClamp: 2,
@@ -203,22 +205,29 @@ function SapAwareStatusBadgeContent({ row }) {
   return chip;
 }
 
-// The status cell: the chip (or chip + its own caption) plus, when the approver
-// answered the rework mail, a line saying so. Nothing is rendered for a request
-// with no replies, so every row that has none looks exactly as it did.
+// The status cell: the chip (or chip + its own caption) plus, once a rework
+// mail has gone out, a line saying whether the approver has answered it.
+// Nothing is rendered for a request that never had one, so every row without a
+// mailed rework looks exactly as it did.
 function SapAwareStatusBadge({ row }) {
-  const replyCaption = buildEmailReplyCaption(row?.emailReplyCount);
+  const emailApproval = buildEmailApprovalCaption(row);
   const statusContent = <SapAwareStatusBadgeContent row={row} />;
 
-  if (replyCaption === "") {
+  if (emailApproval.text === "") {
     return statusContent;
   }
 
   return (
     <Stack spacing={0.5} alignItems="flex-start" sx={{ maxWidth: 220 }}>
       {statusContent}
-      <Typography variant="caption" sx={EMAIL_REPLY_CAPTION_SX}>
-        {replyCaption}
+      <Typography
+        variant="caption"
+        sx={{
+          ...EMAIL_APPROVAL_CAPTION_SX,
+          color: emailApproval.confirmed ? "success.darker" : "error.dark",
+        }}
+      >
+        {emailApproval.text}
       </Typography>
     </Stack>
   );
