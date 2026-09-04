@@ -1088,7 +1088,7 @@ export default function MassApprovalFormDialog({
                       variant="caption"
                       sx={{ display: "block", fontWeight: 800, mb: 0.5 }}
                     >
-                      Created By
+                      Requested By
                     </Typography>
                     <Typography
                       variant="body2"
