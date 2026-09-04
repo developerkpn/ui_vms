@@ -94,6 +94,54 @@ function AttachmentTypeIcon({ fileName }) {
 
   return <InsertDriveFile sx={{ fontSize: 24, color: "text.secondary" }} />;
 }
+
+// This column used to render `name` alone — MAKTX, hard-capped at 40 chars in
+// SAP — while /material/search also matches description, long_text and the
+// aliases. A row that matched on word 60 of its long text therefore looked like
+// it had matched nothing. It now shows the combined description the search
+// endpoint already returns, clamped to two lines.
+function MaterialDescriptionCell({ text }) {
+  const textRef = useRef(null);
+  const [isClamped, setIsClamped] = useState(false);
+
+  useEffect(() => {
+    const node = textRef.current;
+    // +1 absorbs sub-pixel line-height rounding, which otherwise reports a
+    // one-line description as overflowing.
+    setIsClamped(Boolean(node) && node.scrollHeight > node.clientHeight + 1);
+  }, [text]);
+
+  const body = (
+    <Typography
+      ref={textRef}
+      variant="body2"
+      sx={{
+        fontWeight: 600,
+        color: "text.primary",
+        display: "-webkit-box",
+        WebkitBoxOrient: "vertical",
+        WebkitLineClamp: 2,
+        overflow: "hidden",
+      }}
+    >
+      {text}
+    </Typography>
+  );
+
+  // Only a clamped description earns a tooltip; hovering one that is already
+  // fully visible just repeats it back.
+  return (
+    <Box sx={{ minWidth: 200 }}>
+      {isClamped ? (
+        <Tooltip title={text} placement="top-start">
+          {body}
+        </Tooltip>
+      ) : (
+        body
+      )}
+    </Box>
+  );
+}
 const MATERIAL_ACTION_DIALOG_CONFIG = {
   extend: {
     title: "Extend Material",
@@ -867,24 +915,15 @@ export default function SearchMaterials() {
           </Typography>
         ),
       }),
+      // Accessor stays "name": it is the sort key the backend's column map
+      // understands, and combined_description is not sortable there.
       columnHelper.accessor("name", {
         header: "Material Description",
         size: 280,
         cell: info => (
-          <Box sx={{ minWidth: 200 }}>
-            <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary" }}>
-              {info.getValue()}
-            </Typography>
-            {info.row.original.spec && (
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ display: "block", mt: 0.5 }}
-              >
-                {info.row.original.spec}
-              </Typography>
-            )}
-          </Box>
+          <MaterialDescriptionCell
+            text={info.row.original.combined_description || info.getValue() || "-"}
+          />
         ),
       }),
       columnHelper.accessor("groupName", {

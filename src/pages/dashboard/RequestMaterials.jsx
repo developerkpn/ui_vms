@@ -418,8 +418,8 @@ function RequestDetailDialog({ open, request, onClose, massItems, massItemsLoadi
       <DialogContent dividers sx={{ px: { xs: 2, sm: 3 }, py: 2.5 }}>
         <Stack spacing={2}>
           <DetailInfoRow label="Mass Request Reason" value={request?.massRequestReason} />
-          <DetailInfoRow label="Created by" value={detail.createdBy} />
-          <DetailInfoRow label="Created at" value={detail.createdAt} />
+          <DetailInfoRow label="Requested by" value={detail.createdBy} />
+          <DetailInfoRow label="Requested at" value={detail.createdAt} />
 
           <Typography variant="subtitle2" sx={{ fontWeight: 800, mt: 1 }}>
             Items
@@ -1286,7 +1286,7 @@ export default function RequestMaterials() {
                       direction={sortConfig.key === "createdBy" ? sortConfig.direction : "asc"}
                       onClick={() => handleSort("createdBy")}
                     >
-                      Created by
+                      Requested by
                     </TableSortLabel>
                   </TableCell>
                   <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
@@ -1295,7 +1295,7 @@ export default function RequestMaterials() {
                       direction={sortConfig.key === "createdAt" ? sortConfig.direction : "asc"}
                       onClick={() => handleSort("createdAt")}
                     >
-                      Created at
+                      Requested at
                     </TableSortLabel>
                   </TableCell>
                   <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>

@@ -1430,7 +1430,7 @@ export default function AdminApprovalView() {
                         direction={sortConfig.key === "createdBy" ? sortConfig.direction : "asc"}
                         onClick={() => handleSort("createdBy")}
                       >
-                        Created by
+                        Requested by
                       </TableSortLabel>
                     </TableCell>
                     <TableCell sx={PAGE_TABLE_HEADER_SX}>
@@ -1439,7 +1439,7 @@ export default function AdminApprovalView() {
                         direction={sortConfig.key === "createdAt" ? sortConfig.direction : "asc"}
                         onClick={() => handleSort("createdAt")}
                       >
-                        Created at
+                        Requested at
                       </TableSortLabel>
                     </TableCell>
                     <TableCell sx={PAGE_TABLE_HEADER_SX}>
@@ -1614,7 +1614,7 @@ export default function AdminApprovalView() {
                         direction={sortConfig.key === "createdBy" ? sortConfig.direction : "asc"}
                         onClick={() => handleSort("createdBy")}
                       >
-                        Created by
+                        Requested by
                       </TableSortLabel>
                     </TableCell>
                     <TableCell sx={PAGE_TABLE_HEADER_SX}>
@@ -1623,7 +1623,7 @@ export default function AdminApprovalView() {
                         direction={sortConfig.key === "createdAt" ? sortConfig.direction : "asc"}
                         onClick={() => handleSort("createdAt")}
                       >
-                        Created at
+                        Requested at
                       </TableSortLabel>
                     </TableCell>
                     <TableCell sx={PAGE_TABLE_HEADER_SX}>

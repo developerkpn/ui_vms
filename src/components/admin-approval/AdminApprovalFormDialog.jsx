@@ -1195,7 +1195,7 @@ export default function AdminApprovalFormDialog({
               }}
             >
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>
-                Created By
+                Requested By
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 800 }}>
                 {detail.createdBy}
