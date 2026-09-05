@@ -17,7 +17,7 @@ const helper = await import(
 );
 
 const {
-  buildEmailReplyCaption,
+  buildEmailApprovalCaption,
   buildReworkEmailPayload,
   buildReworkEmailSentMessage,
   buildReworkEmailTemplatePath,
@@ -26,7 +26,7 @@ const {
   hasReworkEmailContentError,
   isReworkEmailOnlyResult,
   isReworkEmailSendFailed,
-  normalizeEmailReplyCount,
+  normalizeEmailThreadCount,
   normalizeReworkEmailTemplate,
   normalizeReworkEmailThread,
   resolveReworkEmailKind,
@@ -36,7 +36,8 @@ const {
   REWORK_EMAIL_NOTICE,
   REWORK_EMAIL_REASON_NOTICE,
   REWORK_EMAIL_REASON_PREFIX,
-  REWORK_EMAIL_REPLY_RECEIVED_TEXT,
+  REWORK_EMAIL_APPROVAL_CONFIRMED_TEXT,
+  REWORK_EMAIL_AWAITING_APPROVAL_TEXT,
   REWORK_EMAIL_SENDER_ADDRESS,
 } = helper;
 
@@ -415,36 +416,132 @@ test("the notice tells Master Data where the reason came from", () => {
 // Reply indicator under the Status chip (email_reply_count on the list rows).
 // ---------------------------------------------------------------------------
 
-test("a request with no replies renders no indicator at all", () => {
+test("a request that never had a mail sent renders no indicator at all", () => {
   // "" is the signal the status cell checks: anything falsy means the row looks
   // exactly as it did before the indicator existed.
-  assert.equal(buildEmailReplyCaption(0), "");
-  assert.equal(buildEmailReplyCaption(undefined), "");
-  assert.equal(buildEmailReplyCaption(null), "");
-  assert.equal(buildEmailReplyCaption(""), "");
-  assert.equal(buildEmailReplyCaption("not a number"), "");
-  // A negative count is nonsense the backend cannot produce, but it must not
-  // render as a reply either.
-  assert.equal(buildEmailReplyCaption(-3), "");
+  assert.equal(
+    buildEmailApprovalCaption({
+      emailSentCount: 0,
+      emailUnansweredCount: 0,
+      emailReplyCount: 0,
+    }).text,
+    ""
+  );
+  assert.equal(buildEmailApprovalCaption({}).text, "");
+  assert.equal(buildEmailApprovalCaption().text, "");
+  assert.equal(
+    buildEmailApprovalCaption({ emailSentCount: "not a number", emailReplyCount: null }).text,
+    ""
+  );
+  // Negative counts are nonsense the backend cannot produce, but they must not
+  // render as a sent mail either.
+  assert.equal(
+    buildEmailApprovalCaption({
+      emailSentCount: -3,
+      emailUnansweredCount: -1,
+      emailReplyCount: -1,
+    }).text,
+    ""
+  );
 });
 
-test("a single reply says so without spelling out the count", () => {
-  assert.equal(buildEmailReplyCaption(1), REWORK_EMAIL_REPLY_RECEIVED_TEXT);
+test("a sent mail with no answer yet reads as awaiting approval", () => {
+  const caption = buildEmailApprovalCaption({
+    emailSentCount: 1,
+    emailUnansweredCount: 1,
+    emailReplyCount: 0,
+  });
+
+  assert.equal(caption.text, REWORK_EMAIL_AWAITING_APPROVAL_TEXT);
+  assert.equal(caption.confirmed, false);
   // pg hands COUNT() back as a string on drivers that do not cast bigint.
-  assert.equal(buildEmailReplyCaption("1"), REWORK_EMAIL_REPLY_RECEIVED_TEXT);
+  assert.equal(
+    buildEmailApprovalCaption({
+      emailSentCount: "2",
+      emailUnansweredCount: "2",
+      emailReplyCount: "0",
+    }).text,
+    REWORK_EMAIL_AWAITING_APPROVAL_TEXT
+  );
 });
 
-test("more than one reply carries the count", () => {
-  assert.equal(buildEmailReplyCaption(2), `${REWORK_EMAIL_REPLY_RECEIVED_TEXT} (2)`);
-  assert.equal(buildEmailReplyCaption("11"), `${REWORK_EMAIL_REPLY_RECEIVED_TEXT} (11)`);
+test("every sent mail answered flips the caption to confirmed", () => {
+  const caption = buildEmailApprovalCaption({
+    emailSentCount: 1,
+    emailUnansweredCount: 0,
+    emailReplyCount: 1,
+  });
+
+  assert.equal(caption.text, REWORK_EMAIL_APPROVAL_CONFIRMED_TEXT);
+  assert.equal(caption.confirmed, true);
+  // The count is not spelled out: the caption states an approval state, and
+  // "(3)" next to a line that already means "the approver answered" adds
+  // nothing the thread section does not show in full.
+  assert.equal(
+    buildEmailApprovalCaption({
+      emailSentCount: "2",
+      emailUnansweredCount: "0",
+      emailReplyCount: "3",
+    }).text,
+    REWORK_EMAIL_APPROVAL_CONFIRMED_TEXT
+  );
 });
 
-test("the count is normalized to a whole number of replies", () => {
-  assert.equal(normalizeEmailReplyCount("4"), 4);
-  assert.equal(normalizeEmailReplyCount(4.9), 4);
-  assert.equal(normalizeEmailReplyCount(0), 0);
-  assert.equal(normalizeEmailReplyCount(-1), 0);
-  assert.equal(normalizeEmailReplyCount(Infinity), 0);
-  assert.equal(normalizeEmailReplyCount(NaN), 0);
-  assert.equal(normalizeEmailReplyCount(undefined), 0);
+test("one answered mail does not clear an older one nobody replied to", () => {
+  // Two reworks, only the second answered. The request is still owed an answer
+  // on the first, so the caption stays red.
+  const caption = buildEmailApprovalCaption({
+    emailSentCount: 2,
+    emailUnansweredCount: 1,
+    emailReplyCount: 1,
+  });
+
+  assert.equal(caption.text, REWORK_EMAIL_AWAITING_APPROVAL_TEXT);
+  assert.equal(caption.confirmed, false);
+});
+
+test("an approver writing back twice does not leave the request outstanding", () => {
+  // Replies are not one per mail. Comparing the sent and reply totals would
+  // read 1 !== 2 here and hold a fully answered request on awaiting; counting
+  // mails with no reply lands on 0 and confirms it.
+  const caption = buildEmailApprovalCaption({
+    emailSentCount: 1,
+    emailUnansweredCount: 0,
+    emailReplyCount: 2,
+  });
+
+  assert.equal(caption.text, REWORK_EMAIL_APPROVAL_CONFIRMED_TEXT);
+  assert.equal(caption.confirmed, true);
+});
+
+test("a mail with two replies does not answer for a mail with none", () => {
+  // The other half of the same trap: totals match at 2 === 2, but one of the
+  // two mails was never replied to.
+  const caption = buildEmailApprovalCaption({
+    emailSentCount: 2,
+    emailUnansweredCount: 1,
+    emailReplyCount: 2,
+  });
+
+  assert.equal(caption.text, REWORK_EMAIL_AWAITING_APPROVAL_TEXT);
+  assert.equal(caption.confirmed, false);
+});
+
+test("a reply outlives a sent count the deployment cannot answer with", () => {
+  // A backend still missing the two newer columns answers 0 for both. A reply
+  // proves a mail went out, so the confirmed state must not depend on them.
+  assert.equal(
+    buildEmailApprovalCaption({ emailSentCount: 0, emailReplyCount: 2 }).text,
+    REWORK_EMAIL_APPROVAL_CONFIRMED_TEXT
+  );
+});
+
+test("a count is normalized to a whole number", () => {
+  assert.equal(normalizeEmailThreadCount("4"), 4);
+  assert.equal(normalizeEmailThreadCount(4.9), 4);
+  assert.equal(normalizeEmailThreadCount(0), 0);
+  assert.equal(normalizeEmailThreadCount(-1), 0);
+  assert.equal(normalizeEmailThreadCount(Infinity), 0);
+  assert.equal(normalizeEmailThreadCount(NaN), 0);
+  assert.equal(normalizeEmailThreadCount(undefined), 0);
 });

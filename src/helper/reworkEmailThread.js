@@ -125,43 +125,67 @@ export const REWORK_EMAIL_THREAD_TITLE = "Email Rework";
 export const REWORK_EMAIL_SENDER_MISMATCH_TEXT = "Pengirim berbeda";
 
 /**
+ * Sub-text under the Status chip while a rework mail is out and unanswered.
+ * Nothing else on the row says so: the pill still reads Submit and the request
+ * is still parked at Master Data, so without this line a request waiting on
+ * someone's inbox is indistinguishable from one waiting on nothing.
+ */
+export const REWORK_EMAIL_AWAITING_APPROVAL_TEXT = "Awaiting Email Approval";
+
+/**
  * Sub-text under the Status chip once the approver has written back. The reply
  * itself lives in the request detail's thread section; this only says one is
  * there, so a requester or approver scanning the list knows to open the row.
  */
-export const REWORK_EMAIL_REPLY_RECEIVED_TEXT = "Balasan email diterima";
+export const REWORK_EMAIL_APPROVAL_CONFIRMED_TEXT = "Email Approval Confirmed";
 
 /**
- * The list payload's `email_reply_count` as a number. Anything that is not a
- * finite count reads as none, which renders no line at all — the same as a
- * request whose approver has not answered.
+ * One of the list payload's rework-mail counts as a number. Anything that is
+ * not a finite count reads as none, which renders no line at all — the same as
+ * a request that never had a mail sent.
  *
- * @param {*} value - Raw `emailReplyCount` / `email_reply_count` off a row.
+ * @param {*} value - Raw `emailSentCount` / `emailReplyCount` off a row.
  * @returns {number} 0 or more.
  */
-export function normalizeEmailReplyCount(value) {
+export function normalizeEmailThreadCount(value) {
   const count = Number(value);
   return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
 }
 
 /**
- * The one-line reply indicator, or "" when there is nothing to say. The count
- * is only spelled out past the first reply: "(1)" next to a line that already
- * means "a reply came back" adds nothing.
+ * The one-line e-mail approval indicator under the Status chip.
  *
- * @param {*} count - Raw count off a row.
- * @returns {string} e.g. "Balasan email diterima (3)", or "".
+ * Reads two counts, and neither is the thread's reply total. The sent count
+ * decides whether there is anything to say at all — "no mail was ever sent" and
+ * "sent, still waiting" are both zero replies, and only the sent count
+ * separates them. The count of sent mails with no reply then decides answered
+ * vs waiting: a request can be reworked by mail more than once, and every mail
+ * that went out is owed an answer, so one that is still unanswered holds the
+ * request even after a later one has been replied to.
+ *
+ * Counted per mail rather than by comparing the two totals, because replies are
+ * not one per mail. An approver who writes back twice leaves two rows against a
+ * single mail, which would make the totals match on a request that still has an
+ * ignored mail, and mismatch on one that is fully answered.
+ *
+ * @param {object} [row] - List row carrying emailSentCount, emailUnansweredCount
+ *        and emailReplyCount.
+ * @returns {{text: string, confirmed: boolean}} text is "" when the request
+ *          never had a rework mail sent, which renders no line at all.
  */
-export function buildEmailReplyCaption(count) {
-  const replies = normalizeEmailReplyCount(count);
-
-  if (replies === 0) {
-    return "";
+export function buildEmailApprovalCaption(row = {}) {
+  if (normalizeEmailThreadCount(row?.emailSentCount) === 0) {
+    // A backend that predates the sent count answers 0 for it. A reply is
+    // proof a mail went out, so the row still reads as answered rather than as
+    // one that never had a mailed rework.
+    return normalizeEmailThreadCount(row?.emailReplyCount) > 0
+      ? { text: REWORK_EMAIL_APPROVAL_CONFIRMED_TEXT, confirmed: true }
+      : { text: "", confirmed: false };
   }
 
-  return replies > 1
-    ? `${REWORK_EMAIL_REPLY_RECEIVED_TEXT} (${replies})`
-    : REWORK_EMAIL_REPLY_RECEIVED_TEXT;
+  return normalizeEmailThreadCount(row?.emailUnansweredCount) > 0
+    ? { text: REWORK_EMAIL_AWAITING_APPROVAL_TEXT, confirmed: false }
+    : { text: REWORK_EMAIL_APPROVAL_CONFIRMED_TEXT, confirmed: true };
 }
 
 /**

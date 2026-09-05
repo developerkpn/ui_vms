@@ -204,7 +204,7 @@ export default function ResetPassword() {
                 viewBox="0 0 5000 5000"
                 color="white"
               />
-              <Typography variant="h4">Vendor Management System KPN</Typography>
+              <Typography variant="h4">Material Management System KPN</Typography>
             </Box>
             <Box sx={{ display: 'flex' }}>
               <Typography variant="h5">Password Reset</Typography>

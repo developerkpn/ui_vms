@@ -24,6 +24,16 @@ const DEFAULT_MATERIAL_TYPE = "SPAR - Non Trade Material";
 const INDUSTRY_SECTOR = "C - Chemical Industry";
 const PREFERENCE_KEY = "material_request_preferences";
 
+// The locked fields on the initial screen are readOnly, not disabled, and MUI
+// styles readOnly identically to an editable field. Switching them to disabled
+// would not help either: theme/overrides/Input.jsx deliberately un-greys
+// Mui-disabled. So the "this is not yours to change" signal has to be carried
+// here, on the fields themselves.
+const LOCKED_FIELD_SX = {
+  "& .MuiInputBase-root": { bgcolor: "action.hover" },
+  "& .MuiOutlinedInput-notchedOutline": { borderStyle: "dashed" },
+};
+
 const parseTemplatePayload = payload => {
   if (!payload) {
     return {};
@@ -447,6 +457,7 @@ export default function SingleRequestPage({ mode = "single" }) {
                   size="small"
                   value={formData.materialType}
                   InputProps={{ readOnly: true }}
+                  sx={LOCKED_FIELD_SX}
                 />
 
                 {/* Industry Sector (single fixed value) */}
@@ -456,6 +467,7 @@ export default function SingleRequestPage({ mode = "single" }) {
                   size="small"
                   value={INDUSTRY_SECTOR}
                   InputProps={{ readOnly: true }}
+                  sx={LOCKED_FIELD_SX}
                 />
 
                 {/* Sales Organization (auto-filled from the selected plant's company) */}
@@ -467,6 +479,7 @@ export default function SingleRequestPage({ mode = "single" }) {
                   placeholder="Auto-filled from Plant"
                   InputProps={{ readOnly: true }}
                   InputLabelProps={{ shrink: true }}
+                  sx={LOCKED_FIELD_SX}
                 />
 
                 {isSingleCreateMode && (
