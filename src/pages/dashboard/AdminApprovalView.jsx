@@ -430,7 +430,15 @@ export default function AdminApprovalView() {
   // so a mass batch needs no separate state the way the two status dialogs do.
   const [commentsDialogRow, setCommentsDialogRow] = useState(null);
   const [approvalDialogSubGroups, setApprovalDialogSubGroups] = useState([]);
+  const [approvalDialogMaterialGroups, setApprovalDialogMaterialGroups] = useState([]);
   const [approvalDialogSchema, setApprovalDialogSchema] = useState(null);
+  // The material group the approval dialog has switched to, if any. Both the
+  // sub group list and the form schema are per material group, so the group the
+  // reference data is fetched for has to follow the dialog's dropdown rather
+  // than stay pinned to the one the request was submitted with. Tagged with the
+  // row it was picked on so opening a different request falls straight back to
+  // that request's own group instead of inheriting the last one.
+  const [approvalDialogGroupOverride, setApprovalDialogGroupOverride] = useState(null);
   // Both of the above land after the approval dialog is already open, so the
   // dialog is told they are still coming rather than being left to render an
   // empty Specification section that fills itself in a beat later.
@@ -683,6 +691,71 @@ export default function AdminApprovalView() {
     setStatusFilter(resolveStoredStatusFilter(storedStatusFilterRef.current, isMdmUser));
   }, [isMdmUser]);
 
+  // The group the dialog's reference data belongs to: the request's own until
+  // the approver picks a different one, and the request's own again the moment a
+  // different request is opened.
+  const approvalDialogGroup = useMemo(() => {
+    if (!approvalDialogRow) {
+      return null;
+    }
+
+    if (
+      approvalDialogGroupOverride &&
+      String(approvalDialogGroupOverride.rowId ?? "") ===
+        String(approvalDialogRow.id ?? "")
+    ) {
+      return approvalDialogGroupOverride;
+    }
+
+    return {
+      id:
+        approvalDialogRow.materialGroupId ??
+        approvalDialogRow.material_group_id ??
+        null,
+      code:
+        approvalDialogRow.materialGroupCode ||
+        approvalDialogRow.material_group_code ||
+        "",
+    };
+  }, [approvalDialogRow, approvalDialogGroupOverride]);
+
+  // The group dropdown itself: needed only while the approval dialog is open,
+  // and independent of which group is currently selected in it.
+  useEffect(() => {
+    if (!approvalDialogRow) {
+      setApprovalDialogMaterialGroups([]);
+      return undefined;
+    }
+
+    let active = true;
+
+    axiosPrivate
+      .get("/material/groups/dropdown")
+      .then(response => {
+        if (!active) {
+          return;
+        }
+        setApprovalDialogMaterialGroups(
+          Array.isArray(response?.data?.data) ? response.data.data : []
+        );
+      })
+      .catch(error => {
+        if (!active) {
+          return;
+        }
+        console.error("Failed to fetch approval dialog material groups:", error);
+        setApprovalDialogMaterialGroups([]);
+        openSnackbar(
+          "Material group belum berhasil dimuat di form approval. Silakan coba buka lagi.",
+          "warning"
+        );
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [approvalDialogRow, axiosPrivate]);
+
   useEffect(() => {
     if (!approvalDialogRow) {
       setApprovalDialogSubGroups([]);
@@ -691,9 +764,10 @@ export default function AdminApprovalView() {
       return undefined;
     }
 
-    const requestPath = buildApprovalSubGroupsRequestPath(approvalDialogRow);
-    const materialGroupCode =
-      approvalDialogRow?.materialGroupCode || approvalDialogRow?.material_group_code || "";
+    const requestPath = buildApprovalSubGroupsRequestPath({
+      materialGroupId: approvalDialogGroup?.id ?? null,
+    });
+    const materialGroupCode = approvalDialogGroup?.code || "";
 
     let active = true;
     setApprovalDialogDataLoading(true);
@@ -743,7 +817,7 @@ export default function AdminApprovalView() {
     return () => {
       active = false;
     };
-  }, [approvalDialogRow, axiosPrivate]);
+  }, [approvalDialogRow, approvalDialogGroup?.id, approvalDialogGroup?.code, axiosPrivate]);
 
   const sortRowsByConfig = (rows, config) => {
     if (!config.key) {
@@ -1774,14 +1848,23 @@ export default function AdminApprovalView() {
       <AdminApprovalFormDialog
         open={Boolean(approvalDialogRow)}
         row={approvalDialogRow}
+        materialGroups={approvalDialogMaterialGroups}
         subGroups={approvalDialogSubGroups}
         formSchema={approvalDialogSchema}
         referenceDataLoading={approvalDialogDataLoading}
         serverValidationErrors={approvalDialogServerErrors}
         onClearServerValidationErrors={() => setApprovalDialogServerErrors({})}
+        onMaterialGroupChange={group =>
+          setApprovalDialogGroupOverride({
+            rowId: approvalDialogRow?.id ?? null,
+            id: group?.id ?? null,
+            code: group?.code ?? "",
+          })
+        }
         onClose={() => {
           setApprovalDialogRow(null);
           setApprovalDialogServerErrors({});
+          setApprovalDialogGroupOverride(null);
         }}
         onAction={handleApprovalAction}
         onGrabbed={handleMdmGrabbed}

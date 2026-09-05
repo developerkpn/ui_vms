@@ -135,9 +135,20 @@ export function buildApprovalSpecificationFields({
   });
 }
 
+/**
+ * @param {object} options
+ * @param {object} options.draftValues - the approver's in-dialog draft
+ * @param {object} options.formSchema - form schema of the *currently selected*
+ *   material group, not necessarily the one the request was submitted with
+ * @param {boolean} options.requireMaterialSubGroup - true once the approver has
+ *   swapped the material group, which invalidates whatever sub group the
+ *   request carried
+ * @returns {object} field key -> { error, message }
+ */
 export function validateApprovalDraft({
   draftValues = {},
   formSchema = {},
+  requireMaterialSubGroup = false,
 } = {}) {
   const fieldErrors = {};
   const requestRuleFields = getRequestRuleFields(formSchema);
@@ -154,6 +165,22 @@ export function validateApprovalDraft({
       message,
     };
   };
+
+  if (!toTrimmedString(draftValues?.material_group_id).trim()) {
+    addError("material_group_id", "Material group wajib dipilih.");
+  }
+
+  // A sub group is optional on the request form, so an untouched request must
+  // stay approvable without one. It only becomes mandatory once the approver
+  // swaps the material group: the sub group that came with the request belongs
+  // to the previous group and is cleared, and approving with an empty one would
+  // silently drop it rather than record a deliberate choice.
+  if (
+    requireMaterialSubGroup &&
+    !toTrimmedString(draftValues?.material_sub_group_id).trim()
+  ) {
+    addError("material_sub_group_id", "Sub material group wajib dipilih.");
+  }
 
   // Validate the combined Material Description (what the approver sees in the
   // single box), not column 0 alone — the four SAP columns are a positional
@@ -252,6 +279,25 @@ export function buildApprovalFieldHints(formSchema = {}) {
   }
 
   return hints;
+}
+
+/**
+ * Field keys the given schema's specification template actually defines.
+ *
+ * Template field keys come from a shared field master, not from the group, so
+ * the same key under two material groups is the same field — only its rules
+ * (mandatory, max length, validation type) are per template. That is what makes
+ * a value safe to carry across a group change.
+ *
+ * @param {object} formSchema
+ * @returns {Set<string>}
+ */
+export function getTemplateFieldKeys(formSchema = {}) {
+  return new Set(
+    getTemplateFields(formSchema)
+      .map(field => field?.fieldKey)
+      .filter(Boolean)
+  );
 }
 
 export function toRequestFieldKey(fieldKey = "") {

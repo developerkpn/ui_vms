@@ -27,6 +27,33 @@ export function formatSubGroupOptionLabel(option = {}) {
   return option?.id ? `Sub Group ${option.id}` : "";
 }
 
+/**
+ * Label for a material group option in the approval dialog's dropdown. Kept
+ * beside its sub group twin rather than folded into it: the two read different
+ * field aliases and their "nothing to show" fallbacks name different things.
+ *
+ * @param {{ id?: *, code?: string, name?: string }} option
+ * @returns {string}
+ */
+export function formatMaterialGroupOptionLabel(option = {}) {
+  const code = String(option?.code ?? option?.materialGroupCode ?? "").trim();
+  const name = String(option?.name ?? option?.materialGroupName ?? "").trim();
+
+  if (code && name) {
+    return `${code} - ${name}`;
+  }
+
+  if (name) {
+    return name;
+  }
+
+  if (code) {
+    return code;
+  }
+
+  return option?.id ? `Material Group ${option.id}` : "";
+}
+
 export function buildCurrentSubGroupOption(row = {}) {
   const id =
     row?.materialSubGroupId ??
