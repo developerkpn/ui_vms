@@ -665,6 +665,8 @@ export default function SearchMaterials() {
 
   // The export endpoint re-runs the same search server-side, so the file holds
   // every match for the current filters, not just the page shown in the table.
+  // With no keyword and no group it filters on nothing and the file is every
+  // material — which is why the button is not gated on an active search.
   const handleExportToExcel = async () => {
     setExporting(true);
     try {
@@ -1169,7 +1171,7 @@ export default function SearchMaterials() {
             startIcon={exporting ? <CircularProgress size={16} color="inherit" /> : <Download />}
             color="primary"
             onClick={handleExportToExcel}
-            disabled={!isSearchActive || exporting}
+            disabled={exporting}
             sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 600, px: 3 }}
           >
             Download To Excel
