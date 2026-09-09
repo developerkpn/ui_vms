@@ -175,7 +175,7 @@ export default function LoginPage() {
                 color="white"
               />
               <Typography variant="h4" sx={{ mb: matches ? "5rem" : "2rem", pb: "0.5rem" }}>
-                Material Management System KPN
+                Vendor Management System KPN
               </Typography>
             </Box>
             <Box sx={{ display: "flex", flexDirection: "column", width: "100%", gap: 1 }}>
