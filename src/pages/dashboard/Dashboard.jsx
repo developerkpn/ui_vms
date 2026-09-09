@@ -27,6 +27,11 @@ import useAccessTokStore from "src/store/useAccessTokStore";
 
 const drawerWidth = 240;
 
+// The app is VMS everywhere; only the material menu is presented as MMS.
+const VENDOR_APP_NAME = "Vendor Management System App";
+const MATERIAL_APP_NAME = "Material Management System App";
+const MATERIAL_MENU_PATH_PREFIXES = ["/dashboard/materials", "/dashboard/subgroups"];
+
 const openedMixin = theme => ({
   width: drawerWidth,
   transition: theme.transitions.create("width", {
@@ -109,6 +114,10 @@ export default function MiniDrawer() {
   });
   const [navMenu, setNavmenu] = useState("");
 
+  const isMaterialMenu = MATERIAL_MENU_PATH_PREFIXES.some(prefix =>
+    location.pathname.startsWith(prefix)
+  );
+
   useEffect(() => {
     (async () => {
       try {
@@ -186,7 +195,7 @@ export default function MiniDrawer() {
             />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            Material Management System App
+            {isMaterialMenu ? MATERIAL_APP_NAME : VENDOR_APP_NAME}
           </Typography>
           <AvatarComp />
         </Toolbar>
