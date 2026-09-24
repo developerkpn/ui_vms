@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import { styled, useTheme } from "@mui/material/styles";
 import SvgIcon from "@mui/material/SvgIcon";
 import Box from "@mui/material/Box";
@@ -12,6 +12,7 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import AvatarComp from "src/components/common/AvatarComp";
 import { Outlet, Link, useLocation, Navigate } from "react-router-dom";
+import LoadingContent from "src/components/loadingscreen/LoadingContent";
 import NavSection from "src/components/nav/NavSection";
 import { Menu } from "src/_mock/Menu";
 import Cookies from "js-cookie";
@@ -233,7 +234,14 @@ export default function MiniDrawer() {
           <ResetPasswordDialog open={openDialog} setOpen={setOpenDialog} />
         )}
         <DrawerHeader />
-        <Outlet />
+        {/* Pages are lazy. Without a boundary here they suspend against the
+            app-level one in App.jsx, whose fallback covers the whole viewport —
+            so loading any page took the sidebar and the app bar down with it.
+            Suspending inside the outlet keeps the chrome mounted and its state
+            intact, and confines the spinner to the content area. */}
+        <Suspense fallback={<LoadingContent />}>
+          <Outlet />
+        </Suspense>
       </Box>
     </Box>
   );

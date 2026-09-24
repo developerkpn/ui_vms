@@ -20,6 +20,7 @@ import {
 } from "@mui/material";
 import { Delete, InfoOutlined } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
+import MaterialAiMatchPanel from "../common/MaterialAiMatchPanel";
 import SearchableSelect from "../common/SearchableSelect";
 import SectionLoadingSkeleton from "../common/SectionLoadingSkeleton";
 import RequesterCommentField from "../common/RequesterCommentField";
@@ -397,6 +398,9 @@ const SingleMaterialForm = ({
   const [submitting, setSubmitting] = useState(false);
   const [saveSuccessOpen, setSaveSuccessOpen] = useState(false);
   const [loadingExistingRequest, setLoadingExistingRequest] = useState(false);
+  // Ticket type of the loaded request. Kept out of formState because nothing on
+  // the form writes it — it only decides whether the AI match section shows.
+  const [existingTicketType, setExistingTicketType] = useState("");
 
   const [fieldErrors, setFieldErrors] = useState({});
   const fileInputRef = useRef(null);
@@ -479,6 +483,9 @@ const SingleMaterialForm = ({
         setAttachments(
           Array.isArray(row?.attachments) ? row.attachments.map(normalizeExistingAttachment) : []
         );
+        // Same fallback the approval views use: a row without a ticket type is a
+        // Create request from before the column existed.
+        setExistingTicketType(row?.ticket_type || row?.ticketType || "Create");
         setFieldErrors({});
         setComment("");
       } catch (error) {
@@ -801,6 +808,10 @@ const SingleMaterialForm = ({
     .filter(field => field.kind === "template_field");
   const hasSelectedMaterialGroup = Boolean(formState.materialGroup);
   const showSpecificationSection = !hasSelectedMaterialGroup || specificationFields.length > 0;
+  const showAiMatchSection =
+    isExistingRequestMode &&
+    Boolean(requestId) &&
+    String(existingTicketType).toUpperCase() === "CREATE";
   const handleSpecFieldChange = (field, rawValue) => {
     const value = rawValue.toUpperCase();
 
@@ -1239,6 +1250,16 @@ const SingleMaterialForm = ({
               ))}
             </Stack>
           </Grid>
+
+          {/* Advisory only, and read-only here: the requester sees the same
+              ranking the approvers see, minus the re-run button. Change and
+              Extend already name a material, so only Create requests get one. */}
+          {showAiMatchSection && (
+            <Grid item xs={12}>
+              <Divider sx={{ mb: 4 }} />
+              <MaterialAiMatchPanel kind="single" requestId={requestId} open hideRerun />
+            </Grid>
+          )}
 
           {isReworkMode && (
             <Grid item xs={12}>

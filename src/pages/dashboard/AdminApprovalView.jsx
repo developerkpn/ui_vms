@@ -82,7 +82,13 @@ import {
   STATUS_FILTER_PREFERENCE_KEY,
 } from "src/helper/adminApprovalView.js";
 import PageHeader from "src/components/common/PageHeader";
-import PageTablePaper, { PAGE_TABLE_HEADER_SX } from "src/components/common/PageTablePaper";
+import StatusWithNotes from "src/components/common/StatusWithNotes";
+import { assignmentNoteKind, buildStatusNote } from "src/helper/statusNotes";
+import PageTablePaper, {
+  PAGE_TABLE_CLAMP_SX,
+  PAGE_TABLE_COMPACT_SX,
+  PAGE_TABLE_HEADER_COMPACT_SX,
+} from "src/components/common/PageTablePaper";
 import PageTabs from "src/components/common/PageTabs";
 import TableLoadingRows, { TableEmptyRow } from "src/components/common/TableLoadingRows";
 
@@ -113,29 +119,6 @@ function StatusBadge({ value }) {
 // Spells out which step a still-open request is sitting on — waiting on a named
 // approver, or waiting for Master Data to grab it — so it can be read off the
 // Status column instead of inferred from "Assigned To" at the far right.
-function AssignmentCaption({ status, caption }) {
-  return (
-    <Tooltip title={caption.text} arrow placement="top">
-      <Stack spacing={0.5} alignItems="flex-start" sx={{ maxWidth: 220 }}>
-        <StatusBadge value={status} />
-        <Typography
-          variant="caption"
-          sx={{
-            color: caption.kind === "UNASSIGNED" ? "#f59e0b" : "text.secondary",
-            fontWeight: 600,
-            textAlign: "left",
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-          }}
-        >
-          {caption.text}
-        </Typography>
-      </Stack>
-    </Tooltip>
-  );
-}
 
 // Same caption slot the SAP error message and the assignment caption already
 // occupy under the Status chip. Colour is the state: an unanswered mail is
@@ -143,93 +126,69 @@ function AssignmentCaption({ status, caption }) {
 // dark ends of their ramps rather than the mains, which clear 4.5:1 on the
 // table's white background where error.main does not — and the wording says
 // which state it is on its own, so the colour is reinforcement, not the signal.
-const EMAIL_APPROVAL_CAPTION_SX = {
-  fontWeight: 700,
-  textAlign: "left",
-  display: "-webkit-box",
-  WebkitLineClamp: 2,
-  WebkitBoxOrient: "vertical",
-  overflow: "hidden",
-};
-
-// Show the SAP staging status (waiting / created / error) once a request has
-// been pushed; otherwise fall back to the approval status.
-function SapAwareStatusBadgeContent({ row }) {
+// The status cell stays one line tall. Everything that used to stack underneath
+// the badge — the assignment caption, a SAP write-back error, whether a mailed
+// rework has been answered — is collapsed into a single marker beside it, with
+// the text on hover. Three captions under a chip made a row three times the
+// height of its neighbours, which a ten-column table cannot afford.
+function buildApprovalStatusNotes(row) {
+  const notes = [];
   const sapChip = getSapStatusChip(row?.sapPushStatus);
-  if (!sapChip) {
-    // Gated on the raw status, not the effective label: the label now reads
-    // "Rework" for a rewound request, but that request is still raw-Submit and
-    // still has a next actor to name — the caption must not go dark under it.
-    if (row?.assignmentCaption && normalizeApprovalStatusForFilter(row?.status) === "Submit") {
-      return <AssignmentCaption status={getEffectiveApprovalStatusLabel(row)} caption={row.assignmentCaption} />;
+
+  if (sapChip) {
+    if (isSapError(row?.sapPushStatus) && row?.sapErrorMsg) {
+      notes.push(buildStatusNote("SAP_ERROR", row.sapErrorMsg));
     }
+  } else if (
+    row?.assignmentCaption &&
+    // Gated on the raw status, not the effective label: a rewound request is
+    // still raw-Submit and still has a next actor to name.
+    normalizeApprovalStatusForFilter(row?.status) === "Submit"
+  ) {
+    notes.push(
+      buildStatusNote(
+        assignmentNoteKind(row.assignmentCaption.kind),
+        row.assignmentCaption.text
+      )
+    );
+  }
+
+  const emailApproval = buildEmailApprovalCaption(row);
+  if (emailApproval.text !== "") {
+    notes.push(
+      buildStatusNote(
+        emailApproval.confirmed ? "EMAIL_ANSWERED" : "EMAIL_WAITING",
+        emailApproval.text
+      )
+    );
+  }
+
+  return notes;
+}
+
+// Once a request is approved and pushed, the SAP staging status is the
+// meaningful one to show; otherwise fall back to the approval status.
+function SapAwareStatusBadgeOnly({ row }) {
+  const sapChip = getSapStatusChip(row?.sapPushStatus);
+
+  if (!sapChip) {
     return <StatusBadge value={getEffectiveApprovalStatusLabel(row)} />;
   }
 
-  const chip = (
+  return (
     <Chip
       label={sapChip.label}
       size="small"
-      sx={{
-        fontWeight: 800,
-        bgcolor: sapChip.bgcolor,
-        color: "common.white",
-      }}
+      sx={{ fontWeight: 800, bgcolor: sapChip.bgcolor, color: "common.white" }}
     />
   );
-
-  if (isSapError(row?.sapPushStatus) && row?.sapErrorMsg) {
-    // Surface the SAP write-back message (ERRORMSG_POST) inline, with the full
-    // text on hover in case it is truncated.
-    return (
-      <Tooltip title={row.sapErrorMsg} arrow placement="top">
-        <Stack spacing={0.5} alignItems="flex-start" sx={{ maxWidth: 220 }}>
-          {chip}
-          <Typography
-            variant="caption"
-            sx={{
-              color: "#dc2626",
-              fontWeight: 600,
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-            }}
-          >
-            {row.sapErrorMsg}
-          </Typography>
-        </Stack>
-      </Tooltip>
-    );
-  }
-  return chip;
 }
 
-// The status cell: the chip (or chip + its own caption) plus, once a rework
-// mail has gone out, a line saying whether the approver has answered it.
-// Nothing is rendered for a request that never had one, so every row without a
-// mailed rework looks exactly as it did.
 function SapAwareStatusBadge({ row }) {
-  const emailApproval = buildEmailApprovalCaption(row);
-  const statusContent = <SapAwareStatusBadgeContent row={row} />;
-
-  if (emailApproval.text === "") {
-    return statusContent;
-  }
-
   return (
-    <Stack spacing={0.5} alignItems="flex-start" sx={{ maxWidth: 220 }}>
-      {statusContent}
-      <Typography
-        variant="caption"
-        sx={{
-          ...EMAIL_APPROVAL_CAPTION_SX,
-          color: emailApproval.confirmed ? "success.darker" : "error.dark",
-        }}
-      >
-        {emailApproval.text}
-      </Typography>
-    </Stack>
+    <StatusWithNotes notes={buildApprovalStatusNotes(row)}>
+      <SapAwareStatusBadgeOnly row={row} />
+    </StatusWithNotes>
   );
 }
 
@@ -1435,14 +1394,14 @@ export default function AdminApprovalView() {
 
       {/* Single tab table */}
       {activeTab === "single" && (
-        <PageTablePaper>
-              <Table size="small" sx={{ minWidth: 1060 }}>
+        <PageTablePaper minWidth={860}>
+              <Table size="small" sx={{ minWidth: 860, ...PAGE_TABLE_COMPACT_SX }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell align="center" sx={PAGE_TABLE_HEADER_SX}>
+                    <TableCell align="center" sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                       Action
                     </TableCell>
-                    <TableCell sx={PAGE_TABLE_HEADER_SX}>
+                    <TableCell sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                       <TableSortLabel
                         active={sortConfig.key === "ticketNumber"}
                         direction={sortConfig.key === "ticketNumber" ? sortConfig.direction : "asc"}
@@ -1451,7 +1410,7 @@ export default function AdminApprovalView() {
                         Ticket Number
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell sx={PAGE_TABLE_HEADER_SX}>
+                    <TableCell sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                       <TableSortLabel
                         active={sortConfig.key === "ticketType"}
                         direction={sortConfig.key === "ticketType" ? sortConfig.direction : "asc"}
@@ -1460,7 +1419,7 @@ export default function AdminApprovalView() {
                         Ticket Type
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
+                    <TableCell sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                       <TableSortLabel
                         active={sortConfig.key === "materialCode"}
                         direction={sortConfig.key === "materialCode" ? sortConfig.direction : "asc"}
@@ -1469,7 +1428,7 @@ export default function AdminApprovalView() {
                         Material Code
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, minWidth: 280 }}>
+                    <TableCell sx={{ ...PAGE_TABLE_HEADER_COMPACT_SX, minWidth: 180 }}>
                       <TableSortLabel
                         active={sortConfig.key === "materialDescription"}
                         direction={
@@ -1480,7 +1439,7 @@ export default function AdminApprovalView() {
                         Material Description
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell align="center" sx={PAGE_TABLE_HEADER_SX}>
+                    <TableCell align="center" sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                       <TableSortLabel
                         active={sortConfig.key === "uom"}
                         direction={sortConfig.key === "uom" ? sortConfig.direction : "asc"}
@@ -1489,7 +1448,7 @@ export default function AdminApprovalView() {
                         UOM
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell align="left" sx={PAGE_TABLE_HEADER_SX}>
+                    <TableCell align="left" sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                       <TableSortLabel
                         active={sortConfig.key === "status"}
                         direction={sortConfig.key === "status" ? sortConfig.direction : "asc"}
@@ -1498,7 +1457,7 @@ export default function AdminApprovalView() {
                         Status
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell sx={PAGE_TABLE_HEADER_SX}>
+                    <TableCell sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                       <TableSortLabel
                         active={sortConfig.key === "createdBy"}
                         direction={sortConfig.key === "createdBy" ? sortConfig.direction : "asc"}
@@ -1507,7 +1466,7 @@ export default function AdminApprovalView() {
                         Requested by
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell sx={PAGE_TABLE_HEADER_SX}>
+                    <TableCell sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                       <TableSortLabel
                         active={sortConfig.key === "createdAt"}
                         direction={sortConfig.key === "createdAt" ? sortConfig.direction : "asc"}
@@ -1516,7 +1475,7 @@ export default function AdminApprovalView() {
                         Requested at
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell sx={PAGE_TABLE_HEADER_SX}>
+                    <TableCell sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                       <TableSortLabel
                         active={sortConfig.key === "assignedTo"}
                         direction={sortConfig.key === "assignedTo" ? sortConfig.direction : "asc"}
@@ -1542,7 +1501,7 @@ export default function AdminApprovalView() {
                             borderColor: "divider",
                             color: "text.secondary",
                             verticalAlign: "middle",
-                            py: 1.75,
+                            py: 1.25,
                           },
                           "&:last-child .MuiTableCell-root": {
                             borderBottom: "none",
@@ -1581,8 +1540,10 @@ export default function AdminApprovalView() {
                         <TableCell sx={{ whiteSpace: "nowrap", fontWeight: 700 }}>
                           {getStagedMaterialCode(row) || "-"}
                         </TableCell>
-                        <TableCell sx={{ color: "text.secondary", fontWeight: 600 }}>
-                          {row.materialDescription}
+                        <TableCell sx={{ color: "text.secondary", fontWeight: 600, maxWidth: 260 }}>
+                          <Box sx={PAGE_TABLE_CLAMP_SX} title={row.materialDescription}>
+                            {row.materialDescription}
+                          </Box>
                         </TableCell>
                         <TableCell align="center" sx={{ color: "text.secondary", fontWeight: 700 }}>
                           {row.uom}
@@ -1590,13 +1551,9 @@ export default function AdminApprovalView() {
                         <TableCell align="left">
                           <SapAwareStatusBadge row={row} />
                         </TableCell>
-                        <TableCell sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
-                          {row.createdBy}
-                        </TableCell>
-                        <TableCell sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
-                          {row.createdAt}
-                        </TableCell>
-                        <TableCell sx={{ whiteSpace: "nowrap" }}>
+                        <TableCell sx={{ color: "text.secondary" }}>{row.createdBy}</TableCell>
+                        <TableCell sx={{ color: "text.secondary" }}>{row.createdAt}</TableCell>
+                        <TableCell>
                           <AssignedToCell row={row} />
                         </TableCell>
                       </TableRow>
@@ -1637,14 +1594,14 @@ export default function AdminApprovalView() {
       {/* Mass tab table */}
 
       {activeTab === "mass" && (
-        <PageTablePaper>
-              <Table size="small" sx={{ minWidth: 1060 }}>
+        <PageTablePaper minWidth={860}>
+              <Table size="small" sx={{ minWidth: 860, ...PAGE_TABLE_COMPACT_SX }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell align="center" sx={PAGE_TABLE_HEADER_SX}>
+                    <TableCell align="center" sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                       Action
                     </TableCell>
-                    <TableCell sx={PAGE_TABLE_HEADER_SX}>
+                    <TableCell sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                       <TableSortLabel
                         active={sortConfig.key === "massRequestNo"}
                         direction={sortConfig.key === "massRequestNo" ? sortConfig.direction : "asc"}
@@ -1653,7 +1610,7 @@ export default function AdminApprovalView() {
                         Ticket Number
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell sx={PAGE_TABLE_HEADER_SX}>
+                    <TableCell sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                       <TableSortLabel
                         active={sortConfig.key === "ticketType"}
                         direction={sortConfig.key === "ticketType" ? sortConfig.direction : "asc"}
@@ -1662,7 +1619,7 @@ export default function AdminApprovalView() {
                         Ticket Type
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, minWidth: 280 }}>
+                    <TableCell sx={{ ...PAGE_TABLE_HEADER_COMPACT_SX, minWidth: 180 }}>
                       <TableSortLabel
                         active={sortConfig.key === "massRequestReason"}
                         direction={
@@ -1673,7 +1630,7 @@ export default function AdminApprovalView() {
                         Mass Request Reason
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell align="left" sx={PAGE_TABLE_HEADER_SX}>
+                    <TableCell align="left" sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                       <TableSortLabel
                         active={sortConfig.key === "status"}
                         direction={sortConfig.key === "status" ? sortConfig.direction : "asc"}
@@ -1682,7 +1639,7 @@ export default function AdminApprovalView() {
                         Status
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell sx={PAGE_TABLE_HEADER_SX}>
+                    <TableCell sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                       <TableSortLabel
                         active={sortConfig.key === "createdBy"}
                         direction={sortConfig.key === "createdBy" ? sortConfig.direction : "asc"}
@@ -1691,7 +1648,7 @@ export default function AdminApprovalView() {
                         Requested by
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell sx={PAGE_TABLE_HEADER_SX}>
+                    <TableCell sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                       <TableSortLabel
                         active={sortConfig.key === "createdAt"}
                         direction={sortConfig.key === "createdAt" ? sortConfig.direction : "asc"}
@@ -1700,7 +1657,7 @@ export default function AdminApprovalView() {
                         Requested at
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell sx={PAGE_TABLE_HEADER_SX}>
+                    <TableCell sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                       <TableSortLabel
                         active={sortConfig.key === "assignedTo"}
                         direction={sortConfig.key === "assignedTo" ? sortConfig.direction : "asc"}
@@ -1726,7 +1683,7 @@ export default function AdminApprovalView() {
                             borderColor: "divider",
                             color: "text.secondary",
                             verticalAlign: "middle",
-                            py: 1.75,
+                            py: 1.25,
                           },
                           "&:last-child .MuiTableCell-root": {
                             borderBottom: "none",
@@ -1779,13 +1736,9 @@ export default function AdminApprovalView() {
                         <TableCell align="left">
                           <SapAwareStatusBadge row={row} />
                         </TableCell>
-                        <TableCell sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
-                          {row.createdBy}
-                        </TableCell>
-                        <TableCell sx={{ color: "text.secondary", whiteSpace: "nowrap" }}>
-                          {row.createdAt}
-                        </TableCell>
-                        <TableCell sx={{ whiteSpace: "nowrap" }}>
+                        <TableCell sx={{ color: "text.secondary" }}>{row.createdBy}</TableCell>
+                        <TableCell sx={{ color: "text.secondary" }}>{row.createdAt}</TableCell>
+                        <TableCell>
                           <AssignedToCell row={row} />
                         </TableCell>
                       </TableRow>

@@ -10,7 +10,15 @@ export const MASS_MIN_ATTACHMENTS_PER_ROW = 1;
 export const MASS_SHARED_MIN_ATTACHMENTS = 1;
 export const MASS_MAX_DESCRIPTION_LENGTH = 40;
 
-export const MASS_OPTIONAL_FIELDS = new Set(["poText", "spesifikasiTambahan"]);
+// Sub material group is optional on a mass row: the column it lands in
+// (mat_mass_request_item.material_sub_group) is nullable, and the backend's
+// own optional list agrees. The header asterisk is driven off the required set
+// in MassMaterialForm, so the two must be changed together.
+export const MASS_OPTIONAL_FIELDS = new Set([
+  "poText",
+  "spesifikasiTambahan",
+  "materialSubGroup",
+]);
 
 export const MASS_TEXT_FIELDS = [
   "plant",
@@ -27,7 +35,6 @@ const FIELD_INDONESIAN_MESSAGES = {
   plant: "Plant wajib diisi.",
   sloc: "Sloc wajib diisi.",
   materialGroup: "Material group wajib diisi.",
-  materialSubGroup: "Sub material group wajib diisi.",
   description: "Material description wajib diisi.",
   uom: "Base UoM wajib diisi.",
 };

@@ -91,6 +91,7 @@ import {
   REWORK_EMAIL_REASON_NOTICE,
   validateReworkEmailContent,
 } from "src/helper/reworkEmailThread.js";
+import MaterialAiMatchPanel from "src/components/common/MaterialAiMatchPanel";
 import ReworkDestinationField from "./ReworkDestinationField";
 import ReworkEmailThreadSection from "./ReworkEmailThreadSection";
 
@@ -1412,6 +1413,9 @@ export default function MassApprovalFormDialog({
                 </TableBody>
               </Table>
             </TableContainer>
+
+            {/* Advisory AI ranking per item; see MaterialAiMatchPanel. */}
+            <MaterialAiMatchPanel kind="mass" requestId={row?.id} open={open} />
 
             {/* Shared by every row's "Add" button — which item a pick lands on
                 is tracked in activeAttachmentItemNo, set just before the click

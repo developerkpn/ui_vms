@@ -16,7 +16,7 @@ const helper = await import(
   `data:text/javascript;base64,${fs.readFileSync(helperPath).toString("base64")}`
 );
 
-const { normalizeMassMaterialFieldValue } = helper;
+const { normalizeMassMaterialFieldValue, validateMassRow, MASS_OPTIONAL_FIELDS } = helper;
 
 test("lowercase input uppercases", () => {
   assert.equal(normalizeMassMaterialFieldValue("consumable"), "CONSUMABLE");
@@ -41,5 +41,46 @@ test("normalizer has no built-in prose exemption — the reason field must stay 
   assert.equal(
     normalizeMassMaterialFieldValue("Butuh material tambahan untuk proyek Q3"),
     "BUTUH MATERIAL TAMBAHAN UNTUK PROYEK Q3"
+  );
+});
+
+test("sub material group is optional, so a row without one is valid", () => {
+  const row = {
+    plant: "P1",
+    sloc: "S1",
+    materialGroup: "901",
+    materialSubGroup: "",
+    description: "PUMP",
+    uom: "PC",
+    attachments: [{}],
+  };
+
+  const errors = validateMassRow(row);
+
+  assert.equal(errors.materialSubGroup, undefined);
+  assert.deepEqual(Object.keys(errors), []);
+});
+
+test("the other material fields are still required", () => {
+  const errors = validateMassRow({
+    plant: "",
+    sloc: "",
+    materialGroup: "",
+    materialSubGroup: "",
+    description: "",
+    uom: "",
+    poText: "only this filled",
+  });
+
+  assert.equal(errors.materialSubGroup, undefined);
+  for (const required of ["plant", "sloc", "materialGroup", "description", "uom"]) {
+    assert.equal(errors[required]?.error, true, required);
+  }
+});
+
+test("optional mass fields are exactly PO text, spesifikasi tambahan and sub group", () => {
+  assert.deepEqual(
+    [...MASS_OPTIONAL_FIELDS].sort(),
+    ["materialSubGroup", "poText", "spesifikasiTambahan"]
   );
 });

@@ -12,6 +12,7 @@ import useAccessTokStore from "src/store/useAccessTokStore";
 import useCheckResetPWD from "src/store/useCheckResetPWD";
 import usePermissionStore from "src/store/userPermissionStore";
 import useMenuStore from "src/store/useMenuStore";
+import { resolveLandingRouteForSession } from "src/helper/landingRoute";
 import CircularProgress from "@mui/material/CircularProgress";
 import SvgIcon from "@mui/material/SvgIcon";
 import { PasswordWithEyes } from "src/components/common/PasswordWithEyes";
@@ -107,13 +108,14 @@ export default function LoginPage() {
         setIsResetPWD(response.is_reset_pwd);
         alert("Successfull login");
         setTimeout(() => {
-          if (response.dept_id == "MDM_MAT" || response.dept_id == "MATERIAL") {
-            navigate("/dashboard/materials/lookup");
-          } else if (response.dept_id !== "VENDOR") {
-            navigate("/dashboard/ticket");
-          } else {
-            navigate("/dashboard");
-          }
+          // Permission picks the landing page, not the department. Aiming every
+          // non-vendor department at the ticket list dropped users whose sidebar
+          // has no ticket list on it — a materials requester with no dept_id, for
+          // one. The department only expresses a preference now, and it is
+          // honoured solely when the user can actually reach it. /dashboard is
+          // the fallback: its index resolves the same route once the session has
+          // loaded, and reports the empty case when there is nothing to reach.
+          navigate(resolveLandingRouteForSession(response) ?? "/dashboard");
         }, 1000);
         setBtnclicked(false);
       } catch (err) {

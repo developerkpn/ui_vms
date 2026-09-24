@@ -125,19 +125,24 @@ export const REWORK_EMAIL_THREAD_TITLE = "Email Rework";
 export const REWORK_EMAIL_SENDER_MISMATCH_TEXT = "Pengirim berbeda";
 
 /**
- * Sub-text under the Status chip while a rework mail is out and unanswered.
+ * Shown against the Status chip while a rework mail is out and unanswered.
  * Nothing else on the row says so: the pill still reads Submit and the request
- * is still parked at Master Data, so without this line a request waiting on
- * someone's inbox is indistinguishable from one waiting on nothing.
+ * is still parked at Master Data, so without this a request waiting on someone's
+ * inbox is indistinguishable from one waiting on nothing.
+ *
+ * Deliberately avoids the word "approval": this is about the emailed rework
+ * thread, not the approval chain, and the two used to sit side by side reading
+ * as a contradiction ("Waiting approval from X" next to "Email Approval
+ * Confirmed"). The note's own label says which of the two it is.
  */
-export const REWORK_EMAIL_AWAITING_APPROVAL_TEXT = "Awaiting Email Approval";
+export const REWORK_EMAIL_AWAITING_APPROVAL_TEXT = "Sent to the approver, no reply yet";
 
 /**
  * Sub-text under the Status chip once the approver has written back. The reply
  * itself lives in the request detail's thread section; this only says one is
  * there, so a requester or approver scanning the list knows to open the row.
  */
-export const REWORK_EMAIL_APPROVAL_CONFIRMED_TEXT = "Email Approval Confirmed";
+export const REWORK_EMAIL_APPROVAL_CONFIRMED_TEXT = "The approver replied by email";
 
 /**
  * One of the list payload's rework-mail counts as a number. Anything that is
