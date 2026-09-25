@@ -81,11 +81,13 @@ const MASS_ROW_FIELD_LABELS = {
   spesifikasiTambahan: "Spesifikasi Tambahan",
 };
 
+// Drives the red asterisk in the row header. Sub material group is deliberately
+// absent: it is optional, and MASS_OPTIONAL_FIELDS in the validation module is
+// the other half of that rule.
 const MASS_REQUIRED_FIELDS = new Set([
   "plant",
   "sloc",
   "materialGroup",
-  "materialSubGroup",
   "description",
   "uom",
 ]);

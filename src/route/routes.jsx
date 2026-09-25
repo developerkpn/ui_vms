@@ -16,8 +16,15 @@ const RequestMaterials = lazy(() => import("src/pages/dashboard/RequestMaterials
 const Subgroups = lazy(() => import("src/pages/dashboard/SubgroupMaterial"));
 const Materials = lazy(() => import("src/pages/dashboard/MaterialDetail"));
 const SearchMaterials = lazy(() => import("src/pages/dashboard/SearchMaterials"));
-const MaterialsAdministratorPlaceholder = lazy(
-  () => import("src/pages/dashboard/MaterialsAdministratorPlaceholder")
+const MaterialsAdministratorOverview = lazy(
+  () => import("src/pages/dashboard/MaterialsAdministratorOverview")
+);
+const MaterialsApproverManagement = lazy(
+  () => import("src/pages/dashboard/MaterialsApproverManagement")
+);
+const MaterialsGuideUpload = lazy(() => import("src/pages/dashboard/MaterialsGuideUpload"));
+const MaterialsGuideDashboard = lazy(
+  () => import("src/pages/dashboard/MaterialsGuideDashboard")
 );
 const ReportTicketPosition = lazy(() => import("src/pages/report/ReportTicketPosition"));
 const SingleRequestPage = lazy(() => import("src/pages/dashboard/SingleRequestPage"));
@@ -215,8 +222,24 @@ export const routes = createBrowserRouter([
         element: <AdminApprovalView />,
       },
       {
+        // The sidebar's Administrator entry lands here: an overview that picks
+        // which administration tool to open.
         path: "materials/administrator",
-        element: <MaterialsAdministratorPlaceholder />,
+        element: <MaterialsAdministratorOverview />,
+      },
+      {
+        path: "materials/administrator/approvers",
+        element: <MaterialsApproverManagement />,
+      },
+      {
+        path: "materials/administrator/guide",
+        element: <MaterialsGuideUpload />,
+      },
+      {
+        // Sidebar: Materials > Dashboard (mst_page menu_id seeded by
+        // 20260918_materials_dashboard_menu.sql). Read-only view of the guides.
+        path: "materials/dashboard",
+        element: <MaterialsGuideDashboard />,
       },
       {
         path: "administrator/approval",

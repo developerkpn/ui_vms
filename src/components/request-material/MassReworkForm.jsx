@@ -19,6 +19,7 @@ import {
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { normalizeMassMaterialFieldValue } from "./massMaterialFormValidation.js";
+import MaterialAiMatchPanel from "../common/MaterialAiMatchPanel";
 import RequesterCommentField from "../common/RequesterCommentField";
 import { validateRequesterComment } from "src/helper/requestComments.js";
 
@@ -58,6 +59,7 @@ const FIELD_META = [
 export default function MassReworkForm({
   open,
   ticketNumber,
+  massRequestId = null,
   massRequestReason,
   items = [],
   onClose,
@@ -360,6 +362,10 @@ export default function MassReworkForm({
               </TableBody>
             </Table>
           </TableContainer>
+
+          {/* Advisory AI ranking per item, read-only — useful while revising,
+              but queueing a fresh run stays an approver action. */}
+          <MaterialAiMatchPanel kind="mass" requestId={massRequestId} open={open} hideRerun />
 
           <RequesterCommentField
             value={comment}

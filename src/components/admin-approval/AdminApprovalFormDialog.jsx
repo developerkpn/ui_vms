@@ -87,6 +87,7 @@ import {
   REWORK_EMAIL_REASON_NOTICE,
   validateReworkEmailContent,
 } from "src/helper/reworkEmailThread.js";
+import MaterialAiMatchPanel from "src/components/common/MaterialAiMatchPanel";
 import ReworkDestinationField from "./ReworkDestinationField";
 import ReworkEmailThreadSection from "./ReworkEmailThreadSection";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
@@ -1383,6 +1384,13 @@ export default function AdminApprovalFormDialog({
               </Stack>
             </Paper>
           </Stack>
+
+          {/* Advisory AI ranking of existing materials that look like this request.
+              Renders nothing when the feature is off. Change/Extend already name a
+              material, so only Create requests get one. */}
+          {!isScopedChangeExtendRequest && (
+            <MaterialAiMatchPanel kind="single" requestId={detail.id ?? row?.id} open={open} />
+          )}
 
           {isScopedChangeExtendRequest ? (
             <Box>

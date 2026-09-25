@@ -55,8 +55,21 @@ import MassReworkForm from "src/components/request-material/MassReworkForm";
 import SingleMaterialForm from "src/components/request-material/SingleMaterialForm";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 import PageHeader from "src/components/common/PageHeader";
-import PageTablePaper, { PAGE_TABLE_HEADER_SX } from "src/components/common/PageTablePaper";
+import PageTablePaper, {
+  PAGE_TABLE_CLAMP_SX,
+  PAGE_TABLE_COMPACT_SX,
+  PAGE_TABLE_HEADER_COMPACT_SX,
+} from "src/components/common/PageTablePaper";
 import PageSearchField from "src/components/common/PageSearchField";
+import StatusWithNotes from "src/components/common/StatusWithNotes";
+import { assignmentNoteKind, buildStatusNote } from "src/helper/statusNotes";
+import {
+  ALL_REQUEST_STATUS_FILTER,
+  REQUEST_STATUS_FILTER_OPTIONS,
+  REQUEST_STATUS_FILTER_PREFERENCE_KEY,
+  filterRequestRowsByStatus,
+  resolveStoredRequestStatusFilter,
+} from "src/helper/myRequestFilters";
 import PageTabs from "src/components/common/PageTabs";
 import TableLoadingRows, { TableEmptyRow } from "src/components/common/TableLoadingRows";
 import SectionLoadingSkeleton from "src/components/common/SectionLoadingSkeleton";
@@ -64,6 +77,7 @@ import ApprovalStatusCard from "src/components/common/ApprovalStatusCard";
 import AttachmentPreviewDialog, {
   buildAttachmentUrl,
 } from "src/components/common/AttachmentPreviewDialog";
+import MaterialAiMatchPanel from "src/components/common/MaterialAiMatchPanel";
 import ReworkEmailThreadSection from "src/components/admin-approval/ReworkEmailThreadSection";
 import RequestCommentsDialog from "src/components/common/RequestCommentsDialog";
 import RequesterCommentField from "src/components/common/RequesterCommentField";
@@ -107,28 +121,6 @@ function StatusPill({ status }) {
 // Spells out which step a still-open request is sitting on — waiting on a named
 // approver, or waiting for Master Data to grab it — so it can be read off the
 // Status column instead of inferred from "Assigned To" at the far right.
-function AssignmentCaption({ status, caption }) {
-  return (
-    <Tooltip title={caption.text} arrow placement="top">
-      <Stack spacing={0.5} alignItems="flex-start" sx={{ maxWidth: 220 }}>
-        <StatusPill status={status} />
-        <Typography
-          variant="caption"
-          sx={{
-            color: caption.kind === "UNASSIGNED" ? "#f59e0b" : "text.secondary",
-            fontWeight: 600,
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-          }}
-        >
-          {caption.text}
-        </Typography>
-      </Stack>
-    </Tooltip>
-  );
-}
 
 // Same caption slot the SAP error message and the assignment caption already
 // occupy under the Status chip. Colour is the state: an unanswered mail is
@@ -136,90 +128,69 @@ function AssignmentCaption({ status, caption }) {
 // dark ends of their ramps rather than the mains, which clear 4.5:1 on the
 // table's white background where error.main does not — and the wording says
 // which state it is on its own, so the colour is reinforcement, not the signal.
-const EMAIL_APPROVAL_CAPTION_SX = {
-  fontWeight: 700,
-  display: "-webkit-box",
-  WebkitLineClamp: 2,
-  WebkitBoxOrient: "vertical",
-  overflow: "hidden",
-};
+// The status cell stays one line tall. Everything that used to stack underneath
+// the badge — the assignment caption, a SAP write-back error, whether a mailed
+// rework has been answered — is collapsed into a single marker beside it, with
+// the text on hover. Three captions under a chip made a row three times the
+// height of its neighbours, which a ten-column table cannot afford.
+function buildStatusNotesForRow(row) {
+  const notes = [];
+  const sapChip = getSapStatusChip(row?.sapPushStatus);
+
+  if (sapChip) {
+    if (isSapError(row?.sapPushStatus) && row?.sapErrorMsg) {
+      notes.push(buildStatusNote("SAP_ERROR", row.sapErrorMsg));
+    }
+  } else if (
+    row?.assignmentCaption &&
+    // Gated on the raw status, not the effective label: a rewound request is
+    // still raw-Submit and still has a next actor to name.
+    normalizeApprovalStatusForFilter(row?.status) === "Submit"
+  ) {
+    notes.push(
+      buildStatusNote(
+        assignmentNoteKind(row.assignmentCaption.kind),
+        row.assignmentCaption.text
+      )
+    );
+  }
+
+  const emailApproval = buildEmailApprovalCaption(row);
+  if (emailApproval.text !== "") {
+    notes.push(
+      buildStatusNote(
+        emailApproval.confirmed ? "EMAIL_ANSWERED" : "EMAIL_WAITING",
+        emailApproval.text
+      )
+    );
+  }
+
+  return notes;
+}
 
 // Once a request is approved and pushed, the SAP staging status is the
 // meaningful one to show; otherwise fall back to the approval status.
-function SapAwareStatusContent({ row }) {
+function SapAwareStatusBadgeOnly({ row }) {
   const sapChip = getSapStatusChip(row?.sapPushStatus);
+
   if (!sapChip) {
-    // Gated on the raw status, not the effective label: a rewound request's
-    // pill on this page deliberately stays "Submit" (it is not the
-    // requester's to act on), but the label would read "Rework" — so the gate
-    // reads the raw status directly rather than the label that now diverges
-    // from it.
-    if (row?.assignmentCaption && normalizeApprovalStatusForFilter(row?.status) === "Submit") {
-      return <AssignmentCaption status={row.status} caption={row.assignmentCaption} />;
-    }
     return <StatusPill status={row?.status} />;
   }
 
-  const chip = (
+  return (
     <Chip
       label={sapChip.label}
       size="small"
       sx={{ fontWeight: 700, bgcolor: sapChip.bgcolor, color: sapChip.color }}
     />
   );
-
-  if (isSapError(row?.sapPushStatus) && row?.sapErrorMsg) {
-    // Surface the SAP write-back message (ERRORMSG_POST) inline, with the full
-    // text on hover in case it is truncated.
-    return (
-      <Tooltip title={row.sapErrorMsg} arrow placement="top">
-        <Stack spacing={0.5} alignItems="flex-start" sx={{ maxWidth: 220 }}>
-          {chip}
-          <Typography
-            variant="caption"
-            sx={{
-              color: "#dc2626",
-              fontWeight: 600,
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-            }}
-          >
-            {row.sapErrorMsg}
-          </Typography>
-        </Stack>
-      </Tooltip>
-    );
-  }
-  return chip;
 }
 
-// The status cell: the chip (or chip + its own caption) plus, once a rework
-// mail has gone out, a line saying whether the approver has answered it.
-// Nothing is rendered for a request that never had one, so every row without a
-// mailed rework looks exactly as it did.
 function SapAwareStatus({ row }) {
-  const emailApproval = buildEmailApprovalCaption(row);
-  const statusContent = <SapAwareStatusContent row={row} />;
-
-  if (emailApproval.text === "") {
-    return statusContent;
-  }
-
   return (
-    <Stack spacing={0.5} alignItems="flex-start" sx={{ maxWidth: 220 }}>
-      {statusContent}
-      <Typography
-        variant="caption"
-        sx={{
-          ...EMAIL_APPROVAL_CAPTION_SX,
-          color: emailApproval.confirmed ? "success.darker" : "error.dark",
-        }}
-      >
-        {emailApproval.text}
-      </Typography>
-    </Stack>
+    <StatusWithNotes notes={buildStatusNotesForRow(row)}>
+      <SapAwareStatusBadgeOnly row={row} />
+    </StatusWithNotes>
   );
 }
 
@@ -517,6 +488,10 @@ function RequestDetailDialog({ open, request, onClose, massItems, massItemsLoadi
                 )}
               </TableBody>
             </Table>
+
+          {/* Advisory AI ranking per item, read-only for the requester — the
+              same section the approval dialogs show. */}
+          <MaterialAiMatchPanel kind="mass" requestId={request?.id} open={open} hideRerun />
         </Stack>
       </DialogContent>
 
@@ -727,6 +702,10 @@ export default function RequestMaterials() {
   const [requests, setRequests] = useState([]);
   const [activeTab, setActiveTab] = useState("single");
   const [searchQuery, setSearchQuery] = useState("");
+  // Starts on All and is corrected once the stored preference arrives, the same
+  // way My Approval does it — a filter that has to survive a refresh cannot live
+  // in browser storage, which logout clears and other machines never see.
+  const [statusFilter, setStatusFilter] = useState(ALL_REQUEST_STATUS_FILTER);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
   const [activeRequestId, setActiveRequestId] = useState(null);
@@ -1001,8 +980,10 @@ export default function RequestMaterials() {
       return matchesTab && matchesSearch;
     });
 
+    const statusRows = filterRequestRowsByStatus(nextRows, statusFilter);
+
     if (!sortConfig.key) {
-      return nextRows;
+      return statusRows;
     }
 
     const getSortValue = item =>
@@ -1015,12 +996,12 @@ export default function RequestMaterials() {
           : item[sortConfig.key];
 
     const direction = sortConfig.direction === "desc" ? -1 : 1;
-    return [...nextRows].sort(
+    return [...statusRows].sort(
       (left, right) =>
         String(getSortValue(left) || "").localeCompare(String(getSortValue(right) || "")) *
         direction
     );
-  }, [activeTab, sortConfig, requests, searchQuery]);
+  }, [activeTab, sortConfig, requests, searchQuery, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRequests.length / rowsPerPage));
 
@@ -1030,6 +1011,44 @@ export default function RequestMaterials() {
       direction: prev.key === key && prev.direction === "asc" ? "desc" : "asc",
     }));
     setPage(0);
+  };
+
+  // Never throws: a stored filter is a convenience, not a requirement for the
+  // page to work, so a failed read just leaves it on All.
+  useEffect(() => {
+    let active = true;
+
+    axiosPrivate
+      .get(`/material/preferences/${REQUEST_STATUS_FILTER_PREFERENCE_KEY}`)
+      .then(response => {
+        if (!active) {
+          return;
+        }
+        setStatusFilter(resolveStoredRequestStatusFilter(response?.data?.data?.value));
+      })
+      .catch(error => {
+        console.error("Failed to fetch request status filter preference:", error);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [axiosPrivate]);
+
+  const handleStatusFilterChange = event => {
+    const nextValue = event.target.value;
+    setStatusFilter(nextValue);
+    setPage(0);
+
+    // Fire and forget: the filter is already applied locally, so a failed save
+    // costs the preference next time, not this interaction.
+    axiosPrivate
+      .put(`/material/preferences/${REQUEST_STATUS_FILTER_PREFERENCE_KEY}`, {
+        value: nextValue,
+      })
+      .catch(error =>
+        console.error("Failed to save request status filter preference:", error)
+      );
   };
 
   function openSnackbar(message, severity = "success") {
@@ -1167,66 +1186,95 @@ export default function RequestMaterials() {
   };
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+    <Box sx={{ pb: { xs: 4, md: 6 } }}>
       <PageHeader
         title="My Request"
         subtitle="List of requests created by the user with their status."
         actions={
-          <>
-            <Button variant="contained" onClick={() => openSnackbar("Download to Excel will be connected to API later", "info")}>
-              Download to Excel
-            </Button>
-            <PageSearchField
-              placeholder="Search"
-              value={searchQuery}
-              onChange={event => { setSearchQuery(event.target.value); setPage(0); }}
-              sx={{ width: { xs: "100%", md: 220 } }}
-            />
-          </>
+          <Button variant="contained" onClick={() => openSnackbar("Download to Excel will be connected to API later", "info")}>
+            Download to Excel
+          </Button>
         }
       />
 
-        <Box sx={{ p: { xs: 2, md: 3 } }}>
-          <PageTabs
-            value={activeTab}
-            onChange={(_, value) => { setActiveTab(value); setPage(0); }}
-            tabs={[
-              { value: "single", label: "Single Request" },
-              { value: "mass", label: "Mass Request" },
-            ]}
-          />
-
+      <Box>
+          {/* New sits on the tab row, not in a strip of its own between the
+              tabs and the table. The divider moves up to this wrapper so it
+              still runs the full width underneath both. */}
           <Box
             sx={{
               display: "flex",
-              justifyContent: "flex-end",
-              alignItems: { xs: "stretch", md: "center" },
-              flexDirection: { xs: "column", md: "row" },
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
               gap: 1.5,
-              mb: 2.5,
+              borderBottom: 1,
+              borderColor: "divider",
+              mb: 3,
             }}
           >
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: { xs: "column", sm: "row" },
-                alignItems: { xs: "stretch", sm: "center" },
-                gap: 1.25,
-                width: { xs: "100%", md: "auto" },
-              }}
+            <PageTabs
+              value={activeTab}
+              onChange={(_, value) => { setActiveTab(value); setPage(0); }}
+              tabs={[
+                { value: "single", label: "Single Request" },
+                { value: "mass", label: "Mass Request" },
+              ]}
+              sx={{ mb: 0, borderBottom: 0, flexGrow: 1, minWidth: 0 }}
+            />
+
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={handleCreateRequest}
+              sx={{ mb: 1 }}
             >
-              <Button variant="contained" startIcon={<Add />} onClick={handleCreateRequest}>
-                New
-              </Button>
-            </Box>
+              New
+            </Button>
           </Box>
 
-          <PageTablePaper>
-            <Table size="small" sx={{ minWidth: 980 }}>
+          {/* Search and status filter sit between the tabs and the table, the
+              same arrangement My Approval uses. */}
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={1.5}
+            alignItems={{ xs: "stretch", md: "center" }}
+            sx={{ mb: 2.5 }}
+          >
+            <PageSearchField
+              placeholder="Search by ticket, description, status, assignee..."
+              value={searchQuery}
+              onChange={event => { setSearchQuery(event.target.value); setPage(0); }}
+              sx={{ flex: { xs: "1 1 100%", md: "1 1 auto" }, minWidth: { md: 280 } }}
+            />
+
+            <TextField
+              select
+              size="small"
+              label="Status"
+              value={statusFilter}
+              onChange={handleStatusFilterChange}
+              SelectProps={{ native: true }}
+              sx={{
+                width: { xs: "100%", md: 220 },
+                bgcolor: "background.paper",
+                "& .MuiOutlinedInput-root": { borderRadius: "7px" },
+              }}
+            >
+              {REQUEST_STATUS_FILTER_OPTIONS.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </TextField>
+          </Stack>
+
+          <PageTablePaper minWidth={860}>
+            <Table size="small" sx={{ minWidth: 860, ...PAGE_TABLE_COMPACT_SX }}>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>Action</TableCell>
-                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
+                  <TableCell sx={PAGE_TABLE_HEADER_COMPACT_SX}>Action</TableCell>
+                  <TableCell sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                     <TableSortLabel
                       active={sortConfig.key === "ticketNumber"}
                       direction={sortConfig.key === "ticketNumber" ? sortConfig.direction : "asc"}
@@ -1235,7 +1283,7 @@ export default function RequestMaterials() {
                       Ticket Number
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
+                  <TableCell sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                     <TableSortLabel
                       active={sortConfig.key === "ticketType"}
                       direction={sortConfig.key === "ticketType" ? sortConfig.direction : "asc"}
@@ -1244,7 +1292,7 @@ export default function RequestMaterials() {
                       Ticket Type
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
+                  <TableCell sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                     <TableSortLabel
                       active={sortConfig.key === "materialCode"}
                       direction={sortConfig.key === "materialCode" ? sortConfig.direction : "asc"}
@@ -1253,7 +1301,7 @@ export default function RequestMaterials() {
                       Material Code
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, minWidth: 280 }}>
+                  <TableCell sx={{ ...PAGE_TABLE_HEADER_COMPACT_SX, minWidth: 180 }}>
                     <TableSortLabel
                       active={sortConfig.key === "description"}
                       direction={sortConfig.key === "description" ? sortConfig.direction : "asc"}
@@ -1262,7 +1310,7 @@ export default function RequestMaterials() {
                       {activeTab === "mass" ? "Mass Request Reason" : "Material Description"}
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
+                  <TableCell sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                     <TableSortLabel
                       active={sortConfig.key === "uom"}
                       direction={sortConfig.key === "uom" ? sortConfig.direction : "asc"}
@@ -1271,7 +1319,7 @@ export default function RequestMaterials() {
                       UOM
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell align="left" sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
+                  <TableCell align="left" sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                     <TableSortLabel
                       active={sortConfig.key === "status"}
                       direction={sortConfig.key === "status" ? sortConfig.direction : "asc"}
@@ -1280,7 +1328,7 @@ export default function RequestMaterials() {
                       Status
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
+                  <TableCell sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                     <TableSortLabel
                       active={sortConfig.key === "createdBy"}
                       direction={sortConfig.key === "createdBy" ? sortConfig.direction : "asc"}
@@ -1289,7 +1337,7 @@ export default function RequestMaterials() {
                       Requested by
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
+                  <TableCell sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                     <TableSortLabel
                       active={sortConfig.key === "createdAt"}
                       direction={sortConfig.key === "createdAt" ? sortConfig.direction : "asc"}
@@ -1298,7 +1346,7 @@ export default function RequestMaterials() {
                       Requested at
                     </TableSortLabel>
                   </TableCell>
-                  <TableCell sx={{ ...PAGE_TABLE_HEADER_SX, whiteSpace: "nowrap" }}>
+                  <TableCell sx={PAGE_TABLE_HEADER_COMPACT_SX}>
                     <TableSortLabel
                       active={sortConfig.key === "assignedTo"}
                       direction={sortConfig.key === "assignedTo" ? sortConfig.direction : "asc"}
@@ -1344,16 +1392,21 @@ export default function RequestMaterials() {
                       <TableCell sx={{ whiteSpace: "nowrap", fontWeight: 600 }}>
                         {getStagedMaterialCode(row) || "-"}
                       </TableCell>
-                      <TableCell sx={{ fontWeight: 500 }}>
-                        {activeTab === "mass" ? row.massRequestReason : row.materialDescription}
+                      <TableCell sx={{ fontWeight: 500, maxWidth: 260 }}>
+                        <Box
+                          sx={PAGE_TABLE_CLAMP_SX}
+                          title={activeTab === "mass" ? row.massRequestReason : row.materialDescription}
+                        >
+                          {activeTab === "mass" ? row.massRequestReason : row.materialDescription}
+                        </Box>
                       </TableCell>
                       <TableCell sx={{ whiteSpace: "nowrap" }}>{row.uom}</TableCell>
                       <TableCell align="left">
                         <SapAwareStatus row={row} />
                       </TableCell>
-                      <TableCell sx={{ whiteSpace: "nowrap" }}>{row.createdBy}</TableCell>
-                      <TableCell sx={{ whiteSpace: "nowrap" }}>{row.createdAt}</TableCell>
-                      <TableCell sx={{ whiteSpace: "nowrap" }}>{row.assignedTo}</TableCell>
+                      <TableCell>{row.createdBy}</TableCell>
+                      <TableCell>{row.createdAt}</TableCell>
+                      <TableCell>{row.assignedTo}</TableCell>
                     </TableRow>
                   ))}
 
@@ -1480,6 +1533,7 @@ export default function RequestMaterials() {
       <MassReworkForm
         open={reviseMassOpen}
         ticketNumber={selectedRequest?.ticketNumber}
+        massRequestId={selectedRequest?.id}
         massRequestReason={selectedRequest?.massRequestReason}
         items={massReworkItems}
         onClose={() => {

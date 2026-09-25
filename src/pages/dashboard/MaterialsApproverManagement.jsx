@@ -27,6 +27,7 @@ import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import EditIcon from "@mui/icons-material/Edit";
 import LockIcon from "@mui/icons-material/Lock";
+import AdministratorBackLink from "src/components/common/AdministratorBackLink";
 import PageHeader from "src/components/common/PageHeader";
 import PageTablePaper, { PAGE_TABLE_HEADER_SX } from "src/components/common/PageTablePaper";
 import PageSearchField from "src/components/common/PageSearchField";
@@ -340,7 +341,7 @@ function ChainEditorDialog({
   );
 }
 
-export default function MaterialsAdministratorPlaceholder() {
+export default function MaterialsApproverManagement() {
   const axiosPrivate = useAxiosPrivate();
   const { openSnackbar } = useSnackBar();
 
@@ -480,8 +481,12 @@ export default function MaterialsAdministratorPlaceholder() {
   };
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 3, p: { xs: 2, md: 3 } }}>
-      <PageHeader title="Material Administrator" subtitle="Assign approvers for material requests" />
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 3, pb: { xs: 4, md: 6 } }}>
+      <AdministratorBackLink />
+      <PageHeader
+        title="User Approver Management"
+        subtitle="Assign approvers for material requests"
+      />
       <Box>
         <PageSearchField
           placeholder="Search by name, username, or email…"

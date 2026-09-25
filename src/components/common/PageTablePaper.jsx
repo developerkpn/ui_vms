@@ -17,6 +17,42 @@ export const PAGE_TABLE_HEADER_SX = {
 };
 
 /**
+ * Compact variant of the header styling, for wide tables that would otherwise
+ * scroll sideways on a normal screen.
+ *
+ * The only real difference is that labels wrap. PAGE_TABLE_HEADER_SX keeps every
+ * header on one line, which quietly sets each column's minimum to the width of
+ * its title — "Material Description" and "Ticket Number" alone cost a few
+ * hundred pixels. Letting two-word labels break over two lines gives that space
+ * back to the data.
+ */
+export const PAGE_TABLE_HEADER_COMPACT_SX = {
+  ...PAGE_TABLE_HEADER_SX,
+  whiteSpace: "normal",
+  lineHeight: 1.25,
+  py: 1.5,
+  px: 1.25,
+};
+
+/**
+ * Tighter cell padding, spread onto a Table's sx. Pairs with the compact header.
+ */
+export const PAGE_TABLE_COMPACT_SX = {
+  "& .MuiTableCell-root": { px: 1.25 },
+};
+
+/**
+ * Two-line clamp for a free-text column, so one long description cannot stretch
+ * the table. The full text still belongs in a title attribute on the cell.
+ */
+export const PAGE_TABLE_CLAMP_SX = {
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical",
+  overflow: "hidden",
+};
+
+/**
  * Consistent bordered-paper wrapper for table content.
  *
  * Props:
