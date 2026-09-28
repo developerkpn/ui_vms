@@ -70,7 +70,7 @@ const HEAD_CELL_SX = {
 const BODY_CELL_SX = { border: "1px solid #e0e0e0" };
 
 /** The similarity column: the number, and the same number as a bar under it. */
-function SimilarityCell({ similarity }) {
+export function SimilarityCell({ similarity }) {
   const tone = similarityTone(similarity);
 
   return (
@@ -107,6 +107,16 @@ function MaterialAiMatchRow({ row, showItemTitle }) {
         <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.75 }}>
           Item {row.itemNo} — {row.query.name || "-"}
         </Typography>
+      )}
+
+      {/* The requester's own answer from the pre-save check. Only shown when
+          they explicitly confirmed; no check at all says nothing. */}
+      {row.requesterReview && (
+        <Alert severity="info" sx={{ mb: 1 }}>
+          {row.requesterReview.shownCount > 0
+            ? `Requester sudah melihat ${row.requesterReview.shownCount} material serupa sebelum submit dan mengonfirmasi ini material baru.`
+            : "Saat submit tidak ditemukan material serupa; requester mengonfirmasi ini material baru."}
+        </Alert>
       )}
 
       {row.status === AI_MATCH_STATUS.PENDING && (

@@ -182,6 +182,21 @@ export function normalizeAiMatch(row) {
     topSimilarity: toSimilarity(firstDefined(row.topSimilarity, row.top_similarity)),
     latencyMs: toNumberOrNull(firstDefined(row.latencyMs, row.latency_ms)),
     updatedAt: firstDefined(row.updatedAt, row.updated_at) ?? null,
+    requesterReview: normalizeRequesterReview(row.requesterReview),
+  };
+}
+
+/**
+ * What the requester answered before saving. null unless they explicitly
+ * confirmed "brand new": no pre-save check (feature off, AI down, a rework) is
+ * not the same thing as a confirmation, and the panel must not say it is.
+ */
+function normalizeRequesterReview(review) {
+  if (!review || typeof review !== "object" || review.confirmedNew !== true) return null;
+  return {
+    confirmedNew: true,
+    reviewedAt: firstDefined(review.reviewedAt) ?? null,
+    shownCount: toNumberOrNull(review.shownCount) ?? 0,
   };
 }
 
@@ -261,4 +276,120 @@ export function buildAiMatchPath(kind, requestId) {
  */
 export function buildAiMatchRerunPath(kind, requestId) {
   return `${buildAiMatchPath(kind, requestId)}/rerun`;
+}
+
+// --- Pre-save check ---------------------------------------------------------
+//
+// Before a new request is written, the requester is shown the existing
+// materials that look like each line and answers per line: "it is this one"
+// (the line is not submitted) or "none of these, it is a brand new material".
+// Only brand-new lines are saved, and their confirmation is sent along so the
+// approvers can see the requester already looked.
+
+/** Where the pre-save check is asked. */
+export const AI_PRECHECK_PATH = "/material/ai-match/preview";
+
+/** The choice value for "none of these — it is a brand new material". */
+export const AI_PRECHECK_NEW = "__new__";
+
+/** A mass request has to keep at least this many lines to be submitted. */
+export const AI_PRECHECK_MASS_MIN_NEW_LINES = 2;
+
+/**
+ * One line of the preview answer, in the shape the dialog draws. Same fields
+ * as a stored run (so the same table renders it) plus the line's key.
+ */
+export function normalizePrecheckLine(line) {
+  const match = normalizeAiMatch(line);
+  if (!match) return null;
+  return { ...match, key: line.key ?? null };
+}
+
+/**
+ * A line the requester has to answer: only a finished check that found
+ * something. A failed check or one with no candidates is new by default —
+ * there is nothing to pick from.
+ */
+export function precheckNeedsChoice(line) {
+  return Boolean(
+    line && line.status === AI_MATCH_STATUS.DONE && line.recommendations.length > 0
+  );
+}
+
+/**
+ * The choice a line starts with: undecided when it has candidates, new when
+ * it has none.
+ */
+export function initialPrecheckChoice(line) {
+  return precheckNeedsChoice(line) ? "" : AI_PRECHECK_NEW;
+}
+
+/**
+ * Where the requester's answers stand.
+ *
+ * @param {object[]} lines - Normalized preview lines.
+ * @param {Record<string, string>} choices - key → AI_PRECHECK_NEW, or the picked code.
+ * @returns {{allDecided: boolean, newKeys: Array, existing: Array<{key, itemLabel, code, name}>}}
+ */
+export function summarizePrecheck(lines, choices) {
+  const list = Array.isArray(lines) ? lines.filter(Boolean) : [];
+  const answers = choices && typeof choices === "object" ? choices : {};
+  const newKeys = [];
+  const existing = [];
+  let allDecided = true;
+
+  for (const line of list) {
+    const choice = asText(answers[line.key]);
+    if (!choice) {
+      allDecided = false;
+      continue;
+    }
+    if (choice === AI_PRECHECK_NEW) {
+      newKeys.push(line.key);
+      continue;
+    }
+    const picked = line.recommendations.find(item => item.code === choice);
+    existing.push({
+      key: line.key,
+      query: line.query.name,
+      code: choice,
+      name: picked ? picked.name : "",
+    });
+  }
+
+  return { allDecided, newKeys, existing };
+}
+
+/**
+ * The confirmation for one brand-new line, as the save endpoints take it.
+ * null for a line whose check failed: the requester was shown nothing, so
+ * there is nothing to confirm.
+ */
+export function buildPrecheckReview(line) {
+  if (!line || line.status !== AI_MATCH_STATUS.DONE) return null;
+  return {
+    confirmedNew: true,
+    recommendations: line.recommendations.map(item => ({
+      code: item.code,
+      name: item.name,
+      similarity: item.similarity,
+      matchType: item.matchType,
+    })),
+  };
+}
+
+/**
+ * The mass confirmation payload: one entry per brand-new line, keyed by the
+ * form row it came from. null when there is nothing to record.
+ */
+export function buildMassPrecheckReview(lines, newKeys) {
+  const wanted = new Set(Array.isArray(newKeys) ? newKeys : []);
+  const rows = (Array.isArray(lines) ? lines : [])
+    .filter(line => line && wanted.has(line.key))
+    .map(line => {
+      const review = buildPrecheckReview(line);
+      return review ? { rowIndex: line.key, ...review } : null;
+    })
+    .filter(Boolean);
+  return rows.length > 0 ? { rows } : null;
 }

@@ -21,6 +21,7 @@ import {
 import { Delete, InfoOutlined } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import MaterialAiMatchPanel from "../common/MaterialAiMatchPanel";
+import MaterialAiPrecheckDialog from "../common/MaterialAiPrecheckDialog";
 import SearchableSelect from "../common/SearchableSelect";
 import SectionLoadingSkeleton from "../common/SectionLoadingSkeleton";
 import RequesterCommentField from "../common/RequesterCommentField";
@@ -415,6 +416,11 @@ const SingleMaterialForm = ({
   // (collected inline, since this rework surface is a full page, not a dialog).
   const [comment, setComment] = useState("");
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
+  // Pre-save "does this material already exist?" step, between the comment
+  // dialog and the write. requests is held in state so the dialog sees one
+  // stable list per opening rather than a new array every render.
+  const [precheckOpen, setPrecheckOpen] = useState(false);
+  const [precheckRequests, setPrecheckRequests] = useState([]);
 
   useEffect(() => {
     if (prefetchedGroups.length > 0) {
@@ -680,9 +686,11 @@ const SingleMaterialForm = ({
   );
 
   // Does the actual write. Called directly for a rework save (the comment is
-  // already validated inline, no dialog to confirm first) and from the
-  // Submit Comment dialog's own button for a new submission.
-  const performSubmit = async () => {
+  // already validated inline, no dialog to confirm first) and, for a new
+  // submission, from the pre-save check once the requester has confirmed the
+  // material is new. aiMatchReview is that confirmation, sent so approvers can
+  // see it; null when no check ran.
+  const performSubmit = async (aiMatchReview = null) => {
     try {
       setSubmitting(true);
       const payload = buildRequestPayload();
@@ -699,6 +707,9 @@ const SingleMaterialForm = ({
       formPayload.append("templateValues", JSON.stringify(payload.templateValues));
       formPayload.append("attachments", JSON.stringify({ keepAttachmentIds }));
       formPayload.append("comment", comment.trim());
+      if (aiMatchReview) {
+        formPayload.append("aiMatchReview", JSON.stringify(aiMatchReview));
+      }
 
       newAttachments.forEach(file => {
         formPayload.append("files", file);
@@ -719,6 +730,7 @@ const SingleMaterialForm = ({
       }
 
       setCommentDialogOpen(false);
+      setPrecheckOpen(false);
       setSaveSuccessOpen(true);
     } catch (error) {
       const mappedFieldErrors = mapRequesterServerErrors(error?.response?.data?.errors);
@@ -731,6 +743,8 @@ const SingleMaterialForm = ({
           ...prev,
           ...mappedFieldErrors,
         }));
+        // The errors are on form fields the dialog covers; get out of the way.
+        setPrecheckOpen(false);
       }
       setSubmitError(Object.keys(mappedFieldErrors).length > 0 ? "" : message);
     } finally {
@@ -775,6 +789,17 @@ const SingleMaterialForm = ({
       // validate — the dialog just collects it before the same write fires.
       setCommentDialogOpen(true);
     }
+  };
+
+  // Comment collected: check for an existing material before anything is
+  // written. The check hands back to performSubmit only for a new material.
+  const handleCommentSubmit = () => {
+    setSubmitError("");
+    setCommentDialogOpen(false);
+    setPrecheckRequests([
+      { key: "single", label: "", body: { kind: "single", ...buildRequestPayload() } },
+    ]);
+    setPrecheckOpen(true);
   };
 
   const handleSuccessDialogClose = (_, reason) => {
@@ -1371,11 +1396,23 @@ const SingleMaterialForm = ({
             <Button onClick={() => setCommentDialogOpen(false)} disabled={submitting}>
               Cancel
             </Button>
-            <Button variant="contained" onClick={performSubmit} disabled={submitting}>
-              {submitting ? "Saving..." : "Submit"}
+            <Button variant="contained" onClick={handleCommentSubmit} disabled={submitting}>
+              Submit
             </Button>
           </DialogActions>
         </Dialog>
+      )}
+
+      {!isExistingRequestMode && (
+        <MaterialAiPrecheckDialog
+          open={precheckOpen}
+          kind="single"
+          requests={precheckRequests}
+          submitting={submitting}
+          submitError={submitError}
+          onCancel={() => setPrecheckOpen(false)}
+          onSubmit={({ review }) => performSubmit(review)}
+        />
       )}
     </Card>
   );

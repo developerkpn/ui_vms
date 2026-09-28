@@ -34,6 +34,7 @@ import {
 import * as XLSX from "xlsx";
 import { useNavigate } from "react-router-dom";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
+import MaterialAiPrecheckDialog from "../common/MaterialAiPrecheckDialog";
 import {
   MASS_MAX_DESCRIPTION_LENGTH,
   MASS_MAX_ROWS,
@@ -125,6 +126,11 @@ const MassMaterialForm = ({ onBack }) => {
   const [sharedFiles, setSharedFiles] = useState([]);
   const [sharedFileError, setSharedFileError] = useState("");
   const pendingSubmitRef = useRef(null);
+  // Pre-save "does this material already exist?" step, between the reason
+  // dialog and the write. Held in state so the dialog gets one stable list of
+  // lines per opening.
+  const [precheckOpen, setPrecheckOpen] = useState(false);
+  const [precheckRequests, setPrecheckRequests] = useState([]);
   const fileInputRef = useRef(null);
   const pendingImportRef = useRef(null);
 
@@ -458,35 +464,85 @@ const MassMaterialForm = ({ onBack }) => {
     }
 
     const { filledRowIndexes } = pending;
+    pendingSubmitRef.current = { filledRowIndexes, reason: trimmed };
     setReasonDialogOpen(false);
+
+    // Reason collected: check every line for an existing material before
+    // anything is written. The check hands back only the lines that are new.
+    setPrecheckRequests(
+      filledRowIndexes.map(rowIndex => ({
+        key: rowIndex,
+        label: `Baris ${rowIndex + 1} — ${rows[rowIndex].description}`,
+        body: {
+          kind: "mass",
+          rows: [
+            {
+              rowIndex,
+              description: rows[rowIndex].description,
+              poText: rows[rowIndex].poText,
+              spesifikasiTambahan: rows[rowIndex].spesifikasiTambahan,
+            },
+          ],
+        },
+      }))
+    );
+    setPrecheckOpen(true);
+  };
+
+  const handlePrecheckCancel = () => {
+    setPrecheckOpen(false);
+    pendingSubmitRef.current = null;
+  };
+
+  // Saves only the lines the requester confirmed as new. A line matched to an
+  // existing material is sent blank, which the backend skips as unfilled, so
+  // every other line keeps its row index (file mapping and the confirmation
+  // are keyed by it).
+  const submitMassRequest = async ({ newKeys, review }) => {
+    const pending = pendingSubmitRef.current;
+    if (!pending) {
+      setPrecheckOpen(false);
+      return;
+    }
+    const keep = new Set(newKeys);
+    const submittedRowIndexes = pending.filledRowIndexes.filter(rowIndex =>
+      keep.has(rowIndex)
+    );
 
     const formPayload = new FormData();
     formPayload.append(
       "rows",
       JSON.stringify(
-        rows.map(row => ({
-          plant: row.plant,
-          sloc: row.sloc,
-          materialGroup: row.materialGroup,
-          materialSubGroup: row.materialSubGroup,
-          description: row.description,
-          poText: row.poText,
-          uom: row.uom,
-          spesifikasiTambahan: row.spesifikasiTambahan,
-        }))
+        rows.map((row, rowIndex) =>
+          keep.has(rowIndex)
+            ? {
+                plant: row.plant,
+                sloc: row.sloc,
+                materialGroup: row.materialGroup,
+                materialSubGroup: row.materialSubGroup,
+                description: row.description,
+                poText: row.poText,
+                uom: row.uom,
+                spesifikasiTambahan: row.spesifikasiTambahan,
+              }
+            : {}
+        )
       )
     );
 
-    formPayload.append("massRequestReason", trimmed);
+    formPayload.append("massRequestReason", pending.reason);
+    if (review) {
+      formPayload.append("aiMatchReview", JSON.stringify(review));
+    }
     if (useSharedImage) {
       for (const file of sharedFiles) {
-        for (const rowIndex of filledRowIndexes) {
+        for (const rowIndex of submittedRowIndexes) {
           formPayload.append("files", file);
           formPayload.append("fileRowIndex", String(rowIndex));
         }
       }
     } else {
-      for (const rowIndex of filledRowIndexes) {
+      for (const rowIndex of submittedRowIndexes) {
         const row = rows[rowIndex];
         for (const file of row.attachments) {
           formPayload.append("files", file);
@@ -500,6 +556,7 @@ const MassMaterialForm = ({ onBack }) => {
       await axiosPrivate.post("/material/requests/mass", formPayload, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+      setPrecheckOpen(false);
       setSaveSuccessOpen(true);
     } catch (error) {
       const serverErrors = Array.isArray(error?.response?.data?.errors)
@@ -531,6 +588,9 @@ const MassMaterialForm = ({ onBack }) => {
       if (Object.keys(mapped).length === 0) {
         setSubmitError(topLevel);
       }
+      // Errors belong to the form rows (or the banner above them), which the
+      // dialog covers.
+      setPrecheckOpen(false);
     } finally {
       setSubmitting(false);
       pendingSubmitRef.current = null;
@@ -1100,6 +1160,15 @@ const MassMaterialForm = ({ onBack }) => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <MaterialAiPrecheckDialog
+        open={precheckOpen}
+        kind="mass"
+        requests={precheckRequests}
+        submitting={submitting}
+        onCancel={handlePrecheckCancel}
+        onSubmit={submitMassRequest}
+      />
 
       <Dialog
         open={saveSuccessOpen}

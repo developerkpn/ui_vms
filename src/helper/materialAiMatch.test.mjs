@@ -320,3 +320,114 @@ test("an unknown request kind is a programming error, not a path", () => {
     message: "Unknown AI match kind: undefined",
   });
 });
+
+// --- Pre-save check -------------------------------------------------------
+
+const {
+  AI_PRECHECK_MASS_MIN_NEW_LINES,
+  AI_PRECHECK_NEW,
+  AI_PRECHECK_PATH,
+  buildMassPrecheckReview,
+  buildPrecheckReview,
+  initialPrecheckChoice,
+  normalizePrecheckLine,
+  precheckNeedsChoice,
+  summarizePrecheck,
+} = helper;
+
+function previewLine(key, overrides = {}) {
+  return normalizePrecheckLine({
+    key,
+    status: "DONE",
+    query: { code: "", name: `ITEM ${key}`, desc: "" },
+    recommendations: [
+      { rank: 1, code: `90${key}.001`, name: `EXISTING ${key}`, similarity: 0.93, matchType: "TEXT" },
+      { rank: 2, code: `90${key}.002`, name: `OTHER ${key}`, similarity: 0.71, matchType: "TEXT" },
+    ],
+    ...overrides,
+  });
+}
+
+test("the pre-save check posts to the preview path and needs two new mass lines", () => {
+  assert.equal(AI_PRECHECK_PATH, "/material/ai-match/preview");
+  assert.equal(AI_PRECHECK_MASS_MIN_NEW_LINES, 2);
+});
+
+test("normalizePrecheckLine keeps the line key next to the usual match shape", () => {
+  const line = previewLine(3);
+  assert.equal(line.key, 3);
+  assert.equal(line.status, "DONE");
+  assert.equal(line.recommendations[1].code, "903.002");
+  assert.equal(line.requesterReview, null);
+});
+
+test("only a finished line with candidates asks for a choice; the rest start as new", () => {
+  const withCandidates = previewLine(0);
+  const none = previewLine(1, { recommendations: [] });
+  const failed = previewLine(2, { status: "FAILED", error: "down", recommendations: [] });
+
+  assert.equal(precheckNeedsChoice(withCandidates), true);
+  assert.equal(precheckNeedsChoice(none), false);
+  assert.equal(precheckNeedsChoice(failed), false);
+
+  assert.equal(initialPrecheckChoice(withCandidates), "");
+  assert.equal(initialPrecheckChoice(none), AI_PRECHECK_NEW);
+  assert.equal(initialPrecheckChoice(failed), AI_PRECHECK_NEW);
+});
+
+test("summarizePrecheck splits new lines from lines matched to an existing material", () => {
+  const lines = [previewLine(0), previewLine(2), previewLine(5)];
+
+  const undecided = summarizePrecheck(lines, { 0: AI_PRECHECK_NEW, 2: "", 5: "905.002" });
+  assert.equal(undecided.allDecided, false);
+
+  const decided = summarizePrecheck(lines, { 0: AI_PRECHECK_NEW, 2: AI_PRECHECK_NEW, 5: "905.002" });
+  assert.equal(decided.allDecided, true);
+  assert.deepEqual(decided.newKeys, [0, 2]);
+  assert.deepEqual(decided.existing, [{ key: 5, query: "ITEM 5", code: "905.002", name: "OTHER 5" }]);
+
+  const allExisting = summarizePrecheck([previewLine(0)], { 0: "900.001" });
+  assert.equal(allExisting.allDecided, true);
+  assert.deepEqual(allExisting.newKeys, []);
+});
+
+test("buildPrecheckReview confirms a checked line and has nothing for a failed one", () => {
+  assert.deepEqual(buildPrecheckReview(previewLine(0)), {
+    confirmedNew: true,
+    recommendations: [
+      { code: "900.001", name: "EXISTING 0", similarity: 0.93, matchType: "TEXT" },
+      { code: "900.002", name: "OTHER 0", similarity: 0.71, matchType: "TEXT" },
+    ],
+  });
+  assert.deepEqual(buildPrecheckReview(previewLine(1, { recommendations: [] })), {
+    confirmedNew: true,
+    recommendations: [],
+  });
+  assert.equal(buildPrecheckReview(previewLine(2, { status: "FAILED", recommendations: [] })), null);
+  assert.equal(buildPrecheckReview(undefined), null);
+});
+
+test("buildMassPrecheckReview sends one confirmation per new, checked line keyed by form row", () => {
+  const lines = [
+    previewLine(0),
+    previewLine(2, { status: "FAILED", recommendations: [] }),
+    previewLine(5),
+  ];
+  const review = buildMassPrecheckReview(lines, [0, 2]);
+  assert.deepEqual(
+    review.rows.map(row => [row.rowIndex, row.confirmedNew, row.recommendations.length]),
+    [[0, true, 2]]
+  );
+  assert.equal(buildMassPrecheckReview(lines, [2]), null);
+  assert.equal(buildMassPrecheckReview(lines, []), null);
+});
+
+test("normalizeAiMatch carries the requester's confirmation only when it was given", () => {
+  assert.deepEqual(
+    normalizeAiMatch(buildDto({ requesterReview: { confirmedNew: true, reviewedAt: "t", shownCount: 3 } }))
+      .requesterReview,
+    { confirmedNew: true, reviewedAt: "t", shownCount: 3 }
+  );
+  assert.equal(normalizeAiMatch(buildDto({ requesterReview: null })).requesterReview, null);
+  assert.equal(normalizeAiMatch(buildDto({ requesterReview: { confirmedNew: false } })).requesterReview, null);
+});
