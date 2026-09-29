@@ -2,6 +2,7 @@ import axios from "axios";
 import { lazy } from "react";
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import DashboardIndexRedirect from "src/route/DashboardIndexRedirect";
+import ProtectedRoute from "src/route/ProtectedRoute";
 import ESubmissionDir from "src/pages/dashboard/ESubmissionDir";
 import FormVendorClient from "src/pages/dashboard/FormVendorClient";
 const NavigateETender = lazy(() => import("src/pages/e-tender/NavigateETender"));
@@ -219,21 +220,40 @@ export const routes = createBrowserRouter([
       },
       {
         path: "materials/approval",
-        element: <AdminApprovalView />,
+        // Approvers only: the backend narrows "My Approval" to users assigned
+        // as an approver (plus Master Data and ADMIN).
+        element: (
+          <ProtectedRoute page="My Approval">
+            <AdminApprovalView />
+          </ProtectedRoute>
+        ),
       },
       {
         // The sidebar's Administrator entry lands here: an overview that picks
         // which administration tool to open.
         path: "materials/administrator",
-        element: <MaterialsAdministratorOverview />,
+        // The whole Administrator section is the ADMIN user's.
+        element: (
+          <ProtectedRoute page="Administrator">
+            <MaterialsAdministratorOverview />
+          </ProtectedRoute>
+        ),
       },
       {
         path: "materials/administrator/approvers",
-        element: <MaterialsApproverManagement />,
+        element: (
+          <ProtectedRoute page="Administrator">
+            <MaterialsApproverManagement />
+          </ProtectedRoute>
+        ),
       },
       {
         path: "materials/administrator/guide",
-        element: <MaterialsGuideUpload />,
+        element: (
+          <ProtectedRoute page="Administrator">
+            <MaterialsGuideUpload />
+          </ProtectedRoute>
+        ),
       },
       {
         // Sidebar: Materials > Dashboard (mst_page menu_id seeded by
