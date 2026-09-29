@@ -1,0 +1,58 @@
+name: Production release (trigger backend build)
+
+# The production image is built in developerkpn/vendor_ms_kpn, because the
+# backend serves this frontend from its public/build. A merge to `prod` here
+# runs the frontend tests, then asks that repo's prod-release workflow to build
+# and push a new bwbimdm/vms-prod:prod-X.Y.Z with this exact commit.
+#
+# Needs, in this repo's settings:
+#   secrets.CUSTOM_GITHUB_TOKEN
+#     a token allowed to send repository_dispatch to developerkpn/vendor_ms_kpn
+#     (fine-grained: Contents read & write on that repo)
+
+on:
+  push:
+    branches: [prod]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BACKEND_REPO: developerkpn/vendor_ms_kpn
+  NODE_VERSION: "22"
+
+jobs:
+  test:
+    name: Frontend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+      - run: npm test
+
+  trigger-release:
+    name: Trigger backend release build
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send repository_dispatch
+        env:
+          GH_TOKEN: ${{ secrets.CUSTOM_GITHUB_TOKEN }}
+        run: |
+          gh api "repos/$BACKEND_REPO/dispatches" \
+            -f event_type=frontend-prod-updated \
+            -f "client_payload[frontend_sha]=$GITHUB_SHA"
+          {
+            echo "### Release build requested"
+            echo ""
+            echo "Frontend \`$GITHUB_SHA\` sent to $BACKEND_REPO."
+            echo "Follow it under that repo's Actions > Production release (image to ECR)."
+          } >> "$GITHUB_STEP_SUMMARY"

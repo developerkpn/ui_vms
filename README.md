@@ -1,70 +1,66 @@
-# Getting Started with Create React App
+# VMS frontend (ui_vms)
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+React + Vite single-page app for the Vendor Management System. In every
+environment it is served by the backend
+([vendor_ms_kpn](https://github.com/developerkpn/vendor_ms_kpn)) from that
+repo's `public/build`, so the two repos are checked out side by side:
 
-## Available Scripts
+```
+<workspace>/
+  ui_vms/          this repo
+  vendor_ms_kpn/   the backend; the build lands in its public/build
+```
 
-In the project directory, you can run:
+## Running locally
 
-### `npm start`
+Node 22.
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+```bash
+npm ci
+npm run dev          # Vite dev server on https://localhost:3000 (VITE_PORT to change)
+```
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+The app reads `VITE_*` values from `.env` / `.env.production` (both
+gitignored):
 
-### `npm test`
+| Name | Production value | Meaning |
+|---|---|---|
+| `VITE_URL_LOC` | `/api` | API base |
+| `VITE_URL` | `/` | App base |
+| `VITE_URL_BE` | `/` | Backend base |
+| `VITE_ETENDER` | `https://etender.gamasap.com` | eTender link |
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## Tests
 
-### `npm run build`
+```bash
+npm test             # node --test 'src/**/*.test.mjs'
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+The tests cover the plain-JS helpers (`src/helper`, form validation modules)
+and run under Node without a browser or bundler.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## Build
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+```bash
+npx vite build --mode production
+```
 
-### `npm run eject`
+Writes to `../vendor_ms_kpn/public/build` (see `vite.config.js`), which the
+backend image then includes. Build the frontend before building a backend
+image.
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+## Release
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+Updating the `prod` branch runs `.github/workflows/prod-release.yml`: it runs
+the tests, then asks the backend repo to build and push the production image
+`bwbimdm/vms-prod:prod-X.Y.Z` containing this exact commit. The backend
+README describes that pipeline and its settings.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+Repository setting it needs:
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+| Name | Kind | Purpose |
+|---|---|---|
+| `CUSTOM_GITHUB_TOKEN` | secret | Token allowed to send `repository_dispatch` to `developerkpn/vendor_ms_kpn` (fine-grained: Contents read & write on that repo) |
 
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+`aws.yml` is the older dev pipeline (branch `deploy_dev_ecs`) and is
+unrelated.
