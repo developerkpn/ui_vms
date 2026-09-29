@@ -304,6 +304,7 @@ export default function MassApprovalFormDialog({
   const normalizedStatus = String(detail.status || "").trim().toUpperCase();
   const currentUserId = useSessionStore(state => state.user_id);
   const currentUsername = useSessionStore(state => state.username);
+  const isMaterialAdmin = useSessionStore(state => state.is_material_admin);
   const isMdmUser = useSessionStore(isMdmMaterialUser);
   const canSubmitApprovalAction = normalizedStatus === "SUBMIT";
   // The batch's steps as currently known: prefer the ones a fresh grab returned,
@@ -325,8 +326,9 @@ export default function MassApprovalFormDialog({
       ) || null,
     [approvalSteps]
   );
-  const isAdminOverride =
-    String(currentUsername || "").trim().toUpperCase() === "ADMIN";
+  // ADMIN, or a MATERIAL_ADMIN group member: the backend decides and grants
+  // the same override server-side.
+  const isAdminOverride = isMaterialAdmin;
   const activeApproverUserId = resolveStepApproverUserId(activeStep);
 
   // Master Data is the only stage that gets to choose where a rework lands, and

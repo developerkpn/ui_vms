@@ -785,6 +785,7 @@ export default function AdminApprovalFormDialog({
   const axiosPrivate = useAxiosPrivate();
   const currentUserId = useSessionStore(state => state.user_id);
   const currentUsername = useSessionStore(state => state.username);
+  const isMaterialAdmin = useSessionStore(state => state.is_material_admin);
   const isMdmUser = useSessionStore(isMdmMaterialUser);
 
   useEffect(() => {
@@ -924,8 +925,9 @@ export default function AdminApprovalFormDialog({
   // approver (manual stage) or its claimer (MDM stage). ADMIN keeps its
   // backend-side override. Everyone else — including approvers who already
   // acted on an earlier stage — gets a view-only dialog.
-  const isAdminOverride =
-    String(currentUsername || "").trim().toUpperCase() === "ADMIN";
+  // ADMIN, or a MATERIAL_ADMIN group member: the backend decides and grants
+  // the same override server-side.
+  const isAdminOverride = isMaterialAdmin;
   const isMyManualTurn =
     Boolean(detail.currentStep) &&
     String(detail.currentStep.kind || "").toUpperCase() !== MDM_STEP_KIND &&

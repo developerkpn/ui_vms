@@ -101,6 +101,7 @@ export default function LoginPage() {
           // MDM user without the Pickup button and the assignment filters for
           // the frame or two it takes to land.
           is_mdm_material: response.user_group?.is_mdm_material,
+          is_material_admin: response.is_material_admin,
         });
         setMenu(response.menu);
         setPermission(response.permission);
