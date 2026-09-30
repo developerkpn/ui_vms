@@ -22,7 +22,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import PageHeader from "src/components/common/PageHeader";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
@@ -32,6 +32,7 @@ import {
   buildGuideDownloadUrl,
   buildGuideSections,
   buildGuideUrl,
+  buildGuideVideoPreviewUrl,
   formatGuideSize,
   isImageGuide,
   isPdfGuide,
@@ -48,33 +49,132 @@ const guideIconFor = guide => {
   return DescriptionIcon;
 };
 
+// Previews load only once a card is close to the screen, so a folder of large
+// videos does not start a dozen downloads the moment the dashboard opens.
+function useNearViewport(ref) {
+  const [near, setNear] = useState(false);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || near) {
+      return undefined;
+    }
+    if (typeof IntersectionObserver === "undefined") {
+      setNear(true);
+      return undefined;
+    }
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries.some(entry => entry.isIntersecting)) {
+          setNear(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [ref, near]);
+
+  return near;
+}
+
+const THUMBNAIL_HEIGHT = 148;
+// Grey margin kept around a PDF's page inside the thumbnail.
+const PDF_PAGE_INSET = 10;
+
+const previewKindOf = guide => {
+  if (isImageGuide(guide)) {
+    return "image";
+  }
+  if (isVideoGuide(guide)) {
+    return "video";
+  }
+  if (isPdfGuide(guide)) {
+    return "pdf";
+  }
+  return "other";
+};
+
 /**
- * The top of a card: the picture itself for an image guide, the kind icon for
- * everything else.
+ * The top of a card: a real preview where the browser can draw one (the
+ * picture, a still from the video, page 1 of the PDF) and the kind icon for
+ * everything else, or for a preview that fails to load.
  *
  * Every card gets the same height of media area whatever it holds, so a grid of
  * mixed images and documents still lines up.
  */
 function GuideThumbnail({ guide }) {
-  const [imageFailed, setImageFailed] = useState(false);
+  const boxRef = useRef(null);
+  const canvasRef = useRef(null);
+  const near = useNearViewport(boxRef);
+  const kind = previewKindOf(guide);
+  // loading -> ready, or failed; a document with no preview is failed from the start.
+  const [status, setStatus] = useState(kind === "other" ? "failed" : "loading");
   const Icon = guideIconFor(guide);
-  const showImage = isImageGuide(guide) && !imageFailed;
+  const ready = status === "ready";
+  const failed = status === "failed";
+
+  useEffect(() => {
+    if (kind !== "pdf" || !near || !canvasRef.current) {
+      return undefined;
+    }
+    let cancelled = false;
+    let job = null;
+    // pdf.js is only fetched here, the first time a PDF card comes into view.
+    import("src/helper/pdfThumbnail")
+      .then(({ renderPdfFirstPage }) => {
+        if (cancelled) {
+          return undefined;
+        }
+        job = renderPdfFirstPage(
+          buildGuideUrl(guide),
+          canvasRef.current,
+          (boxRef.current?.clientWidth || 280) - 2 * PDF_PAGE_INSET,
+          THUMBNAIL_HEIGHT - 2 * PDF_PAGE_INSET
+        );
+        return job.promise;
+      })
+      .then(() => !cancelled && setStatus("ready"))
+      .catch(() => !cancelled && setStatus("failed"));
+    return () => {
+      cancelled = true;
+      job?.cancel();
+    };
+  }, [kind, near, guide]);
+
+  // Laid over the placeholder and faded in once loaded. Never display:none
+  // while loading: the browser does not fetch a lazy image it is not
+  // rendering, so a hidden one would wait forever.
+  const mediaSx = {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+    opacity: ready ? 1 : 0,
+    transition: "opacity 200ms ease",
+  };
 
   return (
     <Box
+      ref={boxRef}
       sx={{
         position: "relative",
-        height: 148,
+        height: THUMBNAIL_HEIGHT,
         borderRadius: "10px",
         overflow: "hidden",
-        bgcolor: showImage ? "grey.100" : "primary.main",
+        bgcolor: failed ? "primary.main" : kind === "video" ? "grey.900" : "grey.100",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        color: "primary.contrastText",
+        color: failed ? "primary.contrastText" : "text.disabled",
       }}
     >
-      {showImage ? (
+      {!ready && <Icon sx={{ fontSize: 40 }} />}
+
+      {kind === "image" && !failed && (
         <Box
           component="img"
           src={buildGuideUrl(guide)}
@@ -82,13 +182,90 @@ function GuideThumbnail({ guide }) {
           // Lazy: a dashboard with a folder of screenshots would otherwise pull
           // every one of them on load.
           loading="lazy"
+          onLoad={() => setStatus("ready")}
           // A guide whose bytes have gone missing falls back to the icon rather
           // than leaving a broken-image frame on the card.
-          onError={() => setImageFailed(true)}
-          sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          onError={() => setStatus("failed")}
+          sx={mediaSx}
         />
-      ) : (
-        <Icon sx={{ fontSize: 40 }} />
+      )}
+
+      {kind === "video" && near && !failed && (
+        // Metadata only, muted and inert: the browser fetches what it needs to
+        // paint the frame at the #t= offset, never the whole video. The content
+        // endpoint answers Range requests, which is what makes that possible.
+        <Box
+          component="video"
+          src={buildGuideVideoPreviewUrl(guide)}
+          preload="metadata"
+          muted
+          playsInline
+          disablePictureInPicture
+          tabIndex={-1}
+          aria-hidden="true"
+          onLoadedData={() => setStatus("ready")}
+          onError={() => setStatus("failed")}
+          sx={{ ...mediaSx, pointerEvents: "none" }}
+        />
+      )}
+
+      {kind === "pdf" && !failed && (
+        <Box
+          component="canvas"
+          ref={canvasRef}
+          aria-label={guide.displayName}
+          // The whole first page, centred like a sheet of paper, so a cover
+          // page reads as one rather than as a strip of its top margin.
+          sx={{
+            ...mediaSx,
+            inset: "auto",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: "auto",
+            height: "auto",
+            maxWidth: `calc(100% - ${2 * PDF_PAGE_INSET}px)`,
+            maxHeight: `calc(100% - ${2 * PDF_PAGE_INSET}px)`,
+            bgcolor: "common.white",
+            boxShadow: "0 1px 4px rgba(0, 0, 0, 0.2)",
+          }}
+        />
+      )}
+
+      {/* A still would read as a picture; the play mark says it is a video. */}
+      {ready && kind === "video" && (
+        <Box
+          sx={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            bgcolor: "rgba(0, 0, 0, 0.18)",
+            color: "common.white",
+          }}
+        >
+          <PlayCircleOutlineIcon
+            sx={{ fontSize: 48, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.5))" }}
+          />
+        </Box>
+      )}
+
+      {ready && kind === "pdf" && (
+        <Chip
+          label="PDF"
+          size="small"
+          sx={{
+            position: "absolute",
+            top: 8,
+            left: 8,
+            height: 20,
+            fontSize: 11,
+            fontWeight: 700,
+            bgcolor: "error.main",
+            color: "error.contrastText",
+          }}
+        />
       )}
     </Box>
   );

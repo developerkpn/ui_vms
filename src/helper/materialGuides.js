@@ -83,6 +83,34 @@ export function buildGuideUrl(guide) {
   return `${apiBase}${contentPath}`;
 }
 
+// Where a video card's still is taken from. A second in rather than frame 0,
+// which in a screen recording is often a black or blank title frame.
+export const GUIDE_VIDEO_PREVIEW_SECONDS = 1;
+
+/**
+ * URL for a video card's still: the guide URL with a media fragment, so the
+ * browser seeks there once the metadata is in and paints that frame.
+ */
+export function buildGuideVideoPreviewUrl(guide) {
+  const url = buildGuideUrl(guide);
+  return url ? `${url}#t=${GUIDE_VIDEO_PREVIEW_SECONDS}` : "";
+}
+
+/**
+ * pdf.js scale that draws a page `pageWidth` points wide at `cssWidth` CSS
+ * pixels, times the device pixel ratio so the thumbnail stays sharp on a
+ * high-density screen (capped at 2: past that the canvas only costs memory).
+ */
+export function pdfThumbnailScale(pageWidth, cssWidth, devicePixelRatio = 1) {
+  const width = Number(pageWidth);
+  const target = Number(cssWidth);
+  if (!(width > 0) || !(target > 0)) {
+    return 1;
+  }
+  const ratio = Math.min(Math.max(Number(devicePixelRatio) || 1, 1), 2);
+  return (target * ratio) / width;
+}
+
 export function buildGuideDownloadUrl(guide) {
   const url = buildGuideUrl(guide);
   return url ? `${url}?download=1` : "";

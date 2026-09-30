@@ -11,7 +11,9 @@ import {
   findGuideMissingName,
   buildGuideUrl,
   buildGuideDownloadUrl,
+  buildGuideVideoPreviewUrl,
   formatGuideSize,
+  pdfThumbnailScale,
   isImageGuide,
   isPdfGuide,
   isVideoGuide,
@@ -196,4 +198,22 @@ test("the description stays optional and is sent as an empty string", () => {
   });
 
   assert.deepEqual(JSON.parse(body.get("meta")), [{ name: "Intro", description: "" }]);
+});
+
+test("a video card's still is taken a second in, from the guide's own URL", () => {
+  const guide = { contentPath: "/material/guides/files/7/content" };
+  assert.equal(buildGuideVideoPreviewUrl(guide), `${buildGuideUrl(guide)}#t=1`);
+  assert.equal(buildGuideVideoPreviewUrl({}), "");
+});
+
+test("a PDF thumbnail is drawn at the card's width, sharp on high-density screens", () => {
+  // A4 is 595pt wide.
+  assert.equal(pdfThumbnailScale(595, 595), 1);
+  assert.equal(pdfThumbnailScale(595, 297.5, 2), 1);
+  // The pixel ratio is capped at 2 and never drops below 1.
+  assert.equal(pdfThumbnailScale(100, 100, 3), 2);
+  assert.equal(pdfThumbnailScale(100, 100, 0.5), 1);
+  // Nothing to measure falls back to the page's own size.
+  assert.equal(pdfThumbnailScale(0, 200), 1);
+  assert.equal(pdfThumbnailScale(595, 0), 1);
 });
