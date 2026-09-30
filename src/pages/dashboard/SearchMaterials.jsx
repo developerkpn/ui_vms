@@ -64,6 +64,7 @@ import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import PageHeader from "src/components/common/PageHeader";
 import PageTablePaper from "src/components/common/PageTablePaper";
 import usePermissionStore from "src/store/userPermissionStore";
+import useSessionStore from "src/store/useSessionStore";
 
 const columnHelper = createColumnHelper();
 const MAX_ATTACHMENT_PREVIEW = 3;
@@ -479,6 +480,8 @@ export default function SearchMaterials() {
   const [pendingAttachments, setPendingAttachments] = useState([]);
   const [attachmentError, setAttachmentError] = useState("");
   const [attachmentsUploading, setAttachmentsUploading] = useState(false);
+  const [attachmentToDelete, setAttachmentToDelete] = useState(null);
+  const [attachmentDeleting, setAttachmentDeleting] = useState(false);
   const [materialActionDialog, setMaterialActionDialog] = useState({
     open: false,
     mode: "change",
@@ -495,6 +498,11 @@ export default function SearchMaterials() {
   const [anchorEl, setAnchorEl] = useState(null);
   const [menuMaterial, setMenuMaterial] = useState(null);
   const permission = usePermissionStore(state => state.permission);
+  // Deleting an attachment is Master Data's and the Materials administrators'
+  // (ADMIN, MATERIAL_ADMIN) only; the DELETE endpoint enforces the same rule.
+  const canDeleteAttachments = useSessionStore(
+    state => state.is_mdm_material === true || state.is_material_admin === true
+  );
 
   const showSnackbar = (message, severity = "success") => {
     setSnackbar({ open: true, message, severity });
@@ -796,6 +804,30 @@ export default function SearchMaterials() {
   const handleRemovePendingAttachment = index => {
     setPendingAttachments(prev => prev.filter((_, position) => position !== index));
     setAttachmentError("");
+  };
+
+  const handleConfirmDeleteAttachment = async () => {
+    const materialId = selectedMaterial?.id;
+    if (!attachmentToDelete?.id) {
+      return;
+    }
+
+    setAttachmentDeleting(true);
+
+    try {
+      await axiosPrivate.delete(`/material/attachments/${attachmentToDelete.id}`);
+      await refreshMaterialAttachments(materialId);
+      showSnackbar("Attachment deleted successfully");
+    } catch (error) {
+      // Only the message, for the same reason as the upload handler below.
+      const message =
+        error?.response?.data?.message || "Failed to delete attachment. Please try again.";
+      console.error("Failed to delete attachment:", error?.message);
+      showSnackbar(message, "error");
+    } finally {
+      setAttachmentDeleting(false);
+      setAttachmentToDelete(null);
+    }
   };
 
   const handleUploadAttachments = async () => {
@@ -1401,9 +1433,27 @@ export default function SearchMaterials() {
                 <ListItem
                   key={att.id || index}
                   secondaryAction={
-                    <IconButton edge="end" onClick={() => handleViewAttachment(att)}>
-                      <Visibility />
-                    </IconButton>
+                    <Box sx={{ display: "flex" }}>
+                      <IconButton
+                        edge="end"
+                        onClick={() => handleViewAttachment(att)}
+                        aria-label={`View ${att.attachment}`}
+                        sx={canDeleteAttachments ? { mr: 1 } : undefined}
+                      >
+                        <Visibility />
+                      </IconButton>
+                      {canDeleteAttachments && (
+                        <IconButton
+                          edge="end"
+                          color="error"
+                          disabled={attachmentsUploading || attachmentDeleting}
+                          onClick={() => setAttachmentToDelete(att)}
+                          aria-label={`Delete ${att.attachment}`}
+                        >
+                          <Delete />
+                        </IconButton>
+                      )}
+                    </Box>
                   }
                 >
                   <ListItemIcon>
@@ -1424,8 +1474,45 @@ export default function SearchMaterials() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseAttachmentsDialog} disabled={attachmentsUploading}>
+          <Button
+            onClick={handleCloseAttachmentsDialog}
+            disabled={attachmentsUploading || attachmentDeleting}
+          >
             Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Attachment Confirmation Dialog */}
+      <Dialog
+        open={Boolean(attachmentToDelete)}
+        onClose={() => !attachmentDeleting && setAttachmentToDelete(null)}
+        maxWidth="sm"
+      >
+        <DialogTitle>Confirm Attachment Deletion</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1">Are you sure you want to delete this attachment?</Typography>
+          <Typography variant="body2" sx={{ mt: 1, fontWeight: "medium" }}>
+            {attachmentToDelete?.attachment}
+          </Typography>
+          <Typography variant="body2" color="error" sx={{ mt: 2 }}>
+            This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAttachmentToDelete(null)} disabled={attachmentDeleting}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmDeleteAttachment}
+            color="error"
+            variant="contained"
+            disabled={attachmentDeleting}
+            startIcon={
+              attachmentDeleting ? <CircularProgress size={18} color="inherit" /> : undefined
+            }
+          >
+            {attachmentDeleting ? "Deleting..." : "Delete"}
           </Button>
         </DialogActions>
       </Dialog>
