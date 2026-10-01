@@ -1,3 +1,4 @@
+import { formatOptionalDateTime } from "./adminApprovalView.js";
 import { pickSapFields } from "./sapStatus.js";
 
 /**
@@ -56,9 +57,24 @@ export function buildMassApprovalDetail(row = {}, items = []) {
  * @returns {object|null} Rework summary or null if no rework data.
  */
 export function buildMassReworkSummary(row = {}) {
-  // For mass requests, rework info is stored per-item on the active stage.
-  // Read from the normalized row's first item fields.
-  const reworkStage = row.approvalStage;
+  // A mass rework writes its reason to the remark of the step it came from
+  // (any level, Master Data included) — mat_mass_request_item has no rework_*
+  // columns — and the inbox sends those steps as approvalSteps. The most
+  // recently acted REWORK step is the rework being shown.
+  const reworkStep = (Array.isArray(row.approvalSteps) ? row.approvalSteps : [])
+    .filter(step => String(step?.status ?? "").toUpperCase() === "REWORK")
+    .sort((a, b) => (Date.parse(b.actedAt) || 0) - (Date.parse(a.actedAt) || 0))[0];
+
+  if (reworkStep) {
+    return {
+      massRequestNo: row.massRequestNo ?? "-",
+      reason: reworkStep.remark ?? "",
+      approver: reworkStep.approverName ?? "",
+      at: formatOptionalDateTime(reworkStep.actedAt) ?? "",
+    };
+  }
+
+  // Older rows without approvalSteps: the fixed three-stage fields.
   const remark =
     row.firstItemApproval1Remark ??
     row.firstItemApproval2Remark ??
