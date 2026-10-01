@@ -35,6 +35,11 @@ export default function SearchSuggestionField({
   const [highlightedOption, setHighlightedOption] = useState(null);
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
+  // True once a suggestion is picked or the text is submitted, until the user
+  // types again. While true the old suggestion list stays shut: reopened by a
+  // click on the box it lays over the results table, and a click meant for the
+  // table (the Action column sits right under it) picks a suggestion instead.
+  const [committed, setCommitted] = useState(false);
   const axiosPrivate = useAxiosPrivate();
 
   const fetchSuggestions = useMemo(
@@ -71,6 +76,7 @@ export default function SearchSuggestionField({
       setSelectedOption(option);
       setInputValue(getOptionLabel(option));
       setOpen(false);
+      setCommitted(true);
       const keyword = option.code || option.description || "";
       onSearch?.({ type, option, keyword });
       return true;
@@ -84,6 +90,7 @@ export default function SearchSuggestionField({
       if (!query) return false;
       setSelectedOption(null);
       setOpen(false);
+      setCommitted(true);
       onSearch?.({ type, query });
       return true;
     },
@@ -121,7 +128,9 @@ export default function SearchSuggestionField({
     <Autocomplete
       {...props}
       open={open}
-      onOpen={() => setOpen(true)}
+      onOpen={() => {
+        if (!committed) setOpen(true);
+      }}
       onClose={() => setOpen(false)}
       onHighlightChange={(event, option) => setHighlightedOption(option)}
       // Autocomplete wipes the input on blur whenever no option is selected, which would
@@ -153,6 +162,7 @@ export default function SearchSuggestionField({
 
         if (reason === "clear") {
           setSelectedOption(null);
+          setCommitted(false);
           setInputValue("");
           setOptions([]);
           onInputValueChange?.("");
@@ -161,6 +171,11 @@ export default function SearchSuggestionField({
 
         setSelectedOption(null);
         setInputValue(newInputValue);
+        // Typing starts a new search, so the list may open again. Opened here
+        // rather than left to onOpen, whose `committed` is still the old value
+        // on the keystroke that ends a committed search.
+        setCommitted(false);
+        setOpen(newInputValue !== "");
         onInputValueChange?.(newInputValue);
         fetchSuggestions(newInputValue);
       }}
