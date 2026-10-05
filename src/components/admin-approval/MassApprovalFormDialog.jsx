@@ -71,6 +71,7 @@ import {
   MASS_DECISION_LABELS,
   MASS_DECISION_REJECT,
   MASS_DECISION_REWORK,
+  resolveMassItemStateStyle,
   summarizeMassDecisions,
 } from "src/helper/massItemDecisions.js";
 import {
@@ -143,6 +144,26 @@ const EMPTY_DECISION_REMARKS = {
   [MASS_DECISION_REWORK]: "",
   [MASS_DECISION_REJECT]: "",
 };
+
+// Header line of each step of the per-item decision wizard: where Master Data
+// is in it, and which items this step's action covers.
+function DecisionStepCaption({ index, total, action, itemNos }) {
+  return (
+    <Stack direction="row" spacing={1} alignItems="center" justifyContent="center">
+      <Typography variant="caption" sx={{ fontWeight: 800, color: "text.secondary" }}>
+        Step {index + 1} of {total}
+      </Typography>
+      <Chip
+        label={MASS_DECISION_LABELS[action]}
+        size="small"
+        sx={{ fontWeight: 800, ...DECISION_STYLES[action] }}
+      />
+      <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+        {formatMassItemNos(itemNos)}
+      </Typography>
+    </Stack>
+  );
+}
 
 // Columns of the Final Code (running number) table, in order. Kept as data so
 // the header row is one centred cell definition rather than five hand-aligned
@@ -290,7 +311,8 @@ export default function MassApprovalFormDialog({
   const [decisionError, setDecisionError] = useState("");
   const [decisionRemarks, setDecisionRemarks] = useState(EMPTY_DECISION_REMARKS);
   const [decisionRemarkErrors, setDecisionRemarkErrors] = useState({});
-  const [decisionConfirmOpen, setDecisionConfirmOpen] = useState(false);
+  // The wizard step on screen (one of MASS_DECISION_ACTIONS), null when closed.
+  const [decisionStep, setDecisionStep] = useState(null);
   const axiosPrivate = useAxiosPrivate();
 
   // Reset state when dialog opens/closes
@@ -324,7 +346,7 @@ export default function MassApprovalFormDialog({
       setDecisionError("");
       setDecisionRemarks(EMPTY_DECISION_REMARKS);
       setDecisionRemarkErrors({});
-      setDecisionConfirmOpen(false);
+      setDecisionStep(null);
       // Discards staged attachment changes for every item — an abandoned
       // review must leave no trace, same as itemDrafts above.
       setItemAttachments(buildInitialItemAttachments(detail.items));
@@ -454,6 +476,16 @@ export default function MassApprovalFormDialog({
   const finalCodeItems = isDecideMode
     ? detail.items.filter(item => decisionApproveIds.has(String(item.id)))
     : actionableItems;
+  // The decision wizard: one step per action Master Data picked, in a fixed
+  // order — Approve (running numbers + remark, in the Final Code dialog), then
+  // Rework, then Reject. The last step submits the whole batch.
+  const decisionSteps = MASS_DECISION_ACTIONS.filter(
+    action => decisionSummary.counts[action] > 0
+  );
+  const decisionStepIndex = decisionSteps.indexOf(decisionStep);
+  const isLastDecisionStep = decisionStepIndex === decisionSteps.length - 1;
+  const isFinalCodeOpen =
+    finalCodeDialogOpen || decisionStep === MASS_DECISION_APPROVE;
 
   const handleGrabMdm = async () => {
     const claimPath = buildClaimMdmPath({
@@ -533,9 +565,13 @@ export default function MassApprovalFormDialog({
     ? deriveReworkEmailReason(reworkEmailSubject)
     : "";
 
+  // Fills only what is still empty: the decision wizard remounts the rework
+  // field when Master Data steps Back and forward again, which re-fetches the
+  // draft, and that must not overwrite a mail they already edited. Every
+  // rework clears both fields before it opens, so a first load fills both.
   const handleReworkEmailTemplateLoaded = useCallback(template => {
-    setReworkEmailSubject(template.subject);
-    setReworkEmailBody(template.body);
+    setReworkEmailSubject(prev => prev || template.subject);
+    setReworkEmailBody(prev => prev || template.body);
   }, []);
 
   const handleReworkEmailSubjectChange = value => {
@@ -572,9 +608,13 @@ export default function MassApprovalFormDialog({
     const serverError = serverValidationErrors?.finalCodeSuffix;
     if (serverError?.message) {
       setRemarkDialogOpen(false);
-      setDecisionConfirmOpen(false);
       setFinalCodeGeneralError(serverError.message);
-      setFinalCodeDialogOpen(true);
+      // Within the decision wizard the running numbers are its Approve step.
+      if (currentAction === DECIDE_ACTION) {
+        setDecisionStep(MASS_DECISION_APPROVE);
+      } else {
+        setFinalCodeDialogOpen(true);
+      }
     }
   }, [serverValidationErrors]);
 
@@ -615,7 +655,7 @@ export default function MassApprovalFormDialog({
   // in the batch. A batch normally spans one or two groups, so this stays a
   // couple of requests no matter how many items it carries.
   useEffect(() => {
-    if (!finalCodeDialogOpen) {
+    if (!isFinalCodeOpen) {
       return undefined;
     }
 
@@ -662,7 +702,7 @@ export default function MassApprovalFormDialog({
       active = false;
     };
     // finalCodeGroupCodesKey stands in for the codes themselves — see its memo.
-  }, [finalCodeDialogOpen, finalCodeGroupCodesKey, axiosPrivate]);
+  }, [isFinalCodeOpen, finalCodeGroupCodesKey, axiosPrivate]);
 
   const updateDraft = (itemNo, fieldKey, value) => {
     if (!isItemEditable(detail.items.find(item => item.itemNo === itemNo))) {
@@ -917,7 +957,7 @@ export default function MassApprovalFormDialog({
     }
   };
 
-  const handleFinalCodeNext = () => {
+  const validateFinalCodeSuffixes = () => {
     // Group/sub group are read through resolveField (not the raw item) so a
     // group edited elsewhere in the dialog is what gets validated here — the
     // group is two thirds of the material code being assembled.
@@ -931,18 +971,17 @@ export default function MassApprovalFormDialog({
       })),
     });
 
-    if (Object.keys(errors).length > 0) {
-      setFinalCodeSuffixErrors(errors);
+    setFinalCodeSuffixErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleFinalCodeNext = () => {
+    if (!validateFinalCodeSuffixes()) {
       return;
     }
 
     setFinalCodeDialogOpen(false);
-    setFinalCodeSuffixErrors({});
     setFinalCodeGeneralError("");
-    if (currentAction === DECIDE_ACTION) {
-      setDecisionConfirmOpen(true);
-      return;
-    }
     setRemarkDialogOpen(true);
   };
 
@@ -1020,29 +1059,23 @@ export default function MassApprovalFormDialog({
       return;
     }
 
+    // Remarks, running numbers and the rework destination carry over when
+    // Master Data backs out of the wizard to change a decision and comes back;
+    // they start empty when the batch dialog opens. The mail draft does not:
+    // it lists the reworked items, which may have just changed.
     setCurrentAction(DECIDE_ACTION);
     setDecisionError("");
-    setDecisionRemarks(EMPTY_DECISION_REMARKS);
     setDecisionRemarkErrors({});
-    setFinalCodeSuffixes({});
     setFinalCodeSuffixErrors({});
     setFinalCodeGeneralError("");
-    // The same fresh rework destination the Rework button starts from.
-    setReworkTarget(REWORK_TO_REQUESTER);
-    setReworkNotifyVia(NOTIFY_VIA_APP);
-    setReworkNewApprover(null);
     setReworkEmailSubject("");
     setReworkEmailBody("");
     setReworkEmailErrors({ subject: "", body: "" });
 
-    // Approved items take their running numbers first, exactly as a
-    // whole-batch Master Data approval does.
-    if (decisionSummary.counts[MASS_DECISION_APPROVE] > 0) {
-      setFinalCodeDialogOpen(true);
-      return;
-    }
-
-    setDecisionConfirmOpen(true);
+    // Approve (when picked) is always the first step: approved items take
+    // their running numbers first, exactly as a whole-batch Master Data
+    // approval does.
+    setDecisionStep(decisionSteps[0]);
   };
 
   const handleDecisionRemarkChange = (action, value) => {
@@ -1066,25 +1099,32 @@ export default function MassApprovalFormDialog({
         (itemHasAttachmentChanges(item) && !isDecisionAttachable(item))
     );
 
-  const handleDecideConfirm = () => {
-    const errors = {};
-    for (const action of MASS_DECISION_ACTIONS) {
-      // An EMAIL rework has no box to fill: its reason comes from the subject.
-      const skip =
-        decisionSummary.counts[action] === 0 ||
-        (action === MASS_DECISION_REWORK && isReworkEmailReason);
-      if (!skip && !decisionRemarks[action].trim()) {
-        errors[action] = DECISION_REMARK_REQUIRED[action];
-      }
+  const requireDecisionRemark = action => {
+    if (decisionRemarks[action].trim()) {
+      return true;
     }
-    setDecisionRemarkErrors(errors);
-    if (Object.keys(errors).length > 0) {
-      return;
+    setDecisionRemarkErrors(prev => ({
+      ...prev,
+      [action]: DECISION_REMARK_REQUIRED[action],
+    }));
+    return false;
+  };
+
+  // Whether the wizard may leave `action`'s step forward.
+  const validateDecisionStep = action => {
+    if (action === MASS_DECISION_APPROVE) {
+      // Both checked on one click, so every error on the step shows at once.
+      const suffixesValid = validateFinalCodeSuffixes();
+      return requireDecisionRemark(MASS_DECISION_APPROVE) && suffixesValid;
     }
 
-    if (decisionSummary.counts[MASS_DECISION_REWORK] > 0) {
+    if (action === MASS_DECISION_REWORK) {
+      // An EMAIL rework has no box to fill: its reason comes from the subject.
+      if (!isReworkEmailReason && !requireDecisionRemark(MASS_DECISION_REWORK)) {
+        return false;
+      }
       if (reworkDestinationError) {
-        return;
+        return false;
       }
 
       const emailContentErrors = validateReworkEmailContent({
@@ -1093,11 +1133,13 @@ export default function MassApprovalFormDialog({
         body: reworkEmailBody,
       });
       setReworkEmailErrors(emailContentErrors);
-      if (hasReworkEmailContentError(emailContentErrors)) {
-        return;
-      }
+      return !hasReworkEmailContentError(emailContentErrors);
     }
 
+    return requireDecisionRemark(MASS_DECISION_REJECT);
+  };
+
+  const submitDecisions = () => {
     onAction?.("decide", null, null, {
       requestBody: buildMassDecideRequestBody({
         decisions: itemDecisions,
@@ -1130,6 +1172,41 @@ export default function MassApprovalFormDialog({
         : null,
       reworkRecipientEmail: reworkNewApprover?.email ?? "",
     });
+  };
+
+  const handleDecisionStepNext = () => {
+    if (!validateDecisionStep(decisionStep)) {
+      return;
+    }
+
+    if (decisionStep === MASS_DECISION_APPROVE) {
+      setFinalCodeGeneralError("");
+    }
+
+    if (isLastDecisionStep) {
+      submitDecisions();
+      return;
+    }
+
+    setDecisionStep(decisionSteps[decisionStepIndex + 1]);
+  };
+
+  // Back to the previous step; from the first one, out of the wizard. Nothing
+  // entered on any step is lost.
+  const handleDecisionStepBack = () => {
+    if (submitting) return;
+    setDecisionStep(decisionStepIndex > 0 ? decisionSteps[decisionStepIndex - 1] : null);
+  };
+
+  const handleDecisionStepClose = (_, reason) => {
+    if (
+      submitting &&
+      (reason === "backdropClick" || reason === "escapeKeyDown")
+    ) {
+      return;
+    }
+    if (submitting) return;
+    setDecisionStep(null);
   };
 
   // Remark dialog confirm — fire the action.
@@ -1246,17 +1323,6 @@ export default function MassApprovalFormDialog({
     onClose?.();
   };
 
-  const handleDecisionConfirmClose = (_, reason) => {
-    if (
-      submitting &&
-      (reason === "backdropClick" || reason === "escapeKeyDown")
-    ) {
-      return;
-    }
-    if (submitting) return;
-    setDecisionConfirmOpen(false);
-  };
-
   const handleRemarkDialogClose = (_, reason) => {
     if (
       submitting &&
@@ -1267,6 +1333,44 @@ export default function MassApprovalFormDialog({
     if (submitting) return;
     setRemarkDialogOpen(false);
   };
+
+  const decisionStepNextLabel = submitting
+    ? "Saving..."
+    : isLastDecisionStep
+      ? "Submit"
+      : "Next";
+
+  // Shown on the wizard's first step only, before anything is sent.
+  const discardedChangesAlert = hasDiscardedDecisionChanges ? (
+    <Alert severity="info" sx={{ mb: 2, borderRadius: 1 }}>
+      Field edits are saved only for approved items, and attachment changes
+      only for approved or reworked items. Changes staged on the other items
+      will be discarded.
+    </Alert>
+  ) : null;
+
+  const renderDecisionRemarkField = action => (
+    <TextField
+      fullWidth
+      multiline
+      rows={3}
+      placeholder={
+        action === MASS_DECISION_APPROVE
+          ? "Approve remark..."
+          : `${MASS_DECISION_LABELS[action]} reason...`
+      }
+      value={decisionRemarks[action]}
+      error={Boolean(decisionRemarkErrors[action])}
+      helperText={decisionRemarkErrors[action]}
+      disabled={submitting}
+      onChange={event => handleDecisionRemarkChange(action, event.target.value)}
+      sx={{
+        "& .MuiInputBase-root": {
+          bgcolor: "#f5f5f5",
+        },
+      }}
+    />
+  );
 
   return (
     <>
@@ -1651,8 +1755,10 @@ export default function MassApprovalFormDialog({
                               <Chip
                                 label={describeMassItemState(item)}
                                 size="small"
-                                variant="outlined"
-                                sx={{ fontWeight: 700 }}
+                                sx={{
+                                  fontWeight: 700,
+                                  ...resolveMassItemStateStyle(describeMassItemState(item)),
+                                }}
                               />
                             )}
                           </TableCell>
@@ -1959,10 +2065,12 @@ export default function MassApprovalFormDialog({
         onClose={() => setPreviewOpen(false)}
       />
 
-      {/* Final Code dialog — Master Data stage only, ahead of the remark step */}
+      {/* Final Code dialog — Master Data stage only, ahead of the remark step.
+          In the per-item decision wizard it is the Approve step, carrying the
+          approve remark under the running numbers. */}
       <Dialog
-        open={finalCodeDialogOpen}
-        onClose={handleFinalCodeDialogClose}
+        open={isFinalCodeOpen}
+        onClose={decisionStep ? handleDecisionStepClose : handleFinalCodeDialogClose}
         // Five columns, two of which now carry a name caption under the code.
         // "sm" wrapped them into an unreadable stack.
         maxWidth="md"
@@ -1970,6 +2078,14 @@ export default function MassApprovalFormDialog({
         PaperProps={{ sx: { borderRadius: 2 } }}
       >
         <Stack alignItems="center" spacing={1} sx={{ pt: 3, px: 3 }}>
+          {decisionStep === MASS_DECISION_APPROVE && (
+            <DecisionStepCaption
+              index={decisionStepIndex}
+              total={decisionSteps.length}
+              action={MASS_DECISION_APPROVE}
+              itemNos={decisionSummary.itemNosByAction[MASS_DECISION_APPROVE]}
+            />
+          )}
           <WarningAmber sx={{ color: "warning.main", fontSize: 40 }} />
           <Typography variant="h6" sx={{ fontWeight: 900 }}>
             Final Code Required
@@ -1985,6 +2101,7 @@ export default function MassApprovalFormDialog({
         </Stack>
 
         <DialogContent sx={{ pt: 3 }}>
+          {decisionStep === MASS_DECISION_APPROVE && discardedChangesAlert}
           {finalCodeGeneralError && (
             <Alert severity="error" sx={{ mb: 2, borderRadius: 1 }}>
               {finalCodeGeneralError}
@@ -2104,12 +2221,20 @@ export default function MassApprovalFormDialog({
               </TableBody>
             </Table>
           </TableContainer>
+          {decisionStep === MASS_DECISION_APPROVE && (
+            <Box sx={{ mt: 2.5 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>
+                Approve Remark
+              </Typography>
+              {renderDecisionRemarkField(MASS_DECISION_APPROVE)}
+            </Box>
+          )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3, pt: 0, gap: 1, justifyContent: "center" }}>
           <Button
             variant="outlined"
             color="inherit"
-            onClick={handleFinalCodeDialogClose}
+            onClick={decisionStep ? handleDecisionStepBack : handleFinalCodeDialogClose}
             disabled={submitting}
             sx={{ textTransform: "none", fontWeight: 800, minWidth: 120 }}
           >
@@ -2117,11 +2242,11 @@ export default function MassApprovalFormDialog({
           </Button>
           <Button
             variant="contained"
-            onClick={handleFinalCodeNext}
+            onClick={decisionStep ? handleDecisionStepNext : handleFinalCodeNext}
             disabled={submitting}
             sx={{ textTransform: "none", fontWeight: 800, minWidth: 120 }}
           >
-            Next
+            {decisionStep ? decisionStepNextLabel : "Next"}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2231,134 +2356,103 @@ export default function MassApprovalFormDialog({
         </DialogActions>
       </Dialog>
 
-      {/* Confirm step of Master Data's per-item decisions: one section per
-          action that was picked, each with its own remark / reason. */}
+      {/* Rework and Reject steps of the per-item decision wizard (Approve is
+          the Final Code dialog above): one action per step, each with its own
+          reason. */}
       <Dialog
-        open={decisionConfirmOpen}
-        onClose={handleDecisionConfirmClose}
-        maxWidth="sm"
+        open={decisionStep === MASS_DECISION_REWORK || decisionStep === MASS_DECISION_REJECT}
+        onClose={handleDecisionStepClose}
+        // The rework destination list carries "Approval N - Name - email" rows.
+        maxWidth={decisionStep === MASS_DECISION_REWORK ? "sm" : "xs"}
         fullWidth
       >
-        <Box sx={{ p: 2, display: "flex", alignItems: "center", gap: 1 }}>
-          <WarningAmber sx={{ color: "#f59e0b" }} />
-          <Typography variant="h6" sx={{ fontWeight: 900 }}>
-            Confirm Decisions
-          </Typography>
-        </Box>
-        <DialogContent sx={{ pt: 0 }}>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Each decision applies to its own items only. Approved items get their
-            final code and go to SAP.
-          </Typography>
-          {hasDiscardedDecisionChanges && (
-            <Alert severity="info" sx={{ mb: 2, borderRadius: 1 }}>
-              Field edits are saved only for approved items, and attachment changes
-              only for approved or reworked items. Changes staged on the other
-              items will be discarded.
-            </Alert>
-          )}
-          <Stack spacing={2.5}>
-            {MASS_DECISION_ACTIONS.filter(
-              action => decisionSummary.counts[action] > 0
-            ).map(action => (
-              <Box key={action}>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-                  <Chip
-                    label={MASS_DECISION_LABELS[action]}
-                    size="small"
-                    sx={{ fontWeight: 800, ...DECISION_STYLES[action] }}
-                  />
-                  <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
-                    {formatMassItemNos(decisionSummary.itemNosByAction[action])}
-                  </Typography>
-                </Stack>
-                {action === MASS_DECISION_REWORK && canChooseReworkTarget && (
-                  <ReworkDestinationField
-                    slots={reworkSlots}
-                    value={reworkTarget}
-                    onChange={setReworkTarget}
-                    onNewApproverChange={setReworkNewApprover}
-                    newApprover={reworkNewApprover}
-                    notifyVia={reworkNotifyVia}
-                    onNotifyViaChange={setReworkNotifyVia}
-                    excludeIdentifiers={reworkExcludedIdentifiers}
-                    disabled={submitting}
-                    errorText={reworkDestinationError}
-                    requestKind={REWORK_EMAIL_KIND_MASS}
-                    requestId={row?.id}
-                    itemIds={decisionSummary.itemIdsByAction[MASS_DECISION_REWORK]}
-                    emailSubject={reworkEmailSubject}
-                    emailBody={reworkEmailBody}
-                    onEmailSubjectChange={handleReworkEmailSubjectChange}
-                    onEmailBodyChange={handleReworkEmailBodyChange}
-                    onEmailTemplateLoaded={handleReworkEmailTemplateLoaded}
-                    emailErrors={reworkEmailErrors}
-                  />
-                )}
-                {action === MASS_DECISION_REWORK && isReworkEmailReason ? (
-                  <Box
-                    sx={{
-                      p: 1.5,
-                      borderRadius: 1,
-                      bgcolor: "#f5f5f5",
-                      border: "1px solid",
-                      borderColor: "divider",
-                    }}
-                  >
-                    <Typography variant="caption" color="text.secondary">
-                      {REWORK_EMAIL_REASON_NOTICE}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      sx={{ mt: 0.5, fontWeight: 700, wordBreak: "break-word" }}
-                    >
-                      {reworkEmailReason}
-                    </Typography>
-                  </Box>
-                ) : (
-                  <TextField
-                    fullWidth
-                    multiline
-                    rows={3}
-                    placeholder={
-                      action === MASS_DECISION_APPROVE
-                        ? "Approve remark..."
-                        : `${MASS_DECISION_LABELS[action]} reason...`
-                    }
-                    value={decisionRemarks[action]}
-                    error={Boolean(decisionRemarkErrors[action])}
-                    helperText={decisionRemarkErrors[action]}
-                    onChange={event =>
-                      handleDecisionRemarkChange(action, event.target.value)
-                    }
-                    sx={{
-                      "& .MuiInputBase-root": {
-                        bgcolor: "#f5f5f5",
-                      },
-                    }}
-                  />
-                )}
+        {(decisionStep === MASS_DECISION_REWORK || decisionStep === MASS_DECISION_REJECT) && (
+          <>
+            <Box sx={{ p: 2 }}>
+              <DecisionStepCaption
+                index={decisionStepIndex}
+                total={decisionSteps.length}
+                action={decisionStep}
+                itemNos={decisionSummary.itemNosByAction[decisionStep]}
+              />
+              <Box sx={{ mt: 1.5, display: "flex", alignItems: "center", gap: 1 }}>
+                <WarningAmber sx={{ color: "#f59e0b" }} />
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                  {MASS_DECISION_LABELS[decisionStep]} Reason
+                </Typography>
               </Box>
-            ))}
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button
-            onClick={() => setDecisionConfirmOpen(false)}
-            disabled={submitting}
-            sx={{ color: "text.secondary", textTransform: "none" }}
-          >
-            Close
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleDecideConfirm}
-            disabled={submitting || Boolean(reworkDestinationError)}
-            sx={{ textTransform: "none", fontWeight: 800 }}
-          >
-            {submitting ? "Saving..." : "Submit"}
-          </Button>
-        </DialogActions>
+            </Box>
+            <DialogContent sx={{ pt: 0 }}>
+              {decisionStepIndex === 0 && discardedChangesAlert}
+              {decisionStep === MASS_DECISION_REWORK && canChooseReworkTarget && (
+                <ReworkDestinationField
+                  slots={reworkSlots}
+                  value={reworkTarget}
+                  onChange={setReworkTarget}
+                  onNewApproverChange={setReworkNewApprover}
+                  newApprover={reworkNewApprover}
+                  notifyVia={reworkNotifyVia}
+                  onNotifyViaChange={setReworkNotifyVia}
+                  excludeIdentifiers={reworkExcludedIdentifiers}
+                  disabled={submitting}
+                  errorText={reworkDestinationError}
+                  requestKind={REWORK_EMAIL_KIND_MASS}
+                  requestId={row?.id}
+                  itemIds={decisionSummary.itemIdsByAction[MASS_DECISION_REWORK]}
+                  emailSubject={reworkEmailSubject}
+                  emailBody={reworkEmailBody}
+                  onEmailSubjectChange={handleReworkEmailSubjectChange}
+                  onEmailBodyChange={handleReworkEmailBodyChange}
+                  onEmailTemplateLoaded={handleReworkEmailTemplateLoaded}
+                  emailErrors={reworkEmailErrors}
+                />
+              )}
+              {decisionStep === MASS_DECISION_REWORK && isReworkEmailReason ? (
+                <Box
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 1,
+                    bgcolor: "#f5f5f5",
+                    border: "1px solid",
+                    borderColor: "divider",
+                  }}
+                >
+                  <Typography variant="caption" color="text.secondary">
+                    {REWORK_EMAIL_REASON_NOTICE}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{ mt: 0.5, fontWeight: 700, wordBreak: "break-word" }}
+                  >
+                    {reworkEmailReason}
+                  </Typography>
+                </Box>
+              ) : (
+                renderDecisionRemarkField(decisionStep)
+              )}
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+              <Button
+                onClick={handleDecisionStepBack}
+                disabled={submitting}
+                sx={{ color: "text.secondary", textTransform: "none" }}
+              >
+                Back
+              </Button>
+              <Button
+                variant="contained"
+                onClick={handleDecisionStepNext}
+                disabled={
+                  submitting ||
+                  (decisionStep === MASS_DECISION_REWORK && Boolean(reworkDestinationError))
+                }
+                sx={{ textTransform: "none", fontWeight: 800 }}
+              >
+                {decisionStepNextLabel}
+              </Button>
+            </DialogActions>
+          </>
+        )}
       </Dialog>
     </>
   );

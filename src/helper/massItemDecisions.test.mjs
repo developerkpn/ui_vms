@@ -21,6 +21,7 @@ const {
   resolveItemActiveStep,
   isMassItemActionable,
   describeMassItemState,
+  resolveMassItemStateStyle,
   applyMassDecision,
   summarizeMassDecisions,
   formatMassDecisionSummary,
@@ -69,6 +70,15 @@ test("describeMassItemState names where each item is", () => {
   assert.equal(describeMassItemState(item(1, 1, { status: "CANCEL" })), "Cancel");
   assert.equal(describeMassItemState(item(1, 1, { status: "Rework" })), "Rework");
   assert.equal(describeMassItemState(item(1, 1)), "Master Data");
+});
+
+test("item state badges use the list's status colours", () => {
+  assert.equal(resolveMassItemStateStyle("Rework").bgcolor, "#9c27b0");
+  assert.equal(resolveMassItemStateStyle("Done").bgcolor, "#16a34a");
+  assert.equal(resolveMassItemStateStyle("Cancel").bgcolor, "#dc2626");
+  // Still waiting at some stage: the Submit blue.
+  assert.equal(resolveMassItemStateStyle("Approval 1").bgcolor, "#2f62d6");
+  assert.equal(resolveMassItemStateStyle("Master Data").bgcolor, "#2f62d6");
 });
 
 test("decisions are set and cleared per item, and tallied over the items that need one", () => {

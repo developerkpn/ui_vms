@@ -111,6 +111,26 @@ export function describeMassItemState(item = {}) {
   return normalizeUpper(active.kind) === "MDM" ? "Master Data" : `Approval ${active.level}`;
 }
 
+// Badge colours of an item's state: the same ones the status pills on My
+// Request and My Approval use, so "Rework" reads purple everywhere. Any stage
+// an item is still waiting at is a Submit.
+const MASS_ITEM_STATE_STYLES = {
+  Done: { bgcolor: "#16a34a", color: "#ffffff" },
+  Cancel: { bgcolor: "#dc2626", color: "#ffffff" },
+  Rework: { bgcolor: "#9c27b0", color: "#ffffff" },
+  Submit: { bgcolor: "#2f62d6", color: "#ffffff" },
+};
+
+/**
+ * Chip colours for an item's state label (from describeMassItemState).
+ *
+ * @param {string} label
+ * @returns {{bgcolor: string, color: string}}
+ */
+export function resolveMassItemStateStyle(label) {
+  return MASS_ITEM_STATE_STYLES[label] ?? MASS_ITEM_STATE_STYLES.Submit;
+}
+
 /**
  * Set (or, with a falsy action, clear) the decision of the given items.
  *

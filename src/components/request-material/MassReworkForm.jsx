@@ -23,7 +23,10 @@ import { normalizeMassMaterialFieldValue } from "./massMaterialFormValidation.js
 import MaterialAiMatchPanel from "../common/MaterialAiMatchPanel";
 import RequesterCommentField from "../common/RequesterCommentField";
 import { validateRequesterComment } from "src/helper/requestComments.js";
-import { describeMassItemState } from "src/helper/massItemDecisions.js";
+import {
+  describeMassItemState,
+  resolveMassItemStateStyle,
+} from "src/helper/massItemDecisions.js";
 
 const FIELD_META = [
   { key: "plantCode", dbKey: "plant_code", label: "Plant", required: true },
@@ -334,9 +337,10 @@ export default function MassReworkForm({
                         <Chip
                           label={describeMassItemState(item)}
                           size="small"
-                          variant={isItemInRework(item) ? "filled" : "outlined"}
-                          color={isItemInRework(item) ? "secondary" : "default"}
-                          sx={{ fontWeight: 700 }}
+                          sx={{
+                            fontWeight: 700,
+                            ...resolveMassItemStateStyle(describeMassItemState(item)),
+                          }}
                         />
                       </TableCell>
                       {FIELD_META.map(meta => {
