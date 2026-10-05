@@ -15,7 +15,7 @@ import { STATUS_FILTER_PREFERENCE_KEY } from "./adminApprovalView.js";
 test("the options offered match My Approval's, minus its Master Data extras", () => {
   assert.deepEqual(
     REQUEST_STATUS_FILTER_OPTIONS.map(option => option.value),
-    ["All", "Submit", "Rework", "Cancel", "Done", "Waiting SAP", "SAP Error"]
+    ["All", "Submit", "Rework", "Cancel", "Done", "Partial", "Waiting SAP", "SAP Error"]
   );
 });
 
@@ -36,6 +36,21 @@ test("a plain request filters under its approval status", () => {
   assert.equal(getRequestStatusLabel({ status: "REWORK" }), "Rework");
   assert.equal(getRequestStatusLabel({ status: "CANCELLED" }), "Cancel");
   assert.equal(getRequestStatusLabel({ status: "DONE" }), "Done");
+});
+
+test("a mass batch decided item by item reads Partial, ahead of its SAP state", () => {
+  assert.equal(getRequestStatusLabel({ status: "Partial" }), "Partial");
+  assert.equal(
+    getRequestStatusLabel({ status: "Partial", sapPushStatus: "PENDING" }),
+    "Partial"
+  );
+  assert.deepEqual(
+    filterRequestRowsByStatus(
+      [{ status: "Partial" }, { status: "DONE" }],
+      "Partial"
+    ),
+    [{ status: "Partial" }]
+  );
 });
 
 test("a rewound request filters as Submit, matching the pill this page shows", () => {

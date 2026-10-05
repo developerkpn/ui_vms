@@ -25,6 +25,7 @@ export const APPROVAL_STATUS_FILTER_OPTIONS = [
   { value: "Rework", label: "Rework" },
   { value: "Cancel", label: "Cancel" },
   { value: "Done", label: "Done" },
+  { value: "Partial", label: "Partial" },
   { value: "Waiting SAP", label: "Waiting SAP" },
   { value: "SAP Error", label: "SAP Error" },
 ];
@@ -169,7 +170,16 @@ export function getRewindStepLevels(row) {
 // is pushed, the SAP staging state — "Waiting SAP" / "Done" (created in SAP) /
 // "SAP Error" — replaces the bare approval "Done", matching the table chip. This
 // is why filtering "Done" no longer sweeps in waiting/errored requests.
+export function isPartialApprovalStatus(value) {
+  return String(value || "").trim().toUpperCase() === "PARTIAL";
+}
+
 export function getEffectiveApprovalStatusLabel(row) {
+  // A mass batch whose items Master Data decided differently reads as one
+  // "Partial" status, ahead of the rolled-up SAP state of its approved items.
+  if (isPartialApprovalStatus(row?.status)) {
+    return "Partial";
+  }
   const sapChip = getSapStatusChip(row?.sapPushStatus);
   if (sapChip) {
     return sapChip.label;
@@ -187,6 +197,10 @@ export function normalizeApprovalStatusForFilter(value) {
 
   if (normalized === "REWORK") {
     return "Rework";
+  }
+
+  if (normalized === "PARTIAL") {
+    return "Partial";
   }
 
   if (["REJECT", "REJECTED", "CANCEL", "CANCELLED"].includes(normalized)) {
@@ -820,7 +834,15 @@ export function normalizeMassApprovalRows(rows = []) {
       massRequestNo: stringOrFallback(row.mass_request_no, row.massRequestNo, "-"),
       itemCount: row.item_count ?? row.itemCount ?? 1,
       massRequestReason: stringOrFallback(row.mass_request_reason, row.massRequestReason, "-"),
-      status: normalizeApprovalStatusForFilter(row.first_item_status || "Submit"),
+      // The batch's status: "Partial" once Master Data decided its items
+      // differently, else the status they share.
+      status: normalizeApprovalStatusForFilter(
+        row.batch_status || row.first_item_status || "Submit"
+      ),
+      // The status of the item this viewer sees the batch through (the backend
+      // picks the first one that is their turn) — what gates acting on it.
+      itemStatus: normalizeApprovalStatusForFilter(row.first_item_status || "Submit"),
+      itemStatusCounts: row.item_status_counts ?? row.itemStatusCounts ?? {},
       // Batch-level SAP staging status: the backend rolls the per-item
       // sap_push_status up worst-first, so the row reads like a single one.
       ...pickSapFields(row),

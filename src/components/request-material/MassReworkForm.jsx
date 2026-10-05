@@ -2,6 +2,7 @@ import { Close } from "@mui/icons-material";
 import {
   Box,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -22,6 +23,7 @@ import { normalizeMassMaterialFieldValue } from "./massMaterialFormValidation.js
 import MaterialAiMatchPanel from "../common/MaterialAiMatchPanel";
 import RequesterCommentField from "../common/RequesterCommentField";
 import { validateRequesterComment } from "src/helper/requestComments.js";
+import { describeMassItemState } from "src/helper/massItemDecisions.js";
 
 const FIELD_META = [
   { key: "plantCode", dbKey: "plant_code", label: "Plant", required: true },
@@ -49,12 +51,18 @@ const FIELD_META = [
   },
 ];
 
+// Master Data decides a batch item by item, so only some items may be back with
+// the requester; the rest are done, cancelled or still with an approver.
+const isItemInRework = item => String(item?.status ?? "").trim().toUpperCase() === "REWORK";
+
 /**
  * Editable form for revising a mass request that has been reworked.
- * Shows all items with pre-filled, editable fields — similar to the mass
- * request creation form. No reason field or attachments.
+ * Shows every item of the batch; the ones sent back for rework have
+ * pre-filled, editable fields — similar to the mass request creation form —
+ * and the rest are read-only. No reason field or attachments.
  *
- * All required fields must be non-empty before submission.
+ * All required fields of the reworked items must be non-empty before
+ * submission, and only those items are sent.
  */
 export default function MassReworkForm({
   open,
@@ -75,6 +83,7 @@ export default function MassReworkForm({
     () => FIELD_META.filter(m => m.required).map(m => m.key),
     []
   );
+  const reworkItems = useMemo(() => items.filter(isItemInRework), [items]);
 
   // Reset state when dialog opens/closes
   useEffect(() => {
@@ -121,7 +130,7 @@ export default function MassReworkForm({
     const errors = {};
     let hasError = false;
 
-    for (const item of items) {
+    for (const item of reworkItems) {
       const draft = drafts[item.item_no];
       if (!draft) continue;
 
@@ -148,7 +157,7 @@ export default function MassReworkForm({
   const handleSubmit = () => {
     if (!validate()) return;
 
-    const payload = items.map(item => {
+    const payload = reworkItems.map(item => {
       const draft = drafts[item.item_no];
       if (!draft) return { id: item.id };
 
@@ -217,7 +226,9 @@ export default function MassReworkForm({
       <DialogContent dividers sx={{ px: { xs: 2, sm: 3 }, py: 2.5 }}>
         <Stack spacing={2.5}>
           <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
-            Items ({items.length})
+            {reworkItems.length === items.length
+              ? `Items (${items.length})`
+              : `Items to revise (${reworkItems.length} of ${items.length})`}
           </Typography>
 
           <TableContainer
@@ -249,6 +260,16 @@ export default function MassReworkForm({
                   >
                     Request No
                   </TableCell>
+                  <TableCell
+                    sx={{
+                      fontWeight: 700,
+                      border: "1px solid #e0e0e0",
+                      py: 1.5,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Status
+                  </TableCell>
                   {FIELD_META.map(meta => (
                     <TableCell
                       key={meta.key}
@@ -276,7 +297,7 @@ export default function MassReworkForm({
                 {items.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={2 + FIELD_META.length}
+                      colSpan={3 + FIELD_META.length}
                       align="center"
                       sx={{ py: 3 }}
                     >
@@ -287,7 +308,10 @@ export default function MassReworkForm({
                   </TableRow>
                 ) : (
                   items.map((item, idx) => (
-                    <TableRow key={item.item_no ?? idx}>
+                    <TableRow
+                      key={item.item_no ?? idx}
+                      sx={isItemInRework(item) ? undefined : { bgcolor: "#fafafa" }}
+                    >
                       <TableCell
                         align="center"
                         sx={{
@@ -305,6 +329,15 @@ export default function MassReworkForm({
                         }}
                       >
                         {item.request_no ?? "-"}
+                      </TableCell>
+                      <TableCell sx={{ border: "1px solid #e0e0e0", whiteSpace: "nowrap" }}>
+                        <Chip
+                          label={describeMassItemState(item)}
+                          size="small"
+                          variant={isItemInRework(item) ? "filled" : "outlined"}
+                          color={isItemInRework(item) ? "secondary" : "default"}
+                          sx={{ fontWeight: 700 }}
+                        />
                       </TableCell>
                       {FIELD_META.map(meta => {
                         const isMultiline =
@@ -345,7 +378,7 @@ export default function MassReworkForm({
                                   e.target.value
                                 )
                               }
-                              disabled={submitting}
+                              disabled={submitting || !isItemInRework(item)}
                               inputProps={{
                                 style: { fontSize: "0.8125rem" },
                                 ...(meta.key === "description"
@@ -390,7 +423,7 @@ export default function MassReworkForm({
         <Button
           variant="contained"
           onClick={handleSubmit}
-          disabled={submitting || items.length === 0}
+          disabled={submitting || reworkItems.length === 0}
           sx={{ textTransform: "none", fontWeight: 800 }}
         >
           {submitting ? "Saving..." : "Save Changes"}

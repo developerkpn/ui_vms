@@ -11,6 +11,7 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
   Dialog,
   DialogActions,
@@ -59,6 +60,20 @@ import {
 import { isMdmMaterialUser } from "src/helper/adminApprovalView.js";
 import { normalizeMassMaterialFieldValue } from "src/components/request-material/massMaterialFormValidation.js";
 import {
+  applyMassDecision,
+  buildMassDecideRequestBody,
+  describeMassItemState,
+  formatMassDecisionSummary,
+  formatMassItemNos,
+  isMassItemActionable,
+  MASS_DECISION_ACTIONS,
+  MASS_DECISION_APPROVE,
+  MASS_DECISION_LABELS,
+  MASS_DECISION_REJECT,
+  MASS_DECISION_REWORK,
+  summarizeMassDecisions,
+} from "src/helper/massItemDecisions.js";
+import {
   applyOptimisticMdmClaim,
   buildClaimMdmPath,
   evaluateMdmClaimGate,
@@ -106,6 +121,28 @@ const EDITABLE_FIELD_META = [
   { key: "spesifikasiTambahan", label: "Spesifikasi Tambahan", dbKey: "spesifikasi_tambahan", required: true },
 ];
 const REQUIRED_FIELD_KEYS = EDITABLE_FIELD_META.filter(m => m.required).map(m => m.key);
+
+// The Master Data stage's one submit for the whole batch: every item waiting
+// there carries its own decision (see massItemDecisions.js).
+const DECIDE_ACTION = "Decide";
+
+const DECISION_STYLES = {
+  [MASS_DECISION_APPROVE]: { bgcolor: "#0b35d9", color: "common.white" },
+  [MASS_DECISION_REWORK]: { bgcolor: "#9c27b0", color: "common.white" },
+  [MASS_DECISION_REJECT]: { bgcolor: "#c62828", color: "common.white" },
+};
+
+const DECISION_REMARK_REQUIRED = {
+  [MASS_DECISION_APPROVE]: "Approve remark is required.",
+  [MASS_DECISION_REWORK]: "Rework reason is required.",
+  [MASS_DECISION_REJECT]: "Reject reason is required.",
+};
+
+const EMPTY_DECISION_REMARKS = {
+  [MASS_DECISION_APPROVE]: "",
+  [MASS_DECISION_REWORK]: "",
+  [MASS_DECISION_REJECT]: "",
+};
 
 // Columns of the Final Code (running number) table, in order. Kept as data so
 // the header row is one centred cell definition rather than five hand-aligned
@@ -246,6 +283,14 @@ export default function MassApprovalFormDialog({
   const [claimedSteps, setClaimedSteps] = useState(null);
   const [grabbing, setGrabbing] = useState(false);
   const [grabError, setGrabError] = useState("");
+  // Master Data's per-item decisions: the action picked for each item id, the
+  // items currently ticked, and one remark per action for the confirm step.
+  const [itemDecisions, setItemDecisions] = useState({});
+  const [selectedItemIds, setSelectedItemIds] = useState([]);
+  const [decisionError, setDecisionError] = useState("");
+  const [decisionRemarks, setDecisionRemarks] = useState(EMPTY_DECISION_REMARKS);
+  const [decisionRemarkErrors, setDecisionRemarkErrors] = useState({});
+  const [decisionConfirmOpen, setDecisionConfirmOpen] = useState(false);
   const axiosPrivate = useAxiosPrivate();
 
   // Reset state when dialog opens/closes
@@ -274,6 +319,12 @@ export default function MassApprovalFormDialog({
       setClaimedSteps(null);
       setGrabbing(false);
       setGrabError("");
+      setItemDecisions({});
+      setSelectedItemIds([]);
+      setDecisionError("");
+      setDecisionRemarks(EMPTY_DECISION_REMARKS);
+      setDecisionRemarkErrors({});
+      setDecisionConfirmOpen(false);
       // Discards staged attachment changes for every item — an abandoned
       // review must leave no trace, same as itemDrafts above.
       setItemAttachments(buildInitialItemAttachments(detail.items));
@@ -301,7 +352,9 @@ export default function MassApprovalFormDialog({
     setGrabError("");
   }, [row]);
 
-  const normalizedStatus = String(detail.status || "").trim().toUpperCase();
+  // Gated on the item this viewer sees the batch through, not the batch status:
+  // a "Partial" batch can still hold items waiting on this viewer.
+  const normalizedStatus = String(detail.itemStatus || "").trim().toUpperCase();
   const currentUserId = useSessionStore(state => state.user_id);
   const currentUsername = useSessionStore(state => state.username);
   const isMaterialAdmin = useSessionStore(state => state.is_material_admin);
@@ -360,6 +413,48 @@ export default function MassApprovalFormDialog({
     canSubmitApprovalAction &&
     (isAdminOverride || isMyManualTurn || (isMdmStageActive && isMdmClaimedByMe));
 
+  // The items an action here moves: those waiting at the same step as the one
+  // this viewer acts on. The rest of the batch (done, cancelled, back with the
+  // requester, or on somebody else's step) is shown read-only.
+  const actionableItems = useMemo(
+    () => (canAct ? detail.items.filter(item => isMassItemActionable(item, activeStep)) : []),
+    [canAct, detail.items, activeStep]
+  );
+  const actionableItemIds = useMemo(
+    () => new Set(actionableItems.map(item => String(item.id))),
+    [actionableItems]
+  );
+  const isItemEditable = item => actionableItemIds.has(String(item?.id));
+  // Master Data decides every item on its own and submits them together.
+  const isDecideMode = canAct && isMdmStageActive;
+  const decisionSummary = useMemo(
+    () => summarizeMassDecisions(itemDecisions, actionableItems),
+    [itemDecisions, actionableItems]
+  );
+  const showItemStateColumn =
+    isDecideMode || new Set(detail.items.map(describeMassItemState)).size > 1;
+  const selectableItemIds = actionableItems.map(item => String(item.id));
+  const selectedCount = selectedItemIds.length;
+  const allSelected =
+    selectableItemIds.length > 0 && selectedCount === selectableItemIds.length;
+  // Approve and Rework carry staged attachment changes; field edits only
+  // travel with Approve — the same rules the whole-batch actions follow.
+  const decisionApproveIds = useMemo(
+    () => new Set(decisionSummary.itemIdsByAction[MASS_DECISION_APPROVE].map(String)),
+    [decisionSummary]
+  );
+  const decisionAttachableIds = useMemo(
+    () =>
+      new Set([
+        ...decisionSummary.itemIdsByAction[MASS_DECISION_APPROVE].map(String),
+        ...decisionSummary.itemIdsByAction[MASS_DECISION_REWORK].map(String),
+      ]),
+    [decisionSummary]
+  );
+  const finalCodeItems = isDecideMode
+    ? detail.items.filter(item => decisionApproveIds.has(String(item.id)))
+    : actionableItems;
+
   const handleGrabMdm = async () => {
     const claimPath = buildClaimMdmPath({
       requestId: row?.id,
@@ -395,7 +490,11 @@ export default function MassApprovalFormDialog({
     }
   };
 
-  const canChooseReworkTarget = currentAction === "Rework" && isMdmStageActive;
+  const canChooseReworkTarget =
+    isMdmStageActive &&
+    (currentAction === "Rework" ||
+      (currentAction === DECIDE_ACTION &&
+        decisionSummary.counts[MASS_DECISION_REWORK] > 0));
   const reworkRequester = useMemo(() => resolveReworkRequester(row || {}), [row]);
   const reworkSlots = useMemo(
     () =>
@@ -456,9 +555,15 @@ export default function MassApprovalFormDialog({
     [detail.items]
   );
   // Item no + request no, one column per editable field, the attachments
-  // column, and the two SAP columns when they are showing. Shared by the
-  // loading and empty rows so neither can drift out of step with the header.
-  const itemColumnCount = 3 + EDITABLE_FIELD_META.length + (hasSapColumns ? 2 : 0);
+  // column, the two SAP columns when they are showing, and the selection +
+  // decision/status columns when those are. Shared by the loading and empty
+  // rows so neither can drift out of step with the header.
+  const itemColumnCount =
+    3 +
+    EDITABLE_FIELD_META.length +
+    (hasSapColumns ? 2 : 0) +
+    (isDecideMode ? 1 : 0) +
+    (showItemStateColumn ? 1 : 0);
 
   // Server-side rejection of the composed plan (invalid entry, duplicate code,
   // or one already taken): reopen the Final Code dialog with the server
@@ -467,6 +572,7 @@ export default function MassApprovalFormDialog({
     const serverError = serverValidationErrors?.finalCodeSuffix;
     if (serverError?.message) {
       setRemarkDialogOpen(false);
+      setDecisionConfirmOpen(false);
       setFinalCodeGeneralError(serverError.message);
       setFinalCodeDialogOpen(true);
     }
@@ -559,7 +665,7 @@ export default function MassApprovalFormDialog({
   }, [finalCodeDialogOpen, finalCodeGroupCodesKey, axiosPrivate]);
 
   const updateDraft = (itemNo, fieldKey, value) => {
-    if (!canAct) {
+    if (!isItemEditable(detail.items.find(item => item.itemNo === itemNo))) {
       return;
     }
     // Clear error for this field
@@ -608,7 +714,7 @@ export default function MassApprovalFormDialog({
   };
 
   const handleAttachmentBrowseClick = itemNo => {
-    if (!canAct) {
+    if (!isItemEditable(detail.items.find(item => item.itemNo === itemNo))) {
       return;
     }
     setActiveAttachmentItemNo(itemNo);
@@ -632,7 +738,7 @@ export default function MassApprovalFormDialog({
   };
 
   const handleRemoveItemAttachment = (itemNo, indexToRemove) => {
-    if (!canAct) {
+    if (!isItemEditable(detail.items.find(item => item.itemNo === itemNo))) {
       return;
     }
     setItemAttachments(prev => ({
@@ -665,11 +771,11 @@ export default function MassApprovalFormDialog({
   // Per-item keep/add set for every item whose attachments were actually
   // touched, keyed by item id (the id the approve/rework endpoint keys rows
   // by, not the display-only itemNo). Reject discards this entirely — see
-  // the caller.
-  const buildItemAttachmentChanges = () => {
+  // the caller — and so does `include` for the items it leaves out.
+  const buildItemAttachmentChanges = (include = () => true) => {
     const changes = [];
     for (const item of detail.items) {
-      if (!itemHasAttachmentChanges(item)) {
+      if (!include(item) || !itemHasAttachmentChanges(item)) {
         continue;
       }
       const staged = itemAttachments[item.itemNo] || [];
@@ -693,10 +799,10 @@ export default function MassApprovalFormDialog({
   // whatever it arrived with, and re-validating it here would block approving
   // a batch for a state the reviewer did not create and cannot fix from this
   // dialog.
-  const validateItemAttachments = () => {
+  const validateItemAttachments = (include = () => true) => {
     const errors = {};
     for (const item of detail.items) {
-      if (!itemHasAttachmentChanges(item)) {
+      if (!include(item) || !itemHasAttachmentChanges(item)) {
         continue;
       }
       const staged = itemAttachments[item.itemNo] || [];
@@ -713,12 +819,12 @@ export default function MassApprovalFormDialog({
   const hasEdits = Object.keys(itemDrafts).length > 0;
 
   // Collect edited items in snake_case for the API payload
-  const buildEditedItemsPayload = () => {
+  const buildEditedItemsPayload = (include = () => true) => {
     const edited = [];
     for (const itemNoStr of Object.keys(itemDrafts)) {
       const itemNo = Number(itemNoStr);
       const originalItem = detail.items.find(i => i.itemNo === itemNo);
-      if (!originalItem) continue;
+      if (!originalItem || !include(originalItem)) continue;
 
       const changes = itemDrafts[itemNoStr];
       const payload = { id: originalItem.id };
@@ -734,31 +840,36 @@ export default function MassApprovalFormDialog({
     return edited;
   };
 
+  // Required fields that have been edited cannot be empty. `include` limits the
+  // check to the items whose edits are actually being sent.
+  const validateEditedRequiredFields = (include = () => true) => {
+    const errors = {};
+    for (const itemNoStr of Object.keys(itemDrafts)) {
+      const itemNo = Number(itemNoStr);
+      const originalItem = detail.items.find(i => i.itemNo === itemNo);
+      if (!originalItem || !include(originalItem)) continue;
+      const changes = itemDrafts[itemNoStr];
+      for (const fieldKey of REQUIRED_FIELD_KEYS) {
+        if (
+          changes[fieldKey] !== undefined &&
+          String(changes[fieldKey] ?? "").trim() === ""
+        ) {
+          errors[`${itemNo}::${fieldKey}`] = true;
+        }
+      }
+    }
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   // Action button handlers — open the remark dialog
   const handleApproveClick = () => {
     if (!validateItemAttachments()) {
       return;
     }
 
-    // Validate: required fields that have been edited cannot be empty
-    if (hasEdits) {
-      const errors = {};
-      for (const itemNoStr of Object.keys(itemDrafts)) {
-        const itemNo = Number(itemNoStr);
-        const changes = itemDrafts[itemNoStr];
-        for (const fieldKey of REQUIRED_FIELD_KEYS) {
-          if (
-            changes[fieldKey] !== undefined &&
-            String(changes[fieldKey] ?? "").trim() === ""
-          ) {
-            errors[`${itemNo}::${fieldKey}`] = true;
-          }
-        }
-      }
-      if (Object.keys(errors).length > 0) {
-        setFieldErrors(errors);
-        return;
-      }
+    if (hasEdits && !validateEditedRequiredFields()) {
+      return;
     }
 
     setCurrentAction("Approve");
@@ -812,7 +923,7 @@ export default function MassApprovalFormDialog({
     // group is two thirds of the material code being assembled.
     const errors = validateMassFinalCodeSuffixes({
       finalCodeSuffixes,
-      items: detail.items.map(item => ({
+      items: finalCodeItems.map(item => ({
         id: item.id,
         itemNo: item.itemNo,
         materialGroup: resolveField(item, "materialGroup"),
@@ -828,6 +939,10 @@ export default function MassApprovalFormDialog({
     setFinalCodeDialogOpen(false);
     setFinalCodeSuffixErrors({});
     setFinalCodeGeneralError("");
+    if (currentAction === DECIDE_ACTION) {
+      setDecisionConfirmOpen(true);
+      return;
+    }
     setRemarkDialogOpen(true);
   };
 
@@ -858,6 +973,163 @@ export default function MassApprovalFormDialog({
     setRemarkText("");
     setRemarkError("");
     setRemarkDialogOpen(true);
+  };
+
+  // --- Master Data: per-item decisions --------------------------------------
+
+  const handleToggleItem = itemId => {
+    const key = String(itemId);
+    setSelectedItemIds(prev =>
+      prev.includes(key) ? prev.filter(id => id !== key) : [...prev, key]
+    );
+  };
+
+  const handleToggleAllItems = () => {
+    setSelectedItemIds(allSelected ? [] : selectableItemIds);
+  };
+
+  // Tag the ticked items with an action (null clears theirs), then untick them
+  // so the next pick starts from a clean selection.
+  const handleSetDecision = action => {
+    if (selectedCount === 0) {
+      return;
+    }
+    setItemDecisions(prev => applyMassDecision(prev, selectedItemIds, action));
+    setSelectedItemIds([]);
+    setDecisionError("");
+  };
+
+  const isDecisionApproved = item => decisionApproveIds.has(String(item.id));
+  const isDecisionAttachable = item => decisionAttachableIds.has(String(item.id));
+
+  const handleSubmitDecisionsClick = () => {
+    if (!decisionSummary.complete) {
+      setDecisionError(
+        `Choose Approve, Rework or Reject for ${formatMassItemNos(
+          decisionSummary.undecidedItemNos
+        )}.`
+      );
+      return;
+    }
+
+    if (!validateItemAttachments(isDecisionAttachable)) {
+      return;
+    }
+
+    if (hasEdits && !validateEditedRequiredFields(isDecisionApproved)) {
+      return;
+    }
+
+    setCurrentAction(DECIDE_ACTION);
+    setDecisionError("");
+    setDecisionRemarks(EMPTY_DECISION_REMARKS);
+    setDecisionRemarkErrors({});
+    setFinalCodeSuffixes({});
+    setFinalCodeSuffixErrors({});
+    setFinalCodeGeneralError("");
+    // The same fresh rework destination the Rework button starts from.
+    setReworkTarget(REWORK_TO_REQUESTER);
+    setReworkNotifyVia(NOTIFY_VIA_APP);
+    setReworkNewApprover(null);
+    setReworkEmailSubject("");
+    setReworkEmailBody("");
+    setReworkEmailErrors({ subject: "", body: "" });
+
+    // Approved items take their running numbers first, exactly as a
+    // whole-batch Master Data approval does.
+    if (decisionSummary.counts[MASS_DECISION_APPROVE] > 0) {
+      setFinalCodeDialogOpen(true);
+      return;
+    }
+
+    setDecisionConfirmOpen(true);
+  };
+
+  const handleDecisionRemarkChange = (action, value) => {
+    setDecisionRemarks(prev => ({ ...prev, [action]: value }));
+    setDecisionRemarkErrors(prev => {
+      if (!prev[action]) return prev;
+      const next = { ...prev };
+      delete next[action];
+      return next;
+    });
+  };
+
+  // Field edits only travel with Approve, attachment changes with Approve or
+  // Rework. Whatever was staged on an item decided otherwise is not sent, and
+  // the confirm step says so instead of dropping it silently.
+  const hasDiscardedDecisionChanges =
+    currentAction === DECIDE_ACTION &&
+    detail.items.some(
+      item =>
+        (itemDrafts[item.itemNo] && !isDecisionApproved(item)) ||
+        (itemHasAttachmentChanges(item) && !isDecisionAttachable(item))
+    );
+
+  const handleDecideConfirm = () => {
+    const errors = {};
+    for (const action of MASS_DECISION_ACTIONS) {
+      // An EMAIL rework has no box to fill: its reason comes from the subject.
+      const skip =
+        decisionSummary.counts[action] === 0 ||
+        (action === MASS_DECISION_REWORK && isReworkEmailReason);
+      if (!skip && !decisionRemarks[action].trim()) {
+        errors[action] = DECISION_REMARK_REQUIRED[action];
+      }
+    }
+    setDecisionRemarkErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      return;
+    }
+
+    if (decisionSummary.counts[MASS_DECISION_REWORK] > 0) {
+      if (reworkDestinationError) {
+        return;
+      }
+
+      const emailContentErrors = validateReworkEmailContent({
+        notifyVia: reworkEmailChannel,
+        subject: reworkEmailSubject,
+        body: reworkEmailBody,
+      });
+      setReworkEmailErrors(emailContentErrors);
+      if (hasReworkEmailContentError(emailContentErrors)) {
+        return;
+      }
+    }
+
+    onAction?.("decide", null, null, {
+      requestBody: buildMassDecideRequestBody({
+        decisions: itemDecisions,
+        actionableItems,
+        remark: decisionRemarks[MASS_DECISION_APPROVE].trim(),
+        finalCodeSuffixes,
+        items: buildEditedItemsPayload(isDecisionApproved),
+        reworkReason: isReworkEmailReason
+          ? reworkEmailReason
+          : decisionRemarks[MASS_DECISION_REWORK].trim(),
+        reworkDestination: canChooseReworkTarget
+          ? buildReworkDestinationPayload({
+              selectedValue: reworkTarget,
+              newApprover: reworkNewApprover,
+              notifyVia: reworkNotifyVia,
+              emailContent: buildReworkEmailPayload({
+                notifyVia: reworkEmailChannel,
+                subject: reworkEmailSubject,
+                body: reworkEmailBody,
+              }),
+            })
+          : {},
+        rejectReason: decisionRemarks[MASS_DECISION_REJECT].trim(),
+      }),
+      itemAttachmentChanges: buildItemAttachmentChanges(isDecisionAttachable),
+      decisionCounts: decisionSummary.counts,
+      // Confirmation copy only, as on the Rework path.
+      reworkDestinationLabel: canChooseReworkTarget
+        ? describeReworkDestination({ slots: reworkSlots, selectedValue: reworkTarget })
+        : null,
+      reworkRecipientEmail: reworkNewApprover?.email ?? "",
+    });
   };
 
   // Remark dialog confirm — fire the action.
@@ -958,6 +1230,9 @@ export default function MassApprovalFormDialog({
 
   const handleClose = () => {
     setItemDrafts({});
+    setItemDecisions({});
+    setSelectedItemIds([]);
+    setDecisionError("");
     setRemarkDialogOpen(false);
     setCurrentAction("");
     setRemarkText("");
@@ -969,6 +1244,17 @@ export default function MassApprovalFormDialog({
     setItemAttachments(buildInitialItemAttachments(detail.items));
     setItemAttachmentErrors({});
     onClose?.();
+  };
+
+  const handleDecisionConfirmClose = (_, reason) => {
+    if (
+      submitting &&
+      (reason === "backdropClick" || reason === "escapeKeyDown")
+    ) {
+      return;
+    }
+    if (submitting) return;
+    setDecisionConfirmOpen(false);
   };
 
   const handleRemarkDialogClose = (_, reason) => {
@@ -1112,6 +1398,58 @@ export default function MassApprovalFormDialog({
               {itemsLoading ? "Items" : `Items (${detail.items.length})`}
             </Typography>
 
+            {/* Master Data decides each item on its own: tick items, tag them
+                with an action, repeat, then submit the whole batch at once. */}
+            {isDecideMode && !itemsLoading && actionableItems.length > 0 && (
+              <Paper
+                variant="outlined"
+                sx={{
+                  p: 1.5,
+                  borderRadius: 2,
+                  display: "flex",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 1,
+                }}
+              >
+                <Box sx={{ mr: "auto" }}>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                    {selectedCount > 0
+                      ? `${selectedCount} selected`
+                      : "Tick items, then choose what happens to them."}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Every item waiting at Master Data needs a decision before you submit.
+                  </Typography>
+                </Box>
+                {MASS_DECISION_ACTIONS.map(action => (
+                  <Button
+                    key={action}
+                    size="small"
+                    variant="contained"
+                    disabled={selectedCount === 0 || submitting}
+                    onClick={() => handleSetDecision(action)}
+                    sx={{
+                      ...DECISION_STYLES[action],
+                      textTransform: "none",
+                      fontWeight: 800,
+                    }}
+                  >
+                    {MASS_DECISION_LABELS[action]}
+                  </Button>
+                ))}
+                <Button
+                  size="small"
+                  color="inherit"
+                  disabled={selectedCount === 0 || submitting}
+                  onClick={() => handleSetDecision(null)}
+                  sx={{ textTransform: "none", fontWeight: 700 }}
+                >
+                  Clear
+                </Button>
+              </Paper>
+            )}
+
             <TableContainer
               component={Paper}
               variant="outlined"
@@ -1120,6 +1458,22 @@ export default function MassApprovalFormDialog({
               <Table size="small" sx={{ borderCollapse: "collapse" }}>
                 <TableHead>
                   <TableRow sx={{ bgcolor: "#f5f7f9" }}>
+                    {isDecideMode && (
+                      <TableCell
+                        padding="checkbox"
+                        align="center"
+                        sx={{ border: "1px solid #e0e0e0" }}
+                      >
+                        <Checkbox
+                          size="small"
+                          checked={allSelected}
+                          indeterminate={selectedCount > 0 && !allSelected}
+                          disabled={selectableItemIds.length === 0 || submitting}
+                          onChange={handleToggleAllItems}
+                          inputProps={{ "aria-label": "Select every item waiting at Master Data" }}
+                        />
+                      </TableCell>
+                    )}
                     <TableCell
                       align="center"
                       sx={{
@@ -1141,6 +1495,18 @@ export default function MassApprovalFormDialog({
                     >
                       Request No
                     </TableCell>
+                    {showItemStateColumn && (
+                      <TableCell
+                        sx={{
+                          fontWeight: 700,
+                          border: "1px solid #e0e0e0",
+                          py: 1.5,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {isDecideMode ? "Decision" : "Item Status"}
+                      </TableCell>
+                    )}
                     {EDITABLE_FIELD_META.map(meta => (
                       <TableCell
                         key={meta.key}
@@ -1223,8 +1589,29 @@ export default function MassApprovalFormDialog({
                       </TableCell>
                     </TableRow>
                   ) : (
+                    // Only the items waiting at this viewer's step can be edited,
+                    // ticked or decided; the rest are shown as they are.
                     detail.items.map(item => (
-                      <TableRow key={item.itemNo}>
+                      <TableRow
+                        key={item.itemNo}
+                        selected={selectedItemIds.includes(String(item.id))}
+                        sx={canAct && !isItemEditable(item) ? { bgcolor: "#fafafa" } : undefined}
+                      >
+                        {isDecideMode && (
+                          <TableCell
+                            padding="checkbox"
+                            align="center"
+                            sx={{ border: "1px solid #e0e0e0" }}
+                          >
+                            <Checkbox
+                              size="small"
+                              checked={selectedItemIds.includes(String(item.id))}
+                              disabled={!isItemEditable(item) || submitting}
+                              onChange={() => handleToggleItem(item.id)}
+                              inputProps={{ "aria-label": `Select item ${item.itemNo}` }}
+                            />
+                          </TableCell>
+                        )}
                         <TableCell
                           align="center"
                           sx={{
@@ -1243,6 +1630,33 @@ export default function MassApprovalFormDialog({
                         >
                           {item.requestNo}
                         </TableCell>
+                        {showItemStateColumn && (
+                          <TableCell sx={{ border: "1px solid #e0e0e0", whiteSpace: "nowrap" }}>
+                            {isDecideMode && isItemEditable(item) ? (
+                              itemDecisions[String(item.id)] ? (
+                                <Chip
+                                  label={MASS_DECISION_LABELS[itemDecisions[String(item.id)]]}
+                                  size="small"
+                                  sx={{
+                                    fontWeight: 800,
+                                    ...DECISION_STYLES[itemDecisions[String(item.id)]],
+                                  }}
+                                />
+                              ) : (
+                                <Typography variant="caption" color="text.secondary">
+                                  Undecided
+                                </Typography>
+                              )
+                            ) : (
+                              <Chip
+                                label={describeMassItemState(item)}
+                                size="small"
+                                variant="outlined"
+                                sx={{ fontWeight: 700 }}
+                              />
+                            )}
+                          </TableCell>
+                        )}
                         {EDITABLE_FIELD_META.map(meta => {
                           const isMultiline =
                             meta.key === "poText" ||
@@ -1278,7 +1692,7 @@ export default function MassApprovalFormDialog({
                                     e.target.value
                                   )
                                 }
-                                disabled={!canAct || submitting}
+                                disabled={!isItemEditable(item) || submitting}
                                 inputProps={{
                                   style: { fontSize: "0.8125rem" },
                                 }}
@@ -1356,7 +1770,7 @@ export default function MassApprovalFormDialog({
                                       </Typography>
                                     ) : null}
                                   </Box>
-                                  {canAct && (
+                                  {isItemEditable(item) && (
                                     <IconButton
                                       size="small"
                                       color="error"
@@ -1371,7 +1785,7 @@ export default function MassApprovalFormDialog({
                                 </Stack>
                               );
                             })}
-                            {canAct && (
+                            {isItemEditable(item) && (
                               <Button
                                 size="small"
                                 startIcon={<AttachFile sx={{ fontSize: 16 }} />}
@@ -1467,6 +1881,16 @@ export default function MassApprovalFormDialog({
                 {grabError}
               </Typography>
             )}
+            {isDecideMode && actionableItems.length > 0 && (
+              <Typography variant="body2" sx={{ fontWeight: 700, color: "text.secondary" }}>
+                {formatMassDecisionSummary(decisionSummary)}
+              </Typography>
+            )}
+            {decisionError && (
+              <Typography variant="caption" color="error" sx={{ fontWeight: 700 }}>
+                {decisionError}
+              </Typography>
+            )}
           </Stack>
           <Stack direction="row" spacing={1.5} useFlexGap flexWrap="wrap">
             {canGrabMdm && (
@@ -1480,33 +1904,48 @@ export default function MassApprovalFormDialog({
                 {grabbing ? MDM_GRAB_BUTTON_BUSY_LABEL : MDM_GRAB_BUTTON_LABEL}
               </Button>
             )}
-            <Button
-              variant="contained"
-              startIcon={<Cancel />}
-              onClick={handleRejectClick}
-              disabled={!canAct || submitting}
-              sx={{ bgcolor: "#c62828", textTransform: "none", fontWeight: 800 }}
-            >
-              Reject All
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<Replay />}
-              onClick={handleReworkClick}
-              disabled={!canAct || submitting}
-              sx={{ bgcolor: "#9c27b0", textTransform: "none", fontWeight: 800 }}
-            >
-              Rework All
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<CheckCircle />}
-              onClick={handleApproveClick}
-              disabled={!canAct || submitting}
-              sx={{ bgcolor: "#0b35d9", textTransform: "none", fontWeight: 800 }}
-            >
-              Approve All
-            </Button>
+            {isDecideMode ? (
+              <Button
+                variant="contained"
+                startIcon={<CheckCircle />}
+                onClick={handleSubmitDecisionsClick}
+                // Clickable while items are undecided, so the click can say which.
+                disabled={actionableItems.length === 0 || submitting}
+                sx={{ bgcolor: "#0b35d9", textTransform: "none", fontWeight: 800 }}
+              >
+                Submit Decisions
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="contained"
+                  startIcon={<Cancel />}
+                  onClick={handleRejectClick}
+                  disabled={!canAct || submitting}
+                  sx={{ bgcolor: "#c62828", textTransform: "none", fontWeight: 800 }}
+                >
+                  Reject All
+                </Button>
+                <Button
+                  variant="contained"
+                  startIcon={<Replay />}
+                  onClick={handleReworkClick}
+                  disabled={!canAct || submitting}
+                  sx={{ bgcolor: "#9c27b0", textTransform: "none", fontWeight: 800 }}
+                >
+                  Rework All
+                </Button>
+                <Button
+                  variant="contained"
+                  startIcon={<CheckCircle />}
+                  onClick={handleApproveClick}
+                  disabled={!canAct || submitting}
+                  sx={{ bgcolor: "#0b35d9", textTransform: "none", fontWeight: 800 }}
+                >
+                  Approve All
+                </Button>
+              </>
+            )}
           </Stack>
         </Box>
       </Dialog>
@@ -1580,7 +2019,7 @@ export default function MassApprovalFormDialog({
                 </TableRow>
               </TableHead>
               <TableBody>
-                {detail.items.map(item => {
+                {finalCodeItems.map(item => {
                   // Read through the same draft resolver the editable items
                   // table uses, so a group/description edited elsewhere in
                   // this dialog shows up here immediately rather than the
@@ -1788,6 +2227,136 @@ export default function MassApprovalFormDialog({
             sx={{ textTransform: "none", fontWeight: 800 }}
           >
             {submitting ? "Saving..." : currentAction || "Save"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirm step of Master Data's per-item decisions: one section per
+          action that was picked, each with its own remark / reason. */}
+      <Dialog
+        open={decisionConfirmOpen}
+        onClose={handleDecisionConfirmClose}
+        maxWidth="sm"
+        fullWidth
+      >
+        <Box sx={{ p: 2, display: "flex", alignItems: "center", gap: 1 }}>
+          <WarningAmber sx={{ color: "#f59e0b" }} />
+          <Typography variant="h6" sx={{ fontWeight: 900 }}>
+            Confirm Decisions
+          </Typography>
+        </Box>
+        <DialogContent sx={{ pt: 0 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Each decision applies to its own items only. Approved items get their
+            final code and go to SAP.
+          </Typography>
+          {hasDiscardedDecisionChanges && (
+            <Alert severity="info" sx={{ mb: 2, borderRadius: 1 }}>
+              Field edits are saved only for approved items, and attachment changes
+              only for approved or reworked items. Changes staged on the other
+              items will be discarded.
+            </Alert>
+          )}
+          <Stack spacing={2.5}>
+            {MASS_DECISION_ACTIONS.filter(
+              action => decisionSummary.counts[action] > 0
+            ).map(action => (
+              <Box key={action}>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                  <Chip
+                    label={MASS_DECISION_LABELS[action]}
+                    size="small"
+                    sx={{ fontWeight: 800, ...DECISION_STYLES[action] }}
+                  />
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+                    {formatMassItemNos(decisionSummary.itemNosByAction[action])}
+                  </Typography>
+                </Stack>
+                {action === MASS_DECISION_REWORK && canChooseReworkTarget && (
+                  <ReworkDestinationField
+                    slots={reworkSlots}
+                    value={reworkTarget}
+                    onChange={setReworkTarget}
+                    onNewApproverChange={setReworkNewApprover}
+                    newApprover={reworkNewApprover}
+                    notifyVia={reworkNotifyVia}
+                    onNotifyViaChange={setReworkNotifyVia}
+                    excludeIdentifiers={reworkExcludedIdentifiers}
+                    disabled={submitting}
+                    errorText={reworkDestinationError}
+                    requestKind={REWORK_EMAIL_KIND_MASS}
+                    requestId={row?.id}
+                    itemIds={decisionSummary.itemIdsByAction[MASS_DECISION_REWORK]}
+                    emailSubject={reworkEmailSubject}
+                    emailBody={reworkEmailBody}
+                    onEmailSubjectChange={handleReworkEmailSubjectChange}
+                    onEmailBodyChange={handleReworkEmailBodyChange}
+                    onEmailTemplateLoaded={handleReworkEmailTemplateLoaded}
+                    emailErrors={reworkEmailErrors}
+                  />
+                )}
+                {action === MASS_DECISION_REWORK && isReworkEmailReason ? (
+                  <Box
+                    sx={{
+                      p: 1.5,
+                      borderRadius: 1,
+                      bgcolor: "#f5f5f5",
+                      border: "1px solid",
+                      borderColor: "divider",
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary">
+                      {REWORK_EMAIL_REASON_NOTICE}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      sx={{ mt: 0.5, fontWeight: 700, wordBreak: "break-word" }}
+                    >
+                      {reworkEmailReason}
+                    </Typography>
+                  </Box>
+                ) : (
+                  <TextField
+                    fullWidth
+                    multiline
+                    rows={3}
+                    placeholder={
+                      action === MASS_DECISION_APPROVE
+                        ? "Approve remark..."
+                        : `${MASS_DECISION_LABELS[action]} reason...`
+                    }
+                    value={decisionRemarks[action]}
+                    error={Boolean(decisionRemarkErrors[action])}
+                    helperText={decisionRemarkErrors[action]}
+                    onChange={event =>
+                      handleDecisionRemarkChange(action, event.target.value)
+                    }
+                    sx={{
+                      "& .MuiInputBase-root": {
+                        bgcolor: "#f5f5f5",
+                      },
+                    }}
+                  />
+                )}
+              </Box>
+            ))}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => setDecisionConfirmOpen(false)}
+            disabled={submitting}
+            sx={{ color: "text.secondary", textTransform: "none" }}
+          >
+            Close
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleDecideConfirm}
+            disabled={submitting || Boolean(reworkDestinationError)}
+            sx={{ textTransform: "none", fontWeight: 800 }}
+          >
+            {submitting ? "Saving..." : "Submit"}
           </Button>
         </DialogActions>
       </Dialog>

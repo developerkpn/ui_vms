@@ -1,4 +1,4 @@
-import { formatOptionalDateTime } from "./adminApprovalView.js";
+import { formatOptionalDateTime, normalizeApprovalSteps } from "./adminApprovalView.js";
 import { pickSapFields } from "./sapStatus.js";
 
 /**
@@ -20,6 +20,9 @@ export function buildMassApprovalDetail(row = {}, items = []) {
     massRequestReason: row.massRequestReason ?? "-",
     itemCount: row.itemCount ?? (hasItems ? items.length : 0),
     status: row.status ?? "Submit",
+    // The status of the item the viewer sees the batch through — "Partial" in
+    // `status` says the items differ, this says whether the viewer has a turn.
+    itemStatus: row.itemStatus ?? row.status ?? "Submit",
     assignedTo: row.assignedTo ?? "-",
     createdBy: row.createdBy ?? "-",
     createdAt: row.createdAt ?? "-",
@@ -121,6 +124,9 @@ function normalizeMassRequestItem(item = {}) {
     spesifikasiTambahan: item.spesifikasi_tambahan ?? item.spesifikasiTambahan ?? "",
     status: item.status ?? "Submit",
     assignedTo: item.assigned_to ?? item.assignedTo ?? "-",
+    // Each item's own steps: Master Data decides items one by one, so they can
+    // sit at different stages of the same batch.
+    approvalSteps: normalizeApprovalSteps(item),
     // SAP staging, filled once Master Data approved the batch: the composed
     // material code plus the Oracle write-back status/message per item.
     finalCode: item.final_code ?? item.finalCode ?? null,

@@ -70,6 +70,7 @@ import {
   filterApprovalRows,
   filterApprovalRowsByStatus,
   getEffectiveApprovalStatusLabel,
+  isPartialApprovalStatus,
   isMdmMaterialUser,
   normalizeApprovalRows,
   normalizeApprovalStatusForFilter,
@@ -93,6 +94,35 @@ import PageTabs from "src/components/common/PageTabs";
 import TableLoadingRows, { TableEmptyRow } from "src/components/common/TableLoadingRows";
 
 
+// Snackbar after Master Data's per-item decisions: what happened to how many
+// items. Reworked items that went out "via email" stay at Master Data, so they
+// get the email outcome instead — including when the send failed.
+function buildMassDecisionSnackbarMessage(response, options = {}, emailSendFailed = false) {
+  const counts = options.decisionCounts || {};
+  const emailOnly = isReworkEmailOnlyResult(response);
+  const parts = [
+    counts.APPROVE > 0 ? `${counts.APPROVE} item di-approve` : null,
+    counts.REWORK > 0 && !emailOnly
+      ? `${counts.REWORK} item dikembalikan ke ${options.reworkDestinationLabel || "requester"}`
+      : null,
+    counts.REJECT > 0 ? `${counts.REJECT} item di-reject` : null,
+  ].filter(Boolean);
+  const saved =
+    parts.length > 0
+      ? `Keputusan mass request tersimpan: ${parts.join(", ")}.`
+      : "Keputusan mass request tersimpan.";
+
+  if (!emailOnly) {
+    return saved;
+  }
+
+  return `${saved} ${
+    emailSendFailed
+      ? REWORK_EMAIL_SEND_FAILED_MESSAGE
+      : buildReworkEmailSentMessage(options.reworkRecipientEmail)
+  }`;
+}
+
 const statusStyleMap = {
   Submit: { bgcolor: "#2f62d6", color: "common.white" },
   Approved: { bgcolor: "#2f62d6", color: "common.white" },
@@ -101,6 +131,8 @@ const statusStyleMap = {
   Cancel: { bgcolor: "#dc2626", color: "common.white" },
   Waiting: { bgcolor: "#8f96a3", color: "common.white" },
   Done: { bgcolor: "#16a34a", color: "common.white" },
+  // A mass batch whose items Master Data decided differently.
+  Partial: { bgcolor: "#d97706", color: "common.white" },
 };
 
 function StatusBadge({ value }) {
@@ -171,7 +203,8 @@ function buildApprovalStatusNotes(row) {
 function SapAwareStatusBadgeOnly({ row }) {
   const sapChip = getSapStatusChip(row?.sapPushStatus);
 
-  if (!sapChip) {
+  // "Partial" outranks the rolled-up SAP state of the batch's approved items.
+  if (!sapChip || isPartialApprovalStatus(row?.status)) {
     return <StatusBadge value={getEffectiveApprovalStatusLabel(row)} />;
   }
 
@@ -1182,7 +1215,9 @@ export default function AdminApprovalView() {
           ? "rework"
           : action === "reject"
             ? "reject"
-            : null;
+            : action === "decide"
+              ? "decide"
+              : null;
 
       if (!actionPath) {
         openSnackbar(`${action} belum masuk scope approval saat ini.`, "info");
@@ -1190,8 +1225,12 @@ export default function AdminApprovalView() {
       }
 
       const endpoint = `/material/requests/mass/${row.id}/${actionPath}`;
+      // Master Data's per-item decisions arrive as the finished body; see
+      // buildMassDecideRequestBody in the dialog.
       const requestBody =
-        action === "approve"
+        action === "decide"
+          ? options.requestBody
+          : action === "approve"
           ? {
               remark: reason ?? null,
               items: editedItems ?? null,
@@ -1208,9 +1247,9 @@ export default function AdminApprovalView() {
               })
             : { reason: reason ?? null };
 
-      // Reject discards staged attachment changes (see the dialog); approve
-      // and rework carry whichever items actually changed. No changes at all
-      // means the exact same JSON body as before — the regression guard.
+      // Reject discards staged attachment changes (see the dialog); approve,
+      // rework and decide carry whichever items actually changed. No changes at
+      // all means the exact same JSON body as before — the regression guard.
       const itemAttachmentChanges =
         action !== "reject" && Array.isArray(options?.itemAttachmentChanges)
           ? options.itemAttachmentChanges
@@ -1230,7 +1269,9 @@ export default function AdminApprovalView() {
       setMassApprovalItems([]);
       setMassApprovalItemsLoading(false);
       openSnackbar(
-        action === "approve"
+        action === "decide"
+          ? buildMassDecisionSnackbarMessage(response, options, massEmailSendFailed)
+          : action === "approve"
           ? "Mass request berhasil di-approve."
           : action === "rework"
             ? // "Via email" is correspondence only: the batch was not

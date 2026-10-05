@@ -43,6 +43,7 @@ import {
   computeMassAssignmentCaption,
   formatDateTime,
   formatOptionalDateTime,
+  isPartialApprovalStatus,
   normalizeApprovalStatusForFilter,
   normalizeApprovalSteps,
 } from "src/helper/adminApprovalView.js";
@@ -102,6 +103,8 @@ function StatusPill({ status }) {
     CANCEL: { bgcolor: "#dc2626", color: "#ffffff" },
     CANCELLED: { bgcolor: "#dc2626", color: "#ffffff" },
     DONE: { bgcolor: "#16a34a", color: "#ffffff" },
+    // A mass batch whose items Master Data decided differently.
+    PARTIAL: { bgcolor: "#d97706", color: "#ffffff" },
     WAITING: { bgcolor: "#8f96a3", color: "#ffffff" },
     default: { bgcolor: "#eceff3", color: "#546e7a" },
   };
@@ -173,7 +176,8 @@ function buildStatusNotesForRow(row) {
 function SapAwareStatusBadgeOnly({ row }) {
   const sapChip = getSapStatusChip(row?.sapPushStatus);
 
-  if (!sapChip) {
+  // "Partial" outranks the rolled-up SAP state of the batch's approved items.
+  if (!sapChip || isPartialApprovalStatus(row?.status)) {
     return <StatusPill status={row?.status} />;
   }
 
@@ -203,8 +207,12 @@ function RequestActionDialog({ open, mode, request, onClose, onReviseRequest }) 
   const isReworkMode = mode === "rework";
   const rows = isReworkMode ? [detail.reworkSummary] : detail.approvalHistory;
   const dialogTitle = isReworkMode ? "Rework Status" : "Approval Status";
+  // A mass batch reads "Partial" while some of its items are back with the
+  // requester; itemStatus is the status of the item it is read through (the
+  // first one in Rework). Single requests carry no itemStatus.
+  const reviseStatus = request?.itemStatus ?? detail.status;
   const canReviseRequest =
-    isReworkMode && String(detail.status || "").trim().toUpperCase() === "REWORK" && detail.id;
+    isReworkMode && String(reviseStatus || "").trim().toUpperCase() === "REWORK" && detail.id;
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -844,7 +852,10 @@ export default function RequestMaterials() {
               ticketType: "Create",
               materialDescription: item.first_item_material_description,
               uom: item.first_item_uom,
-              status: item.first_item_status,
+              // "Partial" once Master Data decided the batch's items
+              // differently; itemStatus is the item this row is read through.
+              status: item.batch_status || item.first_item_status,
+              itemStatus: item.first_item_status,
               createdBy: item.created_by_username || item.created_by,
               createdAt: formatDateTime(item.created_at),
               assignedTo: computeMassAssignedToDisplay(item),

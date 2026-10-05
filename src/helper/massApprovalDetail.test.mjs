@@ -60,3 +60,49 @@ test("no rework step and no legacy fields still means no summary", () => {
 
   assert.equal(buildMassReworkSummary(row), null);
 });
+
+test("a batch Master Data decided item by item reads Partial, but acts on the viewer's item", async () => {
+  const { getEffectiveApprovalStatusLabel } = await import("./adminApprovalView.js");
+  const { buildMassApprovalDetail } = await import("./massApprovalDetail.js");
+
+  const [row] = normalizeMassApprovalRows([
+    {
+      ...inboxRow([
+        { level: 1, kind: "MANUAL", approver_user_id: "APP-07", status: "WAITING" },
+        { level: 2, kind: "MDM", approver_user_id: "MDM-01", status: "WAITING" },
+      ]),
+      first_item_status: "Submit",
+      first_item_assigned_to: "Approval 1",
+      batch_status: "Partial",
+      item_status_counts: { DONE: 1, SUBMIT: 1 },
+      sap_push_status: "PENDING",
+    },
+  ]);
+
+  assert.equal(row.status, "Partial");
+  assert.equal(row.itemStatus, "Submit");
+  assert.deepEqual(row.itemStatusCounts, { DONE: 1, SUBMIT: 1 });
+  // "Partial" outranks the approved items' rolled-up SAP state.
+  assert.equal(getEffectiveApprovalStatusLabel(row), "Partial");
+
+  const detail = buildMassApprovalDetail(row, [
+    {
+      id: 11,
+      item_no: 1,
+      status: "DONE",
+      approval_steps: [
+        { level: 1, kind: "MANUAL", approver_user_id: "APP-01", status: "APPROVED" },
+        { level: 2, kind: "MDM", approver_user_id: "MDM-01", status: "APPROVED" },
+      ],
+    },
+  ]);
+  assert.equal(detail.status, "Partial");
+  assert.equal(detail.itemStatus, "Submit");
+  assert.deepEqual(
+    detail.items[0].approvalSteps.map(step => [step.kind, step.status]),
+    [
+      ["MANUAL", "APPROVED"],
+      ["MDM", "APPROVED"],
+    ]
+  );
+});

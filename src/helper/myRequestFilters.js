@@ -1,4 +1,4 @@
-import { normalizeApprovalStatusForFilter } from "./adminApprovalView.js";
+import { isPartialApprovalStatus, normalizeApprovalStatusForFilter } from "./adminApprovalView.js";
 import { getSapStatusChip } from "./sapStatus.js";
 
 // Status filter for My Request, mirroring the one on My Approval.
@@ -16,6 +16,7 @@ export const REQUEST_STATUS_FILTER_OPTIONS = [
   { value: "Rework", label: "Rework" },
   { value: "Cancel", label: "Cancel" },
   { value: "Done", label: "Done" },
+  { value: "Partial", label: "Partial" },
   { value: "Waiting SAP", label: "Waiting SAP" },
   { value: "SAP Error", label: "SAP Error" },
 ];
@@ -31,10 +32,14 @@ export function isAllRequestStatusFilter(statusFilter) {
 }
 
 /**
- * The status this row shows on My Request: the SAP staging state once it has one,
+ * The status this row shows on My Request: "Partial" for a mass batch whose
+ * items were decided differently, else the SAP staging state once it has one,
  * otherwise the plain approval status.
  */
 export function getRequestStatusLabel(row) {
+  if (isPartialApprovalStatus(row?.status)) {
+    return "Partial";
+  }
   const sapChip = getSapStatusChip(row?.sapPushStatus);
   if (sapChip) {
     return sapChip.label;

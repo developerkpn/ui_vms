@@ -103,11 +103,16 @@ function useUserSearch() {
 // it is NOT part of the one-shot key. Re-picking the approver after the draft
 // exists leaves the draft alone, because by then it is Master Data's text and
 // re-fetching would throw the edits away.
+//
+// `itemIds` (mass only) limits the draft to the items being reworked when
+// Master Data decides a batch item by item; it IS part of the key, since a
+// different set of items is a different mail.
 function useReworkEmailTemplate({
   active,
   requestKind,
   requestId,
   approverUserId,
+  itemIds,
   onLoaded,
 }) {
   const axiosPrivate = useAxiosPrivate();
@@ -124,19 +129,25 @@ function useReworkEmailTemplate({
 
   useEffect(() => {
     const path = buildReworkEmailTemplatePath({ requestKind, requestId });
+    const requestKey = `${path}?items=${itemIds}`;
 
-    if (!active || !path || requestedRef.current === path) {
+    if (!active || !path || requestedRef.current === requestKey) {
       return undefined;
     }
 
-    requestedRef.current = path;
+    requestedRef.current = requestKey;
     let alive = true;
     setLoading(true);
     setFailed(false);
 
     axiosPrivate
       // Blank id => omitted, and the endpoint answers with the generic greeting.
-      .get(path, { params: { approverUserId: approverUserId || undefined } })
+      .get(path, {
+        params: {
+          approverUserId: approverUserId || undefined,
+          itemIds: itemIds || undefined,
+        },
+      })
       .then(response => {
         if (alive) {
           onLoadedRef.current?.(normalizeReworkEmailTemplate(response));
@@ -159,7 +170,7 @@ function useReworkEmailTemplate({
     return () => {
       alive = false;
     };
-  }, [active, axiosPrivate, requestKind, requestId, approverUserId]);
+  }, [active, axiosPrivate, requestKind, requestId, approverUserId, itemIds]);
 
   return { loading, failed };
 }
@@ -333,6 +344,8 @@ export default function ReworkDestinationField({
   helperText = "",
   requestKind,
   requestId,
+  // Mass only: the items being reworked, when that is not the whole batch.
+  itemIds = null,
   emailSubject = "",
   emailBody = "",
   onEmailSubjectChange,
@@ -350,6 +363,8 @@ export default function ReworkDestinationField({
     // The email radios only exist under the picked-approver row, so by the time
     // this fetch can fire there is always a user id to name in the greeting.
     approverUserId: resolveNewApproverUserId(newApprover),
+    // Joined so the effect keys on the ids, not on a fresh array each render.
+    itemIds: Array.isArray(itemIds) && itemIds.length > 0 ? itemIds.join(",") : "",
     onLoaded: onEmailTemplateLoaded,
   });
   const options = useMemo(
