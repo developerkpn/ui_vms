@@ -18,7 +18,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { normalizeMassMaterialFieldValue } from "./massMaterialFormValidation.js";
 import MaterialAiMatchPanel from "../common/MaterialAiMatchPanel";
 import RequesterCommentField from "../common/RequesterCommentField";
@@ -81,6 +81,7 @@ export default function MassReworkForm({
   const [fieldErrors, setFieldErrors] = useState({});
   const [comment, setComment] = useState("");
   const [commentError, setCommentError] = useState("");
+  const commentInputRef = useRef(null);
 
   const requiredFields = useMemo(
     () => FIELD_META.filter(m => m.required).map(m => m.key),
@@ -151,6 +152,12 @@ export default function MassReworkForm({
     const commentValidation = validateRequesterComment(comment, { isResubmit: true });
     setCommentError(commentValidation.message);
     if (commentValidation.error) {
+      // When the comment is all that is missing, bring it into view: a refused
+      // save otherwise looks like a click that did nothing.
+      if (!hasError) {
+        commentInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        commentInputRef.current?.focus({ preventScroll: true });
+      }
       hasError = true;
     }
 
@@ -400,11 +407,10 @@ export default function MassReworkForm({
             </Table>
           </TableContainer>
 
-          {/* Advisory AI ranking per item, read-only — useful while revising,
-              but queueing a fresh run stays an approver action. */}
-          <MaterialAiMatchPanel kind="mass" requestId={massRequestId} open={open} hideRerun />
-
+          {/* Right under the items it explains, ahead of the AI ranking: the
+              comment is required, and below the panel it was easy to miss. */}
           <RequesterCommentField
+            inputRef={commentInputRef}
             value={comment}
             onChange={next => {
               setComment(next);
@@ -417,6 +423,10 @@ export default function MassReworkForm({
             helperText={commentError || "Jelaskan apa yang diubah untuk menjawab rework ini."}
             disabled={submitting}
           />
+
+          {/* Advisory AI ranking per item, read-only — useful while revising,
+              but queueing a fresh run stays an approver action. */}
+          <MaterialAiMatchPanel kind="mass" requestId={massRequestId} open={open} hideRerun />
         </Stack>
       </DialogContent>
 

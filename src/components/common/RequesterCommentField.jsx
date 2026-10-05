@@ -20,6 +20,8 @@ import { TextField } from "@mui/material";
  * @param {boolean} [props.autoFocus]
  * @param {boolean} [props.disabled]
  * @param {string} [props.label] - Overrides the default Comment / Comment (optional) label.
+ * @param {object} [props.inputRef] - Ref to the textarea, so a form can bring
+ *        the box into view when it is the reason a save was refused.
  */
 export default function RequesterCommentField({
   value = "",
@@ -30,9 +32,11 @@ export default function RequesterCommentField({
   autoFocus = false,
   disabled = false,
   label,
+  inputRef,
 }) {
   return (
     <TextField
+      inputRef={inputRef}
       autoFocus={autoFocus}
       required={required}
       multiline

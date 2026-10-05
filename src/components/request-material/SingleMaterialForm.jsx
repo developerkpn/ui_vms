@@ -415,6 +415,7 @@ const SingleMaterialForm = ({
   // on Save, mirroring the mass request reason dialog), required on a resubmit
   // (collected inline, since this rework surface is a full page, not a dialog).
   const [comment, setComment] = useState("");
+  const commentInputRef = useRef(null);
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
   // Pre-save "does this material already exist?" step, between the comment
   // dialog and the write. requests is held in state so the dialog sees one
@@ -777,8 +778,15 @@ const SingleMaterialForm = ({
         nextFieldErrors.comment = commentValidation;
       }
     }
-    if (Object.values(nextFieldErrors).some(error => error?.error)) {
+    const failedFields = Object.keys(nextFieldErrors).filter(key => nextFieldErrors[key]?.error);
+    if (failedFields.length > 0) {
       setFieldErrors(nextFieldErrors);
+      // When the comment is all that is missing, bring it into view: a refused
+      // save otherwise looks like a click that did nothing.
+      if (failedFields.length === 1 && failedFields[0] === "comment") {
+        commentInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        commentInputRef.current?.focus({ preventScroll: true });
+      }
       return;
     }
 
@@ -1276,20 +1284,13 @@ const SingleMaterialForm = ({
             </Stack>
           </Grid>
 
-          {/* Advisory only, and read-only here: the requester sees the same
-              ranking the approvers see, minus the re-run button. Change and
-              Extend already name a material, so only Create requests get one. */}
-          {showAiMatchSection && (
-            <Grid item xs={12}>
-              <Divider sx={{ mb: 4 }} />
-              <MaterialAiMatchPanel kind="single" requestId={requestId} open hideRerun />
-            </Grid>
-          )}
-
+          {/* Ahead of the AI ranking: the comment is required on a revision,
+              and below the panel it was easy to miss. */}
           {isReworkMode && (
             <Grid item xs={12}>
               <Divider sx={{ mb: 4 }} />
               <RequesterCommentField
+                inputRef={commentInputRef}
                 value={comment}
                 onChange={handleCommentChange}
                 required
@@ -1300,6 +1301,16 @@ const SingleMaterialForm = ({
                 }
                 disabled={submitting}
               />
+            </Grid>
+          )}
+
+          {/* Advisory only, and read-only here: the requester sees the same
+              ranking the approvers see, minus the re-run button. Change and
+              Extend already name a material, so only Create requests get one. */}
+          {showAiMatchSection && (
+            <Grid item xs={12}>
+              <Divider sx={{ mb: 4 }} />
+              <MaterialAiMatchPanel kind="single" requestId={requestId} open hideRerun />
             </Grid>
           )}
         </Grid>
