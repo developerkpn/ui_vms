@@ -409,13 +409,13 @@ function RequestDetailDialog({ open, request, onClose, massItems, massItemsLoadi
                   <TableCell sx={{ fontWeight: 800 }}>No</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Ticket</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Material Code</TableCell>
+                  <TableCell sx={{ fontWeight: 800 }}>Status</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Material Description</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>UoM</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Plant</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Sloc</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>PO Text</TableCell>
                   <TableCell sx={{ fontWeight: 800 }}>Attachments</TableCell>
-                  <TableCell sx={{ fontWeight: 800 }}>Status</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -428,6 +428,14 @@ function RequestDetailDialog({ open, request, onClose, massItems, massItemsLoadi
                     <TableCell sx={{ whiteSpace: "nowrap" }}>{item.request_no || "-"}</TableCell>
                     <TableCell sx={{ whiteSpace: "nowrap", fontWeight: 600 }}>
                       {getStagedMaterialCode(item) || "-"}
+                    </TableCell>
+                    <TableCell>
+                      {/* Once the item has been pushed, its SAP staging status
+                          is the meaningful one — same chips the single request
+                          list shows. */}
+                      <SapAwareStatus
+                        row={{ status: item.status || "-", ...pickSapFields(item) }}
+                      />
                     </TableCell>
                     <TableCell>{item.material_description || "-"}</TableCell>
                     <TableCell>{item.uom || item.base_uom || "-"}</TableCell>
@@ -479,14 +487,6 @@ function RequestDetailDialog({ open, request, onClose, massItems, massItemsLoadi
                           })}
                         </Stack>
                       )}
-                    </TableCell>
-                    <TableCell>
-                      {/* Once the item has been pushed, its SAP staging status
-                          is the meaningful one — same chips the single request
-                          list shows. */}
-                      <SapAwareStatus
-                        row={{ status: item.status || "-", ...pickSapFields(item) }}
-                      />
                     </TableCell>
                   </TableRow>
                   );

@@ -1611,6 +1611,32 @@ export default function MassApprovalFormDialog({
                         {isDecideMode ? "Decision" : "Item Status"}
                       </TableCell>
                     )}
+                    {/* Right after the item's identity and state, where they are
+                        read first — not past the wide editable columns. */}
+                    {hasSapColumns && (
+                      <TableCell
+                        sx={{
+                          fontWeight: 700,
+                          border: "1px solid #e0e0e0",
+                          py: 1.5,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        Material Code
+                      </TableCell>
+                    )}
+                    {hasSapColumns && (
+                      <TableCell
+                        sx={{
+                          fontWeight: 700,
+                          border: "1px solid #e0e0e0",
+                          py: 1.5,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        SAP Status
+                      </TableCell>
+                    )}
                     {EDITABLE_FIELD_META.map(meta => (
                       <TableCell
                         key={meta.key}
@@ -1651,30 +1677,6 @@ export default function MassApprovalFormDialog({
                         {ATTACHMENT_SIZE_LIMIT_TEXT}
                       </Typography>
                     </TableCell>
-                    {hasSapColumns && (
-                      <TableCell
-                        sx={{
-                          fontWeight: 700,
-                          border: "1px solid #e0e0e0",
-                          py: 1.5,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        Material Code
-                      </TableCell>
-                    )}
-                    {hasSapColumns && (
-                      <TableCell
-                        sx={{
-                          fontWeight: 700,
-                          border: "1px solid #e0e0e0",
-                          py: 1.5,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        SAP Status
-                      </TableCell>
-                    )}
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -1761,6 +1763,23 @@ export default function MassApprovalFormDialog({
                                 }}
                               />
                             )}
+                          </TableCell>
+                        )}
+                        {hasSapColumns && (
+                          <TableCell
+                            sx={{
+                              border: "1px solid #e0e0e0",
+                              fontWeight: 700,
+                              whiteSpace: "nowrap",
+                              color: "text.secondary",
+                            }}
+                          >
+                            {getStagedMaterialCode(item) || "-"}
+                          </TableCell>
+                        )}
+                        {hasSapColumns && (
+                          <TableCell sx={{ border: "1px solid #e0e0e0" }}>
+                            <ItemSapStatus item={item} />
                           </TableCell>
                         )}
                         {EDITABLE_FIELD_META.map(meta => {
@@ -1912,23 +1931,6 @@ export default function MassApprovalFormDialog({
                             )}
                           </Stack>
                         </TableCell>
-                        {hasSapColumns && (
-                          <TableCell
-                            sx={{
-                              border: "1px solid #e0e0e0",
-                              fontWeight: 700,
-                              whiteSpace: "nowrap",
-                              color: "text.secondary",
-                            }}
-                          >
-                            {getStagedMaterialCode(item) || "-"}
-                          </TableCell>
-                        )}
-                        {hasSapColumns && (
-                          <TableCell sx={{ border: "1px solid #e0e0e0" }}>
-                            <ItemSapStatus item={item} />
-                          </TableCell>
-                        )}
                       </TableRow>
                     ))
                   )}
