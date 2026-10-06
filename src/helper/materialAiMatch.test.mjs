@@ -26,6 +26,7 @@ const {
   describeMatchType,
   formatSimilarityPercent,
   MATCH_TYPE_LABELS,
+  isRequestRecommendation,
   normalizeAiMatch,
   normalizeAiMatchList,
   shouldKeepPolling,
@@ -87,7 +88,10 @@ test("every match_type the recommender can send has a reader's label", () => {
   assert.equal(describeMatchType("TEXT"), "Text similarity");
   assert.equal(describeMatchType("TEXT + same subgroup"), "Text + same sub group");
   assert.equal(describeMatchType("TEXT + same group"), "Text + same group");
-  assert.equal(Object.keys(MATCH_TYPE_LABELS).length, 5);
+  assert.equal(describeMatchType("PART NUMBER"), "Same part number");
+  assert.equal(describeMatchType("SIMILAR PART NUMBER"), "Similar part number");
+  assert.equal(describeMatchType("NEAR PART NUMBER"), "Part number 1 char off");
+  assert.equal(Object.keys(MATCH_TYPE_LABELS).length, 8);
 });
 
 test("an unknown match_type is shown as sent, an absent one as a dash", () => {
@@ -183,7 +187,7 @@ test("a raw snake_case row normalizes the same way as the DTO", () => {
   assert.equal(match.topSimilarity, 0.61);
   assert.equal(match.latencyMs, 204.5);
   assert.deepEqual(match.recommendations, [
-    { rank: 1, code: "1", name: "BEARING SKF", similarity: 0.61, matchType: "TEXT" },
+    { rank: 1, code: "1", name: "BEARING SKF", similarity: 0.61, matchType: "TEXT", source: "catalog", requestStatus: "", retired: false },
   ]);
 });
 
@@ -231,8 +235,8 @@ test("missing arrays, missing status and junk recommendations do not break a row
   assert.equal(junk.error, "AI recommender timed out");
   assert.deepEqual(junk.entities, { category: [], specs: [] });
   assert.deepEqual(junk.recommendations, [
-    { rank: 1, code: "", name: "", similarity: null, matchType: "" },
-    { rank: 2, code: "", name: "", similarity: null, matchType: "" },
+    { rank: 1, code: "", name: "", similarity: null, matchType: "", source: "catalog", requestStatus: "", retired: false },
+    { rank: 2, code: "", name: "", similarity: null, matchType: "", source: "catalog", requestStatus: "", retired: false },
   ]);
 });
 
@@ -395,8 +399,8 @@ test("buildPrecheckReview confirms a checked line and has nothing for a failed o
   assert.deepEqual(buildPrecheckReview(previewLine(0)), {
     confirmedNew: true,
     recommendations: [
-      { code: "900.001", name: "EXISTING 0", similarity: 0.93, matchType: "TEXT" },
-      { code: "900.002", name: "OTHER 0", similarity: 0.71, matchType: "TEXT" },
+      { code: "900.001", name: "EXISTING 0", similarity: 0.93, matchType: "TEXT", source: "catalog", requestStatus: "", retired: false },
+      { code: "900.002", name: "OTHER 0", similarity: 0.71, matchType: "TEXT", source: "catalog", requestStatus: "", retired: false },
     ],
   });
   assert.deepEqual(buildPrecheckReview(previewLine(1, { recommendations: [] })), {
@@ -430,4 +434,23 @@ test("normalizeAiMatch carries the requester's confirmation only when it was giv
   );
   assert.equal(normalizeAiMatch(buildDto({ requesterReview: null })).requesterReview, null);
   assert.equal(normalizeAiMatch(buildDto({ requesterReview: { confirmedNew: false } })).requesterReview, null);
+});
+
+test("a recommendation keeps its source, request status and retired flag", () => {
+  const match = normalizeAiMatch(
+    buildDto({
+      recommendations: [
+        { code: "1000000071", name: "P/N 7X-2042 SEAL", similarity: 0.98, matchType: "PART NUMBER", source: "request", requestStatus: "Submit" },
+        { code: "937.111.I62", name: "(NOT USE) HOSE", similarity: 0.9, match_type: "TEXT", source: "catalog", retired: true },
+        { code: "937.111.I63", name: "HOSE", similarity: 0.8, matchType: "TEXT", source: "something else", retired: "yes" },
+      ],
+    })
+  );
+  const [request, retired, plain] = match.recommendations;
+  assert.equal(isRequestRecommendation(request), true);
+  assert.equal(request.requestStatus, "Submit");
+  assert.equal(isRequestRecommendation(retired), false);
+  assert.equal(retired.retired, true);
+  assert.equal(plain.source, "catalog");
+  assert.equal(plain.retired, false);
 });

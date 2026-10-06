@@ -19,7 +19,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { SimilarityCell } from "src/components/common/MaterialAiMatchPanel";
+import { RecommendationCode, SimilarityCell } from "src/components/common/MaterialAiMatchPanel";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import {
   AI_MATCH_STATUS,
@@ -30,6 +30,7 @@ import {
   buildPrecheckReview,
   describeMatchType,
   initialPrecheckChoice,
+  isRequestRecommendation,
   normalizePrecheckLine,
   precheckNeedsChoice,
   summarizePrecheck,
@@ -97,6 +98,14 @@ function PrecheckLine({ line, label, choice, onChoose, disabled }) {
         </Typography>
       )}
 
+      {precheckNeedsChoice(line) && line.recommendations.some(isRequestRecommendation) && (
+        <Alert severity="info" sx={{ py: 0 }}>
+          Ada permintaan yang belum masuk SAP (&quot;Req&quot;) yang mirip baris ini. Jika itu baris
+          yang sama di form ini, hapus salah satunya; jika permintaan orang lain, cek dulu
+          dengan peminta tersebut.
+        </Alert>
+      )}
+
       {precheckNeedsChoice(line) && (
         <TableContainer component={Paper} variant="outlined">
           <Table size="small" sx={{ borderCollapse: "collapse" }}>
@@ -110,24 +119,31 @@ function PrecheckLine({ line, label, choice, onChoose, disabled }) {
               </TableRow>
             </TableHead>
             <TableBody>
-              {line.recommendations.map(item => (
+              {line.recommendations.map(item => {
+                // A request not in SAP yet cannot be "used instead": there is
+                // no material yet. It is shown so the requester can drop a
+                // line entered twice, or ask whoever requested it first.
+                const pickable = !isRequestRecommendation(item);
+                return (
                 <TableRow
                   key={`${line.key}-${item.rank}`}
-                  hover
-                  selected={choice === item.code}
-                  onClick={() => !disabled && onChoose(item.code)}
-                  sx={{ cursor: disabled ? "default" : "pointer" }}
+                  hover={pickable}
+                  selected={pickable && choice === item.code}
+                  onClick={() => pickable && !disabled && onChoose(item.code)}
+                  sx={{ cursor: pickable && !disabled ? "pointer" : "default" }}
                 >
                   <TableCell padding="checkbox" sx={BODY_CELL_SX}>
-                    <Radio
-                      size="small"
-                      checked={choice === item.code}
-                      disabled={disabled}
-                      inputProps={{ "aria-label": `Pilih ${item.code}` }}
-                    />
+                    {pickable && (
+                      <Radio
+                        size="small"
+                        checked={choice === item.code}
+                        disabled={disabled}
+                        inputProps={{ "aria-label": `Pilih ${item.code}` }}
+                      />
+                    )}
                   </TableCell>
-                  <TableCell sx={{ ...BODY_CELL_SX, fontFamily: "monospace", whiteSpace: "nowrap" }}>
-                    {item.code || "-"}
+                  <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: "nowrap" }}>
+                    <RecommendationCode item={item} />
                   </TableCell>
                   <TableCell sx={BODY_CELL_SX}>{item.name || "-"}</TableCell>
                   <TableCell sx={BODY_CELL_SX}>
@@ -135,7 +151,8 @@ function PrecheckLine({ line, label, choice, onChoose, disabled }) {
                   </TableCell>
                   <TableCell sx={BODY_CELL_SX}>{describeMatchType(item.matchType)}</TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
               <TableRow
                 hover
                 selected={choice === AI_PRECHECK_NEW}

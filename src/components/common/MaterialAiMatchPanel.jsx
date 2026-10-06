@@ -2,6 +2,7 @@ import { Replay } from "@mui/icons-material";
 import {
   Alert,
   Box,
+  Chip,
   IconButton,
   LinearProgress,
   Paper,
@@ -24,6 +25,7 @@ import {
   buildAiMatchRerunPath,
   describeMatchType,
   formatSimilarityPercent,
+  isRequestRecommendation,
   normalizeAiMatchList,
   shouldKeepPolling,
   similarityTone,
@@ -70,6 +72,31 @@ const HEAD_CELL_SX = {
 const BODY_CELL_SX = { border: "1px solid #e0e0e0" };
 
 /** The similarity column: the number, and the same number as a bar under it. */
+/**
+ * The code column. An SAP material shows its code, flagged when SAP has
+ * retired it (deletion flag or "(NOT USE)"). A request that is not in SAP yet
+ * shows its request number and where it stands - it is a possible duplicate,
+ * not a material anyone can use.
+ */
+export function RecommendationCode({ item }) {
+  const request = isRequestRecommendation(item);
+  return (
+    <Box>
+      <Typography component="span" sx={{ fontFamily: "monospace", fontSize: "inherit" }}>
+        {request ? `Req ${item.code || "-"}` : item.code || "-"}
+      </Typography>
+      {request && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+          Request{item.requestStatus ? ` · ${item.requestStatus}` : ""}
+        </Typography>
+      )}
+      {!request && item.retired && (
+        <Chip label="Retired" size="small" color="warning" variant="outlined" sx={{ ml: 0.75, height: 18, fontSize: 11 }} />
+      )}
+    </Box>
+  );
+}
+
 export function SimilarityCell({ similarity }) {
   const tone = similarityTone(similarity);
 
@@ -158,10 +185,8 @@ function MaterialAiMatchRow({ row, showItemTitle }) {
                       <TableCell align="center" sx={BODY_CELL_SX}>
                         {recommendation.rank}
                       </TableCell>
-                      <TableCell
-                        sx={{ ...BODY_CELL_SX, fontFamily: "monospace", whiteSpace: "nowrap" }}
-                      >
-                        {recommendation.code || "-"}
+                      <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: "nowrap" }}>
+                        <RecommendationCode item={recommendation} />
                       </TableCell>
                       <TableCell sx={BODY_CELL_SX}>{recommendation.name || "-"}</TableCell>
                       <TableCell sx={BODY_CELL_SX}>

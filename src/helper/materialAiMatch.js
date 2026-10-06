@@ -42,6 +42,15 @@ export const MATCH_TYPE_LABELS = Object.freeze({
   TEXT: "Text similarity",
   "TEXT + same subgroup": "Text + same sub group",
   "TEXT + same group": "Text + same group",
+  "PART NUMBER": "Same part number",
+  "SIMILAR PART NUMBER": "Similar part number",
+  "NEAR PART NUMBER": "Part number 1 char off",
+});
+
+/** Where a recommendation comes from (the backend's AI_MATCH_SOURCE). */
+export const AI_MATCH_SOURCE = Object.freeze({
+  CATALOG: "catalog",
+  REQUEST: "request",
 });
 
 const AI_MATCH_KINDS = Object.freeze(["single", "mass"]);
@@ -142,7 +151,23 @@ function normalizeRecommendation(recommendation, index) {
     name: asText(firstDefined(source.name, source.material_name)),
     similarity: toSimilarity(source.similarity),
     matchType: asText(firstDefined(source.matchType, source.match_type)),
+    // A request that is not in SAP yet (open, approved but not synced, or
+    // another line of the same form): its code is a request number, and it
+    // cannot be picked as the existing material to use.
+    source:
+      source.source === AI_MATCH_SOURCE.REQUEST
+        ? AI_MATCH_SOURCE.REQUEST
+        : AI_MATCH_SOURCE.CATALOG,
+    requestStatus: asText(firstDefined(source.requestStatus, source.request_status)),
+    // Flagged for deletion in SAP or renamed "(NOT USE)": the same part, but
+    // not one to reuse as is.
+    retired: source.retired === true,
   };
+}
+
+/** Whether a recommendation is a request rather than an SAP material. */
+export function isRequestRecommendation(item) {
+  return Boolean(item && item.source === AI_MATCH_SOURCE.REQUEST);
 }
 
 /**
@@ -374,6 +399,9 @@ export function buildPrecheckReview(line) {
       name: item.name,
       similarity: item.similarity,
       matchType: item.matchType,
+      source: item.source,
+      requestStatus: item.requestStatus,
+      retired: item.retired,
     })),
   };
 }

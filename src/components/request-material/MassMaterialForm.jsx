@@ -469,20 +469,22 @@ const MassMaterialForm = ({ onBack }) => {
 
     // Reason collected: check every line for an existing material before
     // anything is written. The check hands back only the lines that are new.
+    // Every line also carries the other filled lines as siblings, so a part
+    // entered twice in this batch shows up before anything is saved.
+    const checkRows = filledRowIndexes.map(rowIndex => ({
+      rowIndex,
+      description: rows[rowIndex].description,
+      poText: rows[rowIndex].poText,
+      spesifikasiTambahan: rows[rowIndex].spesifikasiTambahan,
+    }));
     setPrecheckRequests(
-      filledRowIndexes.map(rowIndex => ({
-        key: rowIndex,
-        label: `Baris ${rowIndex + 1} — ${rows[rowIndex].description}`,
+      checkRows.map(row => ({
+        key: row.rowIndex,
+        label: `Baris ${row.rowIndex + 1} — ${row.description}`,
         body: {
           kind: "mass",
-          rows: [
-            {
-              rowIndex,
-              description: rows[rowIndex].description,
-              poText: rows[rowIndex].poText,
-              spesifikasiTambahan: rows[rowIndex].spesifikasiTambahan,
-            },
-          ],
+          rows: [row],
+          siblings: checkRows.filter(other => other.rowIndex !== row.rowIndex),
         },
       }))
     );
