@@ -1222,11 +1222,6 @@ export default function RequestMaterials() {
       <PageHeader
         title="My Request"
         subtitle="List of requests created by the user with their status."
-        actions={
-          <Button variant="contained" onClick={() => openSnackbar("Download to Excel will be connected to API later", "info")}>
-            Download to Excel
-          </Button>
-        }
       />
 
       <Box>

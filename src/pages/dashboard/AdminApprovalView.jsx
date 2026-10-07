@@ -1353,28 +1353,6 @@ export default function AdminApprovalView() {
       <PageHeader
         title="My Approval"
         subtitle="A list of items awaiting your approval"
-        actions={
-          <Button
-            variant="contained"
-            startIcon={<Download />}
-            onClick={() => openSnackbar("Download to Excel akan disambungkan ke API export.", "info")}
-            sx={{
-              borderRadius: "10px",
-              textTransform: "none",
-              fontWeight: 700,
-              px: 3,
-              py: 1.25,
-              bgcolor: "#3367d6",
-              boxShadow: "0 14px 26px rgba(51, 103, 214, 0.26)",
-              "&:hover": {
-                bgcolor: "#2557c7",
-                boxShadow: "0 16px 30px rgba(51, 103, 214, 0.32)",
-              },
-            }}
-          >
-            Download To Excel
-          </Button>
-        }
       />
 
       <PageTabs
