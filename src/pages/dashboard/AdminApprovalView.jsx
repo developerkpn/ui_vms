@@ -50,6 +50,11 @@ import {
   REWORK_EMAIL_SEND_FAILED_MESSAGE,
 } from "src/helper/reworkEmailThread.js";
 import { getSapStatusChip, getStagedMaterialCode, isSapError } from "src/helper/sapStatus.js";
+import {
+  buildMyApprovalSheetRows,
+  downloadListAsExcel,
+  exportFileName,
+} from "src/helper/excelExport.js";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import { buildApprovalSubGroupsRequestPath } from "src/helper/adminApprovalSubGroup.js";
 import {
@@ -1326,6 +1331,23 @@ export default function AdminApprovalView() {
     setSnackbar({ open: true, message, severity });
   }
 
+  // Downloads what the list shows on every page: this tab, after the search,
+  // the status filter (including MDM's "Request All" scope) and the sort.
+  const exportRows = activeTab === "mass" ? massVisibleRows : visibleRows;
+  const handleDownloadExcel = () => {
+    try {
+      const count = downloadListAsExcel({
+        sheetRows: buildMyApprovalSheetRows(exportRows, activeTab),
+        fileName: exportFileName("My Approval", activeTab),
+        sheetName: activeTab === "mass" ? "Mass Approvals" : "Single Approvals",
+      });
+      openSnackbar(`${count} request${count === 1 ? "" : "s"} downloaded to Excel.`, "success");
+    } catch (error) {
+      console.error("Failed to export approvals to Excel:", error);
+      openSnackbar("Failed to create the Excel file.", "error");
+    }
+  };
+
   return (
     <Box sx={{ pb: { xs: 4, md: 6 } }}>
       <PageHeader
@@ -1431,6 +1453,15 @@ export default function AdminApprovalView() {
             </option>
           ))}
         </TextField>
+        <Button
+          variant="outlined"
+          startIcon={<Download />}
+          onClick={handleDownloadExcel}
+          disabled={loading || isMdmAllPending || exportRows.length === 0}
+          sx={{ whiteSpace: "nowrap", flexShrink: 0, minHeight: 50, borderRadius: "7px" }}
+        >
+          Download Excel
+        </Button>
       </Stack>
 
       {/* Single tab table */}

@@ -37,6 +37,11 @@ import {
 } from "src/helper/reworkEmailThread.js";
 import { getSapStatusChip, getStagedMaterialCode, isSapError, pickSapFields } from "src/helper/sapStatus.js";
 import {
+  buildMyRequestSheetRows,
+  downloadListAsExcel,
+  exportFileName,
+} from "src/helper/excelExport.js";
+import {
   computeAssignedToDisplay,
   computeAssignmentCaption,
   computeMassAssignedToDisplay,
@@ -1066,6 +1071,22 @@ export default function RequestMaterials() {
     setSnackbar({ open: true, message, severity });
   }
 
+  // Downloads what the list shows on every page: this tab, after the search,
+  // the status filter and the sort.
+  const handleDownloadExcel = () => {
+    try {
+      const count = downloadListAsExcel({
+        sheetRows: buildMyRequestSheetRows(filteredRequests, activeTab),
+        fileName: exportFileName("My Request", activeTab),
+        sheetName: activeTab === "mass" ? "Mass Requests" : "Single Requests",
+      });
+      openSnackbar(`${count} request${count === 1 ? "" : "s"} downloaded to Excel.`);
+    } catch (error) {
+      console.error("Failed to export requests to Excel:", error);
+      openSnackbar("Failed to create the Excel file.", "error");
+    }
+  };
+
   const handleMenuOpen = (event, request) => {
     setMenuAnchorEl(event.currentTarget);
     setActiveRequestId(request.requestKey);
@@ -1278,6 +1299,16 @@ export default function RequestMaterials() {
                 </option>
               ))}
             </TextField>
+
+            <Button
+              variant="outlined"
+              startIcon={<Download />}
+              onClick={handleDownloadExcel}
+              disabled={requestsLoading || filteredRequests.length === 0}
+              sx={{ whiteSpace: "nowrap", flexShrink: 0, height: 40, borderRadius: "7px" }}
+            >
+              Download Excel
+            </Button>
           </Stack>
 
           <PageTablePaper minWidth={860}>
