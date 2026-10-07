@@ -61,6 +61,7 @@ import MassReworkForm from "src/components/request-material/MassReworkForm";
 import SingleMaterialForm from "src/components/request-material/SingleMaterialForm";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 import PageHeader from "src/components/common/PageHeader";
+import TicketTypeBadge from "src/components/common/TicketTypeBadge";
 import PageTablePaper, {
   PAGE_TABLE_CLAMP_SX,
   PAGE_TABLE_COMPACT_SX,
@@ -201,10 +202,6 @@ function SapAwareStatus({ row }) {
       <SapAwareStatusBadgeOnly row={row} />
     </StatusWithNotes>
   );
-}
-
-function TicketTypePill({ value }) {
-  return <Chip label={value} variant="outlined" size="small" />;
 }
 
 function RequestActionDialog({ open, mode, request, onClose, onReviseRequest }) {
@@ -389,7 +386,7 @@ function RequestDetailDialog({ open, request, onClose, massItems, massItemsLoadi
             {detail.ticketNumber}
           </Typography>
           <Stack direction="row" spacing={1} sx={{ mt: 1 }} alignItems="center">
-            <TicketTypePill value={detail.ticketType} />
+            <TicketTypeBadge value={detail.ticketType} />
             <StatusPill status={detail.status} />
           </Stack>
         </Box>
@@ -1222,6 +1219,18 @@ export default function RequestMaterials() {
       <PageHeader
         title="My Request"
         subtitle="List of requests created by the user with their status."
+        actions={
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<Download />}
+            onClick={handleDownloadExcel}
+            disabled={requestsLoading || filteredRequests.length === 0}
+            sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 600, px: 3 }}
+          >
+            Download Excel
+          </Button>
+        }
       />
 
       <Box>
@@ -1295,15 +1304,6 @@ export default function RequestMaterials() {
               ))}
             </TextField>
 
-            <Button
-              variant="outlined"
-              startIcon={<Download />}
-              onClick={handleDownloadExcel}
-              disabled={requestsLoading || filteredRequests.length === 0}
-              sx={{ whiteSpace: "nowrap", flexShrink: 0, height: 40, borderRadius: "7px" }}
-            >
-              Download Excel
-            </Button>
           </Stack>
 
           <PageTablePaper minWidth={860}>
@@ -1424,7 +1424,7 @@ export default function RequestMaterials() {
                         </Button>
                       </TableCell>
                       <TableCell>
-                        <TicketTypePill value={row.ticketType} />
+                        <TicketTypeBadge value={row.ticketType} />
                       </TableCell>
                       <TableCell sx={{ whiteSpace: "nowrap", fontWeight: 600 }}>
                         {getStagedMaterialCode(row) || "-"}

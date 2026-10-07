@@ -88,6 +88,7 @@ import {
   STATUS_FILTER_PREFERENCE_KEY,
 } from "src/helper/adminApprovalView.js";
 import PageHeader from "src/components/common/PageHeader";
+import TicketTypeBadge from "src/components/common/TicketTypeBadge";
 import StatusWithNotes from "src/components/common/StatusWithNotes";
 import { assignmentNoteKind, buildStatusNote } from "src/helper/statusNotes";
 import PageTablePaper, {
@@ -227,29 +228,6 @@ function SapAwareStatusBadge({ row }) {
     <StatusWithNotes notes={buildApprovalStatusNotes(row)}>
       <SapAwareStatusBadgeOnly row={row} />
     </StatusWithNotes>
-  );
-}
-
-function TicketTypeBadge({ value }) {
-  return (
-    <Chip
-      label={value || "Create"}
-      size="small"
-      deleteIcon={<KeyboardArrowDown />}
-      onDelete={() => {}}
-      sx={{
-        minWidth: 112,
-        justifyContent: "space-between",
-        borderRadius: "8px",
-        bgcolor: "#8d8f91",
-        color: "common.white",
-        fontWeight: 800,
-        "& .MuiChip-deleteIcon": {
-          color: "common.white",
-          fontSize: 20,
-        },
-      }}
-    />
   );
 }
 
@@ -1353,6 +1331,18 @@ export default function AdminApprovalView() {
       <PageHeader
         title="My Approval"
         subtitle="A list of items awaiting your approval"
+        actions={
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<Download />}
+            onClick={handleDownloadExcel}
+            disabled={loading || isMdmAllPending || exportRows.length === 0}
+            sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 600, px: 3 }}
+          >
+            Download Excel
+          </Button>
+        }
       />
 
       <PageTabs
@@ -1431,15 +1421,6 @@ export default function AdminApprovalView() {
             </option>
           ))}
         </TextField>
-        <Button
-          variant="outlined"
-          startIcon={<Download />}
-          onClick={handleDownloadExcel}
-          disabled={loading || isMdmAllPending || exportRows.length === 0}
-          sx={{ whiteSpace: "nowrap", flexShrink: 0, minHeight: 50, borderRadius: "7px" }}
-        >
-          Download Excel
-        </Button>
       </Stack>
 
       {/* Single tab table */}
