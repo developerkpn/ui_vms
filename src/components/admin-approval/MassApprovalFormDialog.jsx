@@ -117,9 +117,9 @@ const EDITABLE_FIELD_META = [
   { key: "materialGroup", label: "Mat Group", dbKey: "material_group", required: true },
   { key: "materialSubGroup", label: "Sub Mat Group", dbKey: "material_sub_group", required: true },
   { key: "materialDescription", label: "Description", dbKey: "material_description", required: true },
-  { key: "poText", label: "PO Text", dbKey: "po_text", required: true },
+  { key: "poText", label: "PO Text", dbKey: "po_text", required: false },
   { key: "uom", label: "UoM", dbKey: "base_uom", required: true },
-  { key: "spesifikasiTambahan", label: "Spesifikasi Tambahan", dbKey: "spesifikasi_tambahan", required: true },
+  { key: "spesifikasiTambahan", label: "Spesifikasi Tambahan", dbKey: "spesifikasi_tambahan", required: false },
 ];
 const REQUIRED_FIELD_KEYS = EDITABLE_FIELD_META.filter(m => m.required).map(m => m.key);
 
