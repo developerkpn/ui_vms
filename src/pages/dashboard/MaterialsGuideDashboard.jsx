@@ -423,7 +423,7 @@ function GuideViewer({ guide, onClose }) {
   );
 }
 
-export default function MaterialsGuideDashboard() {
+export default function MaterialsGuideDashboard({ embedded = false }) {
   const axiosPrivate = useAxiosPrivate();
   const { openSnackbar } = useSnackBar();
 
@@ -458,10 +458,12 @@ export default function MaterialsGuideDashboard() {
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 3, pb: { xs: 4, md: 6 } }}>
-      <PageHeader
-        title="Dashboard"
-        subtitle="Guides and videos for the Material Management System"
-      />
+      {!embedded && (
+        <PageHeader
+          title="Dashboard"
+          subtitle="Guides and videos for the Material Management System"
+        />
+      )}
 
       {loading && (
         <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>

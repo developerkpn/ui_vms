@@ -24,8 +24,8 @@ const MaterialsApproverManagement = lazy(
   () => import("src/pages/dashboard/MaterialsApproverManagement")
 );
 const MaterialsGuideUpload = lazy(() => import("src/pages/dashboard/MaterialsGuideUpload"));
-const MaterialsGuideDashboard = lazy(
-  () => import("src/pages/dashboard/MaterialsGuideDashboard")
+const MaterialsDashboard = lazy(
+  () => import("src/pages/dashboard/MaterialsDashboard")
 );
 const ReportTicketPosition = lazy(() => import("src/pages/report/ReportTicketPosition"));
 const SingleRequestPage = lazy(() => import("src/pages/dashboard/SingleRequestPage"));
@@ -257,9 +257,9 @@ export const routes = createBrowserRouter([
       },
       {
         // Sidebar: Materials > Dashboard (mst_page menu_id seeded by
-        // 20260918_materials_dashboard_menu.sql). Read-only view of the guides.
+        // 20260918_materials_dashboard_menu.sql). Dashboard and user-guide tabs.
         path: "materials/dashboard",
-        element: <MaterialsGuideDashboard />,
+        element: <MaterialsDashboard />,
       },
       {
         path: "administrator/approval",
