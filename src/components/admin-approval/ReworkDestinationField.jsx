@@ -31,6 +31,7 @@ import {
 import {
   buildReworkEmailTemplatePath,
   normalizeReworkEmailTemplate,
+  REWORK_EMAIL_KIND_MASS,
   REWORK_EMAIL_NOTICE,
   REWORK_EMAIL_TEMPLATE_ERROR_TEXT,
 } from "src/helper/reworkEmailThread.js";
@@ -482,7 +483,8 @@ export default function ReworkDestinationField({
                   size="small"
                   fullWidth
                   multiline
-                  rows={10}
+                  minRows={requestKind === REWORK_EMAIL_KIND_MASS ? 14 : 10}
+                  maxRows={requestKind === REWORK_EMAIL_KIND_MASS ? 24 : 20}
                   label="Isi Email"
                   value={emailBody}
                   disabled={disabled}

@@ -1353,7 +1353,8 @@ export default function MassApprovalFormDialog({
     <TextField
       fullWidth
       multiline
-      rows={3}
+      minRows={action === MASS_DECISION_REWORK ? 14 : 3}
+      maxRows={action === MASS_DECISION_REWORK ? 24 : 3}
       placeholder={
         action === MASS_DECISION_APPROVE
           ? "Approve remark..."
@@ -1559,7 +1560,7 @@ export default function MassApprovalFormDialog({
               variant="outlined"
               sx={{ borderRadius: 2, maxHeight: 480 }}
             >
-              <Table size="small" sx={{ borderCollapse: "collapse" }}>
+              <Table size="small" sx={{ borderCollapse: "collapse", minWidth: "calc(100% + 200px)" }}>
                 <TableHead>
                   <TableRow sx={{ bgcolor: "#f5f7f9" }}>
                     {isDecideMode && (
@@ -1645,6 +1646,7 @@ export default function MassApprovalFormDialog({
                           border: "1px solid #e0e0e0",
                           py: 1.5,
                           whiteSpace: "nowrap",
+                          ...(meta.key === "materialDescription" ? { width: 320, minWidth: 320 } : {}),
                         }}
                       >
                         {meta.label}
@@ -1793,7 +1795,7 @@ export default function MassApprovalFormDialog({
                                 border: "1px solid #e0e0e0",
                                 verticalAlign: "top",
                                 p: 0.5,
-                                minWidth: 120,
+                                minWidth: meta.key === "materialDescription" ? 320 : 120,
                               }}
                             >
                               <TextField
@@ -2257,10 +2259,19 @@ export default function MassApprovalFormDialog({
       <Dialog
         open={remarkDialogOpen}
         onClose={handleRemarkDialogClose}
-        // The destination list carries "Approval N - Name - email" rows, which
-        // wrap badly in the reason dialog's usual width.
-        maxWidth={canChooseReworkTarget ? "sm" : "xs"}
+        maxWidth={currentAction === "Rework" ? "lg" : "xs"}
         fullWidth
+        PaperProps={
+          currentAction === "Rework"
+            ? {
+                sx: {
+                  m: { xs: 1.5, sm: 3 },
+                  width: { xs: "calc(100% - 24px)", sm: "calc(100% - 48px)" },
+                  maxHeight: { xs: "calc(100% - 24px)", sm: "calc(100% - 48px)" },
+                },
+              }
+            : undefined
+        }
       >
         <Box sx={{ p: 2, display: "flex", alignItems: "center", gap: 1 }}>
           <WarningAmber sx={{ color: "#f59e0b" }} />
@@ -2322,7 +2333,8 @@ export default function MassApprovalFormDialog({
             <TextField
               fullWidth
               multiline
-              rows={4}
+              minRows={currentAction === "Rework" ? 14 : 4}
+              maxRows={currentAction === "Rework" ? 24 : 4}
               placeholder="Enter your message here..."
               value={remarkText}
               error={Boolean(remarkError)}
@@ -2364,9 +2376,19 @@ export default function MassApprovalFormDialog({
       <Dialog
         open={decisionStep === MASS_DECISION_REWORK || decisionStep === MASS_DECISION_REJECT}
         onClose={handleDecisionStepClose}
-        // The rework destination list carries "Approval N - Name - email" rows.
-        maxWidth={decisionStep === MASS_DECISION_REWORK ? "sm" : "xs"}
+        maxWidth={decisionStep === MASS_DECISION_REWORK ? "lg" : "xs"}
         fullWidth
+        PaperProps={
+          decisionStep === MASS_DECISION_REWORK
+            ? {
+                sx: {
+                  m: { xs: 1.5, sm: 3 },
+                  width: { xs: "calc(100% - 24px)", sm: "calc(100% - 48px)" },
+                  maxHeight: { xs: "calc(100% - 24px)", sm: "calc(100% - 48px)" },
+                },
+              }
+            : undefined
+        }
       >
         {(decisionStep === MASS_DECISION_REWORK || decisionStep === MASS_DECISION_REJECT) && (
           <>

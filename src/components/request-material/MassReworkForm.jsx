@@ -246,7 +246,7 @@ export default function MassReworkForm({
             variant="outlined"
             sx={{ borderRadius: 2, maxHeight: 480 }}
           >
-            <Table size="small" sx={{ borderCollapse: "collapse" }}>
+            <Table size="small" sx={{ borderCollapse: "collapse", minWidth: "calc(100% + 200px)" }}>
               <TableHead>
                 <TableRow sx={{ bgcolor: "#f5f7f9" }}>
                   <TableCell
@@ -288,6 +288,7 @@ export default function MassReworkForm({
                         border: "1px solid #e0e0e0",
                         py: 1.5,
                         whiteSpace: "nowrap",
+                        ...(meta.key === "materialDescription" ? { width: 320, minWidth: 320 } : {}),
                       }}
                     >
                       {meta.label}
@@ -365,7 +366,7 @@ export default function MassReworkForm({
                               border: "1px solid #e0e0e0",
                               verticalAlign: "top",
                               p: 0.5,
-                              minWidth: 120,
+                              minWidth: meta.key === "materialDescription" ? 320 : 120,
                             }}
                           >
                             <TextField

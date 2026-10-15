@@ -2011,10 +2011,19 @@ export default function AdminApprovalFormDialog({
       <Dialog
         open={remarkDialogOpen}
         onClose={handleRemarkDialogClose}
-        // The destination list carries "Approval N - Name - email" rows, which
-        // wrap badly in the reason dialog's usual width.
-        maxWidth={canChooseReworkTarget ? "sm" : "xs"}
+        maxWidth={currentAction === "Rework" ? "md" : "xs"}
         fullWidth
+        PaperProps={
+          currentAction === "Rework"
+            ? {
+                sx: {
+                  m: { xs: 1.5, sm: 3 },
+                  width: { xs: "calc(100% - 24px)", sm: "calc(100% - 48px)" },
+                  maxHeight: { xs: "calc(100% - 24px)", sm: "calc(100% - 48px)" },
+                },
+              }
+            : undefined
+        }
       >
         <Box sx={{ p: 2, display: "flex", alignItems: "center", gap: 1 }}>
           <WarningAmber sx={{ color: "#f59e0b" }} />
@@ -2076,7 +2085,8 @@ export default function AdminApprovalFormDialog({
             <TextField
               fullWidth
               multiline
-              rows={4}
+              minRows={currentAction === "Rework" ? 10 : 4}
+              maxRows={currentAction === "Rework" ? 20 : 4}
               placeholder="Enter your message here..."
               value={remarkText}
               error={Boolean(remarkError)}
