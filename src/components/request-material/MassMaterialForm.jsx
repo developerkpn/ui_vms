@@ -704,7 +704,7 @@ const MassMaterialForm = ({ onBack }) => {
           </Alert>
         ) : null}
         <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 0 }}>
-          <Table size="small" sx={{ borderCollapse: "collapse", minWidth: "calc(100% + 200px)" }}>
+          <Table size="small" sx={{ borderCollapse: "collapse", minWidth: "calc(100% + 560px)" }}>
             <TableHead>
               <TableRow sx={{ bgcolor: "#f5f7f9" }}>
                 <TableCell
@@ -726,7 +726,7 @@ const MassMaterialForm = ({ onBack }) => {
                       fontWeight: 700,
                       border: "1px solid #e0e0e0",
                       py: 1.5,
-                      ...(fieldKey === "description" ? { width: 320, minWidth: 320 } : {}),
+                      ...(fieldKey === "description" ? { width: 680, minWidth: 680 } : {}),
                     }}
                   >
                     {MASS_ROW_FIELD_LABELS[fieldKey]}
@@ -791,7 +791,7 @@ const MassMaterialForm = ({ onBack }) => {
                           sx={{
                             border: "1px solid #e0e0e0",
                             verticalAlign: "top",
-                            ...(fieldKey === "description" ? { width: 320, minWidth: 320 } : {}),
+                            ...(fieldKey === "description" ? { width: 680, minWidth: 680 } : {}),
                           }}
                         >
                           <TextField
@@ -799,12 +799,10 @@ const MassMaterialForm = ({ onBack }) => {
                             variant="standard"
                             fullWidth
                             multiline={
-                              fieldKey === "description" ||
                               fieldKey === "poText" ||
                               fieldKey === "spesifikasiTambahan"
                             }
                             minRows={
-                              fieldKey === "description" ||
                               fieldKey === "poText" ||
                               fieldKey === "spesifikasiTambahan"
                                 ? 1

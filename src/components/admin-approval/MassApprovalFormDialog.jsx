@@ -1560,7 +1560,7 @@ export default function MassApprovalFormDialog({
               variant="outlined"
               sx={{ borderRadius: 2, maxHeight: 480 }}
             >
-              <Table size="small" sx={{ borderCollapse: "collapse", minWidth: "calc(100% + 200px)" }}>
+              <Table size="small" sx={{ borderCollapse: "collapse", minWidth: "calc(100% + 560px)" }}>
                 <TableHead>
                   <TableRow sx={{ bgcolor: "#f5f7f9" }}>
                     {isDecideMode && (
@@ -1646,7 +1646,7 @@ export default function MassApprovalFormDialog({
                           border: "1px solid #e0e0e0",
                           py: 1.5,
                           whiteSpace: "nowrap",
-                          ...(meta.key === "materialDescription" ? { width: 320, minWidth: 320 } : {}),
+                          ...(meta.key === "materialDescription" ? { width: 680, minWidth: 680 } : {}),
                         }}
                       >
                         {meta.label}
@@ -1795,7 +1795,7 @@ export default function MassApprovalFormDialog({
                                 border: "1px solid #e0e0e0",
                                 verticalAlign: "top",
                                 p: 0.5,
-                                minWidth: meta.key === "materialDescription" ? 320 : 120,
+                                minWidth: meta.key === "materialDescription" ? 680 : 120,
                               }}
                             >
                               <TextField
@@ -1822,6 +1822,7 @@ export default function MassApprovalFormDialog({
                                 disabled={!isItemEditable(item) || submitting}
                                 inputProps={{
                                   style: { fontSize: "0.8125rem" },
+                                  ...(meta.key === "materialDescription" ? { maxLength: 40 } : {}),
                                 }}
                               />
                             </TableCell>
