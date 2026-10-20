@@ -87,6 +87,7 @@ import {
   resolveStepApproverUserId,
 } from "src/helper/mdmClaimGate.js";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
+import useInputDraft from "src/hooks/useInputDraft";
 import useSessionStore from "src/store/useSessionStore";
 import {
   buildReworkDestinationPayload,
@@ -175,6 +176,24 @@ const FINAL_CODE_COLUMNS = [
   { label: "Sub Material Group", width: 180 },
   { label: "Running Number", width: 150 },
 ];
+
+// Keep keystroke renders inside this field rather than the entire batch table.
+// The parent retains the latest suffix for validation and submission.
+function RunningNumberField({ initialValue, onChange, ...props }) {
+  const [value, setValue] = useState(initialValue);
+
+  return (
+    <TextField
+      {...props}
+      value={value}
+      onChange={event => {
+        const suffix = sanitizeMassFinalCodeSuffix(event.target.value);
+        setValue(suffix);
+        onChange(suffix);
+      }}
+    />
+  );
+}
 
 // Per-item SAP staging status, same chips the single request shows in the
 // approval list — plus the SAP write-back message on hover when it errored.
@@ -274,7 +293,7 @@ export default function MassApprovalFormDialog({
   // Remark dialog state
   const [remarkDialogOpen, setRemarkDialogOpen] = useState(false);
   const [currentAction, setCurrentAction] = useState("");
-  const [remarkText, setRemarkText] = useState("");
+  const [remarkText, setRemarkText, remarkInputKey] = useInputDraft("");
   const [remarkError, setRemarkError] = useState("");
   // Rework destination — Master Data only; see the Rework To field below.
   const [reworkTarget, setReworkTarget] = useState(REWORK_TO_REQUESTER);
@@ -283,13 +302,13 @@ export default function MassApprovalFormDialog({
   // The mail itself, once the EMAIL channel is chosen. Kept here rather than in
   // the field so toggling back to "Via aplikasi" and out again does not discard
   // what Master Data has already typed.
-  const [reworkEmailSubject, setReworkEmailSubject] = useState("");
-  const [reworkEmailBody, setReworkEmailBody] = useState("");
+  const [reworkEmailSubject, setReworkEmailSubject, emailSubjectInputKey, refreshEmailReason] = useInputDraft("");
+  const [reworkEmailBody, setReworkEmailBody, emailBodyInputKey] = useInputDraft("");
   const [reworkEmailErrors, setReworkEmailErrors] = useState({ subject: "", body: "" });
   // Running numbers entered at the Master Data stage — one per item, typed in
   // one by one, keyed by item id. See the Final Code dialog below.
   const [finalCodeDialogOpen, setFinalCodeDialogOpen] = useState(false);
-  const [finalCodeSuffixes, setFinalCodeSuffixes] = useState({});
+  const [finalCodeSuffixes, setFinalCodeSuffixes, finalCodeInputKey] = useInputDraft({});
   const [finalCodeSuffixErrors, setFinalCodeSuffixErrors] = useState({});
   // Server-side rejection of the composed plan (duplicate code, unresolved
   // group, …) — not tied to one item's box, shown as a banner instead.
@@ -309,7 +328,7 @@ export default function MassApprovalFormDialog({
   const [itemDecisions, setItemDecisions] = useState({});
   const [selectedItemIds, setSelectedItemIds] = useState([]);
   const [decisionError, setDecisionError] = useState("");
-  const [decisionRemarks, setDecisionRemarks] = useState(EMPTY_DECISION_REMARKS);
+  const [decisionRemarks, setDecisionRemarks, decisionRemarkInputKey] = useInputDraft(EMPTY_DECISION_REMARKS);
   const [decisionRemarkErrors, setDecisionRemarkErrors] = useState({});
   // The wizard step on screen (one of MASS_DECISION_ACTIONS), null when closed.
   const [decisionStep, setDecisionStep] = useState(null);
@@ -562,7 +581,7 @@ export default function MassApprovalFormDialog({
   // the in-app history shows it — it is just derived from the subject.
   const isReworkEmailReason = reworkEmailChannel === NOTIFY_VIA_EMAIL;
   const reworkEmailReason = isReworkEmailReason
-    ? deriveReworkEmailReason(reworkEmailSubject)
+    ? deriveReworkEmailReason(reworkEmailSubject.current)
     : "";
 
   // Fills only what is still empty: the decision wizard remounts the rework
@@ -575,12 +594,12 @@ export default function MassApprovalFormDialog({
   }, []);
 
   const handleReworkEmailSubjectChange = value => {
-    setReworkEmailSubject(value);
+    reworkEmailSubject.current = value;
     setReworkEmailErrors(prev => (prev.subject ? { ...prev, subject: "" } : prev));
   };
 
   const handleReworkEmailBodyChange = value => {
-    setReworkEmailBody(value);
+    reworkEmailBody.current = value;
     setReworkEmailErrors(prev => (prev.body ? { ...prev, body: "" } : prev));
   };
 
@@ -942,16 +961,17 @@ export default function MassApprovalFormDialog({
   };
 
   const handleFinalCodeSuffixChange = (itemId, value) => {
-    setFinalCodeSuffixes(prev => ({
-      ...prev,
-      [itemId]: sanitizeMassFinalCodeSuffix(value),
-    }));
-    setFinalCodeSuffixErrors(prev => {
-      if (!prev[itemId]) return prev;
-      const next = { ...prev };
-      delete next[itemId];
-      return next;
-    });
+    finalCodeSuffixes.current = {
+      ...finalCodeSuffixes.current,
+      [itemId]: value,
+    };
+    if (finalCodeSuffixErrors[itemId]) {
+      setFinalCodeSuffixErrors(prev => {
+        const next = { ...prev };
+        delete next[itemId];
+        return next;
+      });
+    }
     if (finalCodeGeneralError) {
       setFinalCodeGeneralError("");
     }
@@ -962,7 +982,7 @@ export default function MassApprovalFormDialog({
     // group edited elsewhere in the dialog is what gets validated here — the
     // group is two thirds of the material code being assembled.
     const errors = validateMassFinalCodeSuffixes({
-      finalCodeSuffixes,
+      finalCodeSuffixes: finalCodeSuffixes.current,
       items: finalCodeItems.map(item => ({
         id: item.id,
         itemNo: item.itemNo,
@@ -1079,7 +1099,7 @@ export default function MassApprovalFormDialog({
   };
 
   const handleDecisionRemarkChange = (action, value) => {
-    setDecisionRemarks(prev => ({ ...prev, [action]: value }));
+    decisionRemarks.current = { ...decisionRemarks.current, [action]: value };
     setDecisionRemarkErrors(prev => {
       if (!prev[action]) return prev;
       const next = { ...prev };
@@ -1100,7 +1120,7 @@ export default function MassApprovalFormDialog({
     );
 
   const requireDecisionRemark = action => {
-    if (decisionRemarks[action].trim()) {
+    if (decisionRemarks.current[action].trim()) {
       return true;
     }
     setDecisionRemarkErrors(prev => ({
@@ -1129,8 +1149,8 @@ export default function MassApprovalFormDialog({
 
       const emailContentErrors = validateReworkEmailContent({
         notifyVia: reworkEmailChannel,
-        subject: reworkEmailSubject,
-        body: reworkEmailBody,
+        subject: reworkEmailSubject.current,
+        body: reworkEmailBody.current,
       });
       setReworkEmailErrors(emailContentErrors);
       return !hasReworkEmailContentError(emailContentErrors);
@@ -1144,12 +1164,12 @@ export default function MassApprovalFormDialog({
       requestBody: buildMassDecideRequestBody({
         decisions: itemDecisions,
         actionableItems,
-        remark: decisionRemarks[MASS_DECISION_APPROVE].trim(),
-        finalCodeSuffixes,
+        remark: decisionRemarks.current[MASS_DECISION_APPROVE].trim(),
+        finalCodeSuffixes: finalCodeSuffixes.current,
         items: buildEditedItemsPayload(isDecisionApproved),
         reworkReason: isReworkEmailReason
-          ? reworkEmailReason
-          : decisionRemarks[MASS_DECISION_REWORK].trim(),
+          ? deriveReworkEmailReason(reworkEmailSubject.current)
+          : decisionRemarks.current[MASS_DECISION_REWORK].trim(),
         reworkDestination: canChooseReworkTarget
           ? buildReworkDestinationPayload({
               selectedValue: reworkTarget,
@@ -1157,12 +1177,12 @@ export default function MassApprovalFormDialog({
               notifyVia: reworkNotifyVia,
               emailContent: buildReworkEmailPayload({
                 notifyVia: reworkEmailChannel,
-                subject: reworkEmailSubject,
-                body: reworkEmailBody,
+                subject: reworkEmailSubject.current,
+                body: reworkEmailBody.current,
               }),
             })
           : {},
-        rejectReason: decisionRemarks[MASS_DECISION_REJECT].trim(),
+        rejectReason: decisionRemarks.current[MASS_DECISION_REJECT].trim(),
       }),
       itemAttachmentChanges: buildItemAttachmentChanges(isDecisionAttachable),
       decisionCounts: decisionSummary.counts,
@@ -1212,7 +1232,7 @@ export default function MassApprovalFormDialog({
   // Remark dialog confirm — fire the action.
   // Approval, Rework, and Reject all require a non-empty remark/reason.
   const handleRemarkConfirm = () => {
-    const trimmed = remarkText.trim();
+    const trimmed = remarkText.current.trim();
 
     // An EMAIL rework has no box to leave empty: its reason comes from the
     // subject, which the blank-draft check below is what guards.
@@ -1237,8 +1257,8 @@ export default function MassApprovalFormDialog({
       // half-written mail on screen instead of losing it to a 400.
       const emailContentErrors = validateReworkEmailContent({
         notifyVia: reworkEmailChannel,
-        subject: reworkEmailSubject,
-        body: reworkEmailBody,
+        subject: reworkEmailSubject.current,
+        body: reworkEmailBody.current,
       });
       setReworkEmailErrors(emailContentErrors);
       if (hasReworkEmailContentError(emailContentErrors)) {
@@ -1251,7 +1271,7 @@ export default function MassApprovalFormDialog({
         "rework",
         // The mail's own subject stands in for the reason nobody was asked to
         // type; the box is what every other destination still sends.
-        isReworkEmailReason ? reworkEmailReason : trimmed,
+        isReworkEmailReason ? deriveReworkEmailReason(reworkEmailSubject.current) : trimmed,
         null,
         {
           ...(canChooseReworkTarget
@@ -1262,8 +1282,8 @@ export default function MassApprovalFormDialog({
                   notifyVia: reworkNotifyVia,
                   emailContent: buildReworkEmailPayload({
                     notifyVia: reworkEmailChannel,
-                    subject: reworkEmailSubject,
-                    body: reworkEmailBody,
+                    subject: reworkEmailSubject.current,
+                    body: reworkEmailBody.current,
                   }),
                 }),
                 // Confirmation copy only — the page strips it before POSTing.
@@ -1299,7 +1319,7 @@ export default function MassApprovalFormDialog({
       trimmed,
       hasEdits ? buildEditedItemsPayload() : null,
       {
-        ...(isMdmStageActive ? { finalCodeSuffixes } : {}),
+        ...(isMdmStageActive ? { finalCodeSuffixes: finalCodeSuffixes.current } : {}),
         itemAttachmentChanges: buildItemAttachmentChanges(),
       }
     );
@@ -1360,7 +1380,8 @@ export default function MassApprovalFormDialog({
           ? "Approve remark..."
           : `${MASS_DECISION_LABELS[action]} reason...`
       }
-      value={decisionRemarks[action]}
+      key={`${decisionRemarkInputKey}-${action}`}
+      defaultValue={decisionRemarks.current[action]}
       error={Boolean(decisionRemarkErrors[action])}
       helperText={decisionRemarkErrors[action]}
       disabled={submitting}
@@ -2194,9 +2215,10 @@ export default function MassApprovalFormDialog({
                         )}
                       </TableCell>
                       <TableCell align="center" sx={{ p: 1 }}>
-                        <TextField
+                        <RunningNumberField
+                          key={`${finalCodeInputKey}-${item.id}`}
                           size="small"
-                          value={finalCodeSuffixes[String(item.id)] || ""}
+                          initialValue={finalCodeSuffixes.current[String(item.id)] || ""}
                           placeholder="A01"
                           disabled={submitting}
                           error={Boolean(finalCodeSuffixErrors[String(item.id)])}
@@ -2212,10 +2234,10 @@ export default function MassApprovalFormDialog({
                           }}
                           sx={{ width: 110, bgcolor: "background.paper" }}
                           FormHelperTextProps={{ sx: { textAlign: "center", mx: 0 } }}
-                          onChange={event =>
+                          onChange={value =>
                             handleFinalCodeSuffixChange(
                               String(item.id),
-                              event.target.value
+                              value
                             )
                           }
                         />
@@ -2302,8 +2324,11 @@ export default function MassApprovalFormDialog({
               errorText={reworkDestinationError}
               requestKind={REWORK_EMAIL_KIND_MASS}
               requestId={row?.id}
-              emailSubject={reworkEmailSubject}
-              emailBody={reworkEmailBody}
+              emailSubject={reworkEmailSubject.current}
+              emailSubjectInputKey={emailSubjectInputKey}
+              emailBodyInputKey={emailBodyInputKey}
+              onEmailSubjectBlur={refreshEmailReason}
+              emailBody={reworkEmailBody.current}
               onEmailSubjectChange={handleReworkEmailSubjectChange}
               onEmailBodyChange={handleReworkEmailBodyChange}
               onEmailTemplateLoaded={handleReworkEmailTemplateLoaded}
@@ -2337,11 +2362,12 @@ export default function MassApprovalFormDialog({
               minRows={currentAction === "Rework" ? 14 : 4}
               maxRows={currentAction === "Rework" ? 24 : 4}
               placeholder="Enter your message here..."
-              value={remarkText}
+              key={remarkInputKey}
+              defaultValue={remarkText.current}
               error={Boolean(remarkError)}
               helperText={remarkError}
               onChange={e => {
-                setRemarkText(e.target.value);
+                remarkText.current = e.target.value;
                 if (remarkError) setRemarkError("");
               }}
               sx={{
@@ -2424,8 +2450,11 @@ export default function MassApprovalFormDialog({
                   requestKind={REWORK_EMAIL_KIND_MASS}
                   requestId={row?.id}
                   itemIds={decisionSummary.itemIdsByAction[MASS_DECISION_REWORK]}
-                  emailSubject={reworkEmailSubject}
-                  emailBody={reworkEmailBody}
+                  emailSubject={reworkEmailSubject.current}
+                  emailSubjectInputKey={emailSubjectInputKey}
+                  emailBodyInputKey={emailBodyInputKey}
+                  onEmailSubjectBlur={refreshEmailReason}
+                  emailBody={reworkEmailBody.current}
                   onEmailSubjectChange={handleReworkEmailSubjectChange}
                   onEmailBodyChange={handleReworkEmailBodyChange}
                   onEmailTemplateLoaded={handleReworkEmailTemplateLoaded}

@@ -349,6 +349,9 @@ export default function ReworkDestinationField({
   itemIds = null,
   emailSubject = "",
   emailBody = "",
+  emailSubjectInputKey = 0,
+  emailBodyInputKey = 0,
+  onEmailSubjectBlur,
   onEmailSubjectChange,
   onEmailBodyChange,
   onEmailTemplateLoaded,
@@ -473,7 +476,9 @@ export default function ReworkDestinationField({
                   size="small"
                   fullWidth
                   label="Subject"
-                  value={emailSubject}
+                  key={`subject-${emailSubjectInputKey}`}
+                  defaultValue={emailSubject}
+                  onBlur={onEmailSubjectBlur}
                   disabled={disabled}
                   error={Boolean(emailErrors.subject)}
                   helperText={emailErrors.subject || ""}
@@ -486,7 +491,8 @@ export default function ReworkDestinationField({
                   minRows={requestKind === REWORK_EMAIL_KIND_MASS ? 14 : 10}
                   maxRows={requestKind === REWORK_EMAIL_KIND_MASS ? 24 : 20}
                   label="Isi Email"
-                  value={emailBody}
+                  key={`body-${emailBodyInputKey}`}
+                  defaultValue={emailBody}
                   disabled={disabled}
                   error={Boolean(emailErrors.body)}
                   helperText={emailErrors.body || ""}

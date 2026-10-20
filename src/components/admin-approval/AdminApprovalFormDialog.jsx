@@ -91,6 +91,7 @@ import MaterialAiMatchPanel from "src/components/common/MaterialAiMatchPanel";
 import ReworkDestinationField from "./ReworkDestinationField";
 import ReworkEmailThreadSection from "./ReworkEmailThreadSection";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
+import useInputDraft from "src/hooks/useInputDraft";
 import {
   ATTACHMENT_SIZE_LIMIT_TEXT,
   ATTACHMENT_SUPPORTED_FORMATS_TEXT,
@@ -722,7 +723,7 @@ export default function AdminApprovalFormDialog({
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
   const [currentAction, setCurrentAction] = useState("");
-  const [remarkText, setRemarkText] = useState("");
+  const [remarkText, setRemarkText, remarkInputKey] = useInputDraft("");
   const [reworkTarget, setReworkTarget] = useState(REWORK_TO_REQUESTER);
   // User hand-picked for the fillable "Approval 1" slot, and how they should be
   // told about it. Both only ever leave this component together with the
@@ -732,8 +733,8 @@ export default function AdminApprovalFormDialog({
   // The mail itself, once the EMAIL channel is chosen. It lives here rather than
   // in the field so a trip through the "Via aplikasi" radio does not throw away
   // what Master Data has already typed.
-  const [reworkEmailSubject, setReworkEmailSubject] = useState("");
-  const [reworkEmailBody, setReworkEmailBody] = useState("");
+  const [reworkEmailSubject, setReworkEmailSubject, emailSubjectInputKey, refreshEmailReason] = useInputDraft("");
+  const [reworkEmailBody, setReworkEmailBody, emailBodyInputKey] = useInputDraft("");
   const [reworkEmailErrors, setReworkEmailErrors] = useState({ subject: "", body: "" });
   const [finalCodeSuffix, setFinalCodeSuffix] = useState("");
   const [finalCodeSuffixError, setFinalCodeSuffixError] = useState("");
@@ -1236,7 +1237,7 @@ export default function AdminApprovalFormDialog({
   // shows it. Every other destination keeps typing its own.
   const isReworkEmailReason = reworkEmailChannel === NOTIFY_VIA_EMAIL;
   const reworkEmailReason = isReworkEmailReason
-    ? deriveReworkEmailReason(reworkEmailSubject)
+    ? deriveReworkEmailReason(reworkEmailSubject.current)
     : "";
   // The transcript is for the people who can act on the Master Data step; for
   // everyone else the section never mounts and never fetches.
@@ -1248,12 +1249,12 @@ export default function AdminApprovalFormDialog({
   }, []);
 
   const handleReworkEmailSubjectChange = value => {
-    setReworkEmailSubject(value);
+    reworkEmailSubject.current = value;
     setReworkEmailErrors(prev => (prev.subject ? { ...prev, subject: "" } : prev));
   };
 
   const handleReworkEmailBodyChange = value => {
-    setReworkEmailBody(value);
+    reworkEmailBody.current = value;
     setReworkEmailErrors(prev => (prev.body ? { ...prev, body: "" } : prev));
   };
 
@@ -2053,8 +2054,11 @@ export default function AdminApprovalFormDialog({
               errorText={reworkDestinationError}
               requestKind={reworkEmailKind}
               requestId={detail.id}
-              emailSubject={reworkEmailSubject}
-              emailBody={reworkEmailBody}
+              emailSubject={reworkEmailSubject.current}
+              emailSubjectInputKey={emailSubjectInputKey}
+              emailBodyInputKey={emailBodyInputKey}
+              onEmailSubjectBlur={refreshEmailReason}
+              emailBody={reworkEmailBody.current}
               onEmailSubjectChange={handleReworkEmailSubjectChange}
               onEmailBodyChange={handleReworkEmailBodyChange}
               onEmailTemplateLoaded={handleReworkEmailTemplateLoaded}
@@ -2088,11 +2092,12 @@ export default function AdminApprovalFormDialog({
               minRows={currentAction === "Rework" ? 10 : 4}
               maxRows={currentAction === "Rework" ? 20 : 4}
               placeholder="Enter your message here..."
-              value={remarkText}
+              key={remarkInputKey}
+              defaultValue={remarkText.current}
               error={Boolean(remarkError)}
               helperText={remarkError}
               onChange={e => {
-                setRemarkText(e.target.value);
+                remarkText.current = e.target.value;
                 if (remarkError) {
                   setRemarkError("");
                 }
@@ -2119,7 +2124,7 @@ export default function AdminApprovalFormDialog({
               if (
                 (currentAction === "Reject" || currentAction === "Rework") &&
                 !isReworkEmailReason &&
-                !String(remarkText || "").trim()
+                !String(remarkText.current || "").trim()
               ) {
                 setRemarkError(
                   currentAction === "Rework"
@@ -2138,8 +2143,8 @@ export default function AdminApprovalFormDialog({
               // the half-written mail on screen instead of losing it to a 400.
               const emailContentErrors = validateReworkEmailContent({
                 notifyVia: reworkEmailChannel,
-                subject: reworkEmailSubject,
-                body: reworkEmailBody,
+                subject: reworkEmailSubject.current,
+                body: reworkEmailBody.current,
               });
               setReworkEmailErrors(emailContentErrors);
               if (hasReworkEmailContentError(emailContentErrors)) {
@@ -2149,8 +2154,8 @@ export default function AdminApprovalFormDialog({
               // The mail's own subject stands in for the reason nobody was
               // asked to type; the box is what everything else still sends.
               const submittedRemark = isReworkEmailReason
-                ? reworkEmailReason
-                : remarkText;
+                ? deriveReworkEmailReason(reworkEmailSubject.current)
+                : remarkText.current;
 
               // Absent unless Master Data actually had the choice, so every
               // other rework keeps sending exactly what it sent before.
@@ -2162,8 +2167,8 @@ export default function AdminApprovalFormDialog({
                       notifyVia: reworkNotifyVia,
                       emailContent: buildReworkEmailPayload({
                         notifyVia: reworkEmailChannel,
-                        subject: reworkEmailSubject,
-                        body: reworkEmailBody,
+                        subject: reworkEmailSubject.current,
+                        body: reworkEmailBody.current,
                       }),
                     }),
                     // Confirmation copy only — the page strips it before POSTing.
