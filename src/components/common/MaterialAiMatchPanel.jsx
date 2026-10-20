@@ -2,7 +2,12 @@ import { Replay } from "@mui/icons-material";
 import {
   Alert,
   Box,
+  Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
   LinearProgress,
   Paper,
@@ -15,7 +20,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import SectionLoadingSkeleton from "src/components/common/SectionLoadingSkeleton";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import {
@@ -26,7 +31,10 @@ import {
   describeMatchType,
   formatSimilarityPercent,
   isRequestRecommendation,
+  matchingTextParts,
   normalizeAiMatchList,
+  requestRecommendationLabel,
+  requestRecommendationNotice,
   shouldKeepPolling,
   similarityTone,
 } from "src/helper/materialAiMatch.js";
@@ -55,6 +63,7 @@ import {
 const RERUN_REFETCH_DELAY_MS = 1000;
 
 const TONE_COLOR = {
+  veryLikely: "#005c2b",
   success: "success.darker",
   warning: "warning.darker",
   neutral: "text.secondary",
@@ -74,21 +83,60 @@ const BODY_CELL_SX = { border: "1px solid #e0e0e0" };
 /** The similarity column: the number, and the same number as a bar under it. */
 /**
  * The code column. An SAP material shows its code, flagged when SAP has
- * retired it (deletion flag or "(NOT USE)"). A request that is not in SAP yet
- * shows its request number and where it stands - it is a possible duplicate,
- * not a material anyone can use.
+ * retired it (deletion flag or "(NOT USE)"). A request-history match shows its
+ * request number, requester scope and status, with material summary details.
  */
-export function RecommendationCode({ item }) {
+export function RecommendationCode({ item, query }) {
   const request = isRequestRecommendation(item);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const details = item.requestDetails || {};
+  const detailsTitleId = useId();
   return (
     <Box>
-      <Typography component="span" sx={{ fontFamily: "monospace", fontSize: "inherit" }}>
+      <Typography component="span" sx={{
+        fontFamily: "monospace", fontSize: "inherit",
+        ...(query?.code && query.code === item.code ? { color: "#1565c0", fontWeight: 700 } : {}),
+      }}>
         {request ? `Req ${item.code || "-"}` : item.code || "-"}
       </Typography>
       {request && (
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-          Request{item.requestStatus ? ` · ${item.requestStatus}` : ""}
-        </Typography>
+        <>
+          <Typography variant="caption" color="primary" sx={{ display: "block", fontWeight: 700 }}>
+            {requestRecommendationLabel(item)}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+            {item.requestStatus || details.status || "-"}
+          </Typography>
+          {item.requestScope !== "same_batch" && (
+            <Typography variant="caption" sx={{ display: "block" }}>Please contact MDM.</Typography>
+          )}
+          <Button size="small" onClick={event => { event.stopPropagation(); setDetailsOpen(true); }}
+            sx={{ p: 0, minWidth: 0 }} aria-label={`View request ${item.code || details.requestNo} details`}>
+            View details
+          </Button>
+          <Dialog open={detailsOpen} onClose={() => setDetailsOpen(false)} fullWidth maxWidth="sm"
+            aria-labelledby={detailsTitleId}>
+            <DialogTitle id={detailsTitleId}>{requestRecommendationLabel(item)}</DialogTitle>
+            <DialogContent dividers>
+              <Alert severity="info" sx={{ mb: 2 }}>{requestRecommendationNotice(item)}</Alert>
+              <Typography variant="body2"><b>Request Number: </b>{details.requestNo || item.code || "-"}</Typography>
+              {details.batchNo && <Typography variant="body2"><b>Mass Request: </b>{details.batchNo}{details.itemNo ? ` · Item ${details.itemNo}` : ""}</Typography>}
+              <Typography variant="body2"><b>Requester: </b>{details.requesterName || "-"}</Typography>
+              <Typography variant="body2"><b>Status: </b>{details.status || item.requestStatus || "-"}</Typography>
+              {details.createdAt && <Typography variant="body2"><b>Requested At: </b>{new Date(details.createdAt).toLocaleString("id-ID")}</Typography>}
+              <Box sx={{ mt: 2, mb: 2 }}>
+                <Typography variant="body2"><b>Material Name: </b><MatchedMaterialText text={item.name} query={query} /></Typography>
+                <Typography variant="body2"><b>Material Code: </b>{details.materialCode || "Not assigned"}</Typography>
+                <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+                  <b>Description / Long Text: </b><MatchedMaterialText text={item.desc} query={query} />
+                </Typography>
+                {(details.groupCode || details.subgroupCode) && <Typography variant="body2"><b>Group / Subgroup: </b>{details.groupCode || "-"} / {details.subgroupCode || "-"}</Typography>}
+              </Box>
+              <SimilarityCell similarity={item.similarity} />
+            </DialogContent>
+            <DialogActions><Button onClick={() => setDetailsOpen(false)}>Close</Button></DialogActions>
+          </Dialog>
+        </>
       )}
       {!request && item.retired && (
         <Chip label="Retired" size="small" color="warning" variant="outlined" sx={{ ml: 0.75, height: 18, fontSize: 11 }} />
@@ -108,7 +156,7 @@ export function SimilarityCell({ similarity }) {
       <LinearProgress
         variant="determinate"
         value={(similarity ?? 0) * 100}
-        color={tone === "neutral" ? "inherit" : tone}
+        color={tone === "neutral" || tone === "veryLikely" ? "inherit" : tone}
         sx={{
           mt: 0.5,
           height: 6,
@@ -116,9 +164,35 @@ export function SimilarityCell({ similarity }) {
           // "inherit" paints the bar in the current text colour, which is the
           // only way to give the neutral tone a grey that is not a palette.
           ...(tone === "neutral" ? { color: "grey.400" } : null),
+          ...(tone === "veryLikely" ? {
+            bgcolor: "#c6e8d2",
+            "& .MuiLinearProgress-bar": { bgcolor: TONE_COLOR.veryLikely },
+          } : null),
         }}
       />
     </Box>
+  );
+}
+
+export function MatchedMaterialText({ text, query }) {
+  if (!text) return "-";
+  return matchingTextParts(text, query).map((part, index) => (
+    <Box component="span" key={index} sx={part.matched ? { color: "#1565c0", fontWeight: 700 } : undefined}>
+      {part.text}
+    </Box>
+  ));
+}
+
+export function MaterialQuerySummary({ query, label }) {
+  return (
+    <Paper variant="outlined" sx={{ p: 1.25, mb: 1.25, bgcolor: "grey.50" }}>
+      {label && <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>{label}</Typography>}
+      <Typography variant="body2"><Box component="span" sx={{ fontWeight: 700 }}>Material Name: </Box>{query?.name || "-"}</Typography>
+      <Typography variant="body2"><Box component="span" sx={{ fontWeight: 700 }}>Material Code: </Box>{query?.code || "-"}</Typography>
+      <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+        <Box component="span" sx={{ fontWeight: 700 }}>Description / Long Text: </Box>{query?.desc || "-"}
+      </Typography>
+    </Paper>
   );
 }
 
@@ -130,11 +204,7 @@ export function SimilarityCell({ similarity }) {
 function MaterialAiMatchRow({ row, showItemTitle }) {
   return (
     <Box>
-      {showItemTitle && (
-        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.75 }}>
-          Item {row.itemNo} — {row.query.name || "-"}
-        </Typography>
-      )}
+      <MaterialQuerySummary query={row.query} label={showItemTitle ? `Item ${row.itemNo}` : undefined} />
 
       {/* The requester's own answer from the pre-save check. Only shown when
           they explicitly confirmed; no check at all says nothing. */}
@@ -175,6 +245,7 @@ function MaterialAiMatchRow({ row, showItemTitle }) {
                     </TableCell>
                     <TableCell sx={HEAD_CELL_SX}>Material Code</TableCell>
                     <TableCell sx={HEAD_CELL_SX}>Material Name</TableCell>
+                    <TableCell sx={HEAD_CELL_SX}>Description / Long Text</TableCell>
                     <TableCell sx={HEAD_CELL_SX}>Similarity</TableCell>
                     <TableCell sx={HEAD_CELL_SX}>Match Type</TableCell>
                   </TableRow>
@@ -186,9 +257,14 @@ function MaterialAiMatchRow({ row, showItemTitle }) {
                         {recommendation.rank}
                       </TableCell>
                       <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: "nowrap" }}>
-                        <RecommendationCode item={recommendation} />
+                        <RecommendationCode item={recommendation} query={row.query} />
                       </TableCell>
-                      <TableCell sx={BODY_CELL_SX}>{recommendation.name || "-"}</TableCell>
+                      <TableCell sx={{ ...BODY_CELL_SX, minWidth: 180 }}>
+                        <MatchedMaterialText text={recommendation.name} query={row.query} />
+                      </TableCell>
+                      <TableCell sx={{ ...BODY_CELL_SX, minWidth: 220, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+                        <MatchedMaterialText text={recommendation.desc} query={row.query} />
+                      </TableCell>
                       <TableCell sx={BODY_CELL_SX}>
                         <SimilarityCell similarity={recommendation.similarity} />
                       </TableCell>

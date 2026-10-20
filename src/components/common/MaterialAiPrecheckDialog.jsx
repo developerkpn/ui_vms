@@ -19,7 +19,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { RecommendationCode, SimilarityCell } from "src/components/common/MaterialAiMatchPanel";
+import { MaterialQuerySummary, MatchedMaterialText, RecommendationCode, SimilarityCell } from "src/components/common/MaterialAiMatchPanel";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import {
   AI_MATCH_STATUS,
@@ -32,6 +32,7 @@ import {
   initialPrecheckChoice,
   isRequestRecommendation,
   normalizePrecheckLine,
+  precheckHasExactMatch,
   precheckNeedsChoice,
   summarizePrecheck,
 } from "src/helper/materialAiMatch.js";
@@ -76,13 +77,19 @@ const HEAD_CELL_SX = {
 };
 const BODY_CELL_SX = { border: "1px solid #e0e0e0" };
 
-function PrecheckLine({ line, label, choice, onChoose, disabled }) {
+function PrecheckLine({ line, label, choice, onChoose, disabled, isMass }) {
+  const exactMatch = precheckHasExactMatch(line);
+  const choiceDisabled = disabled || exactMatch;
   return (
     <Box>
-      {label && (
-        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.75 }}>
-          {label}
-        </Typography>
+      <MaterialQuerySummary query={line.query} label={label} />
+
+      {exactMatch && (
+        <Alert severity="error">
+          Ditemukan kecocokan 100%. Material ini tidak dapat disubmit sebagai material baru.
+          Silakan hubungi MDM.
+          {isMass && " Hapus atau perbaiki baris ini sebelum submit mass request."}
+        </Alert>
       )}
 
       {line.status === AI_MATCH_STATUS.FAILED && (
@@ -98,11 +105,10 @@ function PrecheckLine({ line, label, choice, onChoose, disabled }) {
         </Typography>
       )}
 
-      {precheckNeedsChoice(line) && line.recommendations.some(isRequestRecommendation) && (
+      {!exactMatch && precheckNeedsChoice(line) && line.recommendations.some(isRequestRecommendation) && (
         <Alert severity="info" sx={{ py: 0 }}>
-          Ada permintaan yang belum masuk SAP (&quot;Req&quot;) yang mirip baris ini. Jika itu baris
-          yang sama di form ini, hapus salah satunya; jika permintaan orang lain, cek dulu
-          dengan peminta tersebut.
+          Ada request material serupa. Klik &quot;View details&quot; untuk melihat peminta dan statusnya.
+          Hubungi MDM sebelum membuat request baru; jika baris yang sama di form ini, hapus salah satunya.
         </Alert>
       )}
 
@@ -114,38 +120,44 @@ function PrecheckLine({ line, label, choice, onChoose, disabled }) {
                 <TableCell padding="checkbox" sx={HEAD_CELL_SX} />
                 <TableCell sx={HEAD_CELL_SX}>Material Code</TableCell>
                 <TableCell sx={HEAD_CELL_SX}>Material Name</TableCell>
+                <TableCell sx={HEAD_CELL_SX}>Description / Long Text</TableCell>
                 <TableCell sx={HEAD_CELL_SX}>Similarity</TableCell>
                 <TableCell sx={HEAD_CELL_SX}>Match Type</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {line.recommendations.map(item => {
-                // A request not in SAP yet cannot be "used instead": there is
-                // no material yet. It is shown so the requester can drop a
-                // line entered twice, or ask whoever requested it first.
+                // A request number cannot be "used instead" as a SAP code.
+                // Completed material codes can be selected in catalogue rows;
+                // history rows provide details for following up with MDM.
                 const pickable = !isRequestRecommendation(item);
                 return (
                 <TableRow
                   key={`${line.key}-${item.rank}`}
                   hover={pickable}
                   selected={pickable && choice === item.code}
-                  onClick={() => pickable && !disabled && onChoose(item.code)}
-                  sx={{ cursor: pickable && !disabled ? "pointer" : "default" }}
+                  onClick={() => pickable && !choiceDisabled && onChoose(item.code)}
+                  sx={{ cursor: pickable && !choiceDisabled ? "pointer" : "default" }}
                 >
                   <TableCell padding="checkbox" sx={BODY_CELL_SX}>
                     {pickable && (
                       <Radio
                         size="small"
                         checked={choice === item.code}
-                        disabled={disabled}
+                        disabled={choiceDisabled}
                         inputProps={{ "aria-label": `Pilih ${item.code}` }}
                       />
                     )}
                   </TableCell>
                   <TableCell sx={{ ...BODY_CELL_SX, whiteSpace: "nowrap" }}>
-                    <RecommendationCode item={item} />
+                    <RecommendationCode item={item} query={line.query} />
                   </TableCell>
-                  <TableCell sx={BODY_CELL_SX}>{item.name || "-"}</TableCell>
+                  <TableCell sx={{ ...BODY_CELL_SX, minWidth: 180 }}>
+                    <MatchedMaterialText text={item.name} query={line.query} />
+                  </TableCell>
+                  <TableCell sx={{ ...BODY_CELL_SX, minWidth: 220, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+                    <MatchedMaterialText text={item.desc} query={line.query} />
+                  </TableCell>
                   <TableCell sx={BODY_CELL_SX}>
                     <SimilarityCell similarity={item.similarity} />
                   </TableCell>
@@ -156,18 +168,18 @@ function PrecheckLine({ line, label, choice, onChoose, disabled }) {
               <TableRow
                 hover
                 selected={choice === AI_PRECHECK_NEW}
-                onClick={() => !disabled && onChoose(AI_PRECHECK_NEW)}
-                sx={{ cursor: disabled ? "default" : "pointer" }}
+                onClick={() => !choiceDisabled && onChoose(AI_PRECHECK_NEW)}
+                sx={{ cursor: choiceDisabled ? "default" : "pointer" }}
               >
                 <TableCell padding="checkbox" sx={BODY_CELL_SX}>
                   <Radio
                     size="small"
                     checked={choice === AI_PRECHECK_NEW}
-                    disabled={disabled}
+                    disabled={choiceDisabled}
                     inputProps={{ "aria-label": "Material baru" }}
                   />
                 </TableCell>
-                <TableCell colSpan={4} sx={{ ...BODY_CELL_SX, fontWeight: 700 }}>
+                <TableCell colSpan={5} sx={{ ...BODY_CELL_SX, fontWeight: 700 }}>
                   Bukan salah satu di atas — ini material baru
                 </TableCell>
               </TableRow>
@@ -264,6 +276,7 @@ export default function MaterialAiPrecheckDialog({
   const nothingNew = summary.allDecided && summary.newKeys.length === 0;
 
   const handleConfirm = () => {
+    if (phase !== PHASE.REVIEW || submitting || !summary.allDecided || tooFewForMass) return;
     if (nothingNew) {
       setPhase(PHASE.DONE);
       return;
@@ -344,6 +357,7 @@ export default function MaterialAiPrecheckDialog({
             choice={choices[line.key] || ""}
             onChoose={value => setChoices(prev => ({ ...prev, [line.key]: value }))}
             disabled={submitting}
+            isMass={isMass}
           />
         ))}
 

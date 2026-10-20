@@ -673,6 +673,7 @@ const SingleMaterialForm = ({
   const buildRequestPayload = useCallback(
     () => ({
       materialGroupCode: formState.materialGroup,
+      subgroup: formState.subgroup,
       requestFields: {
         ...formState.requestFieldValues,
         plant: formState.requestFieldValues.plant || formData?.plant || "",
@@ -683,7 +684,7 @@ const SingleMaterialForm = ({
       },
       templateValues: formState.templateFieldValues,
     }),
-    [formData, formState.materialGroup, formState.requestFieldValues, formState.templateFieldValues]
+    [formData, formState.materialGroup, formState.subgroup, formState.requestFieldValues, formState.templateFieldValues]
   );
 
   // Does the actual write. Called directly for a rework save (the comment is

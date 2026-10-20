@@ -27,6 +27,9 @@ const {
   formatSimilarityPercent,
   MATCH_TYPE_LABELS,
   isRequestRecommendation,
+  matchingTextParts,
+  requestRecommendationLabel,
+  requestRecommendationNotice,
   normalizeAiMatch,
   normalizeAiMatchList,
   shouldKeepPolling,
@@ -76,7 +79,7 @@ test("the status vocabulary and poll budget are the ones the backend writes", ()
   assert.deepEqual(AI_MATCH_STATUS, { PENDING: "PENDING", DONE: "DONE", FAILED: "FAILED" });
   assert.equal(AI_MATCH_POLL_INTERVAL_MS, 5000);
   assert.equal(AI_MATCH_MAX_POLLS, 24);
-  assert.deepEqual(AI_MATCH_TONE_THRESHOLDS, { success: 0.9, warning: 0.75 });
+  assert.deepEqual(AI_MATCH_TONE_THRESHOLDS, { veryLikely: 0.98, success: 0.9, warning: 0.75 });
   assert.throws(() => {
     AI_MATCH_STATUS.PENDING = "nope";
   });
@@ -127,12 +130,17 @@ test("a similarity reads as a percentage with one decimal", () => {
   assert.equal(formatSimilarityPercent(0.9731), "97.3%");
   assert.equal(formatSimilarityPercent("0.8012"), "80.1%");
   assert.equal(formatSimilarityPercent(1), "100.0%");
+  assert.equal(formatSimilarityPercent(0.99999), "99.9%");
   assert.equal(formatSimilarityPercent(0), "0.0%");
   assert.equal(formatSimilarityPercent(null), "-");
   assert.equal(formatSimilarityPercent("n/a"), "-");
 });
 
 test("the colour tone changes exactly at the two thresholds", () => {
+  assert.equal(similarityTone(0.98), "success");
+  assert.equal(similarityTone(0.9801), "veryLikely");
+  assert.equal(similarityTone("0.987"), "veryLikely");
+  assert.equal(similarityTone(1), "veryLikely");
   assert.equal(similarityTone(0.9), "success");
   assert.equal(similarityTone(0.95), "success");
   assert.equal(similarityTone(0.8999), "warning");
@@ -187,7 +195,7 @@ test("a raw snake_case row normalizes the same way as the DTO", () => {
   assert.equal(match.topSimilarity, 0.61);
   assert.equal(match.latencyMs, 204.5);
   assert.deepEqual(match.recommendations, [
-    { rank: 1, code: "1", name: "BEARING SKF", similarity: 0.61, matchType: "TEXT", source: "catalog", requestStatus: "", retired: false },
+    { rank: 1, code: "1", name: "BEARING SKF", desc: "", similarity: 0.61, matchType: "TEXT", source: "catalog", requestStatus: "", retired: false },
   ]);
 });
 
@@ -235,8 +243,8 @@ test("missing arrays, missing status and junk recommendations do not break a row
   assert.equal(junk.error, "AI recommender timed out");
   assert.deepEqual(junk.entities, { category: [], specs: [] });
   assert.deepEqual(junk.recommendations, [
-    { rank: 1, code: "", name: "", similarity: null, matchType: "", source: "catalog", requestStatus: "", retired: false },
-    { rank: 2, code: "", name: "", similarity: null, matchType: "", source: "catalog", requestStatus: "", retired: false },
+    { rank: 1, code: "", name: "", desc: "", similarity: null, matchType: "", source: "catalog", requestStatus: "", retired: false },
+    { rank: 2, code: "", name: "", desc: "", similarity: null, matchType: "", source: "catalog", requestStatus: "", retired: false },
   ]);
 });
 
@@ -335,6 +343,7 @@ const {
   buildPrecheckReview,
   initialPrecheckChoice,
   normalizePrecheckLine,
+  precheckHasExactMatch,
   precheckNeedsChoice,
   summarizePrecheck,
 } = helper;
@@ -395,12 +404,47 @@ test("summarizePrecheck splits new lines from lines matched to an existing mater
   assert.deepEqual(allExisting.newKeys, []);
 });
 
+test("100% matches block single and mass submissions regardless of source or chosen answer", () => {
+  for (const source of ["catalog", "request"]) {
+    for (const requestScope of ["own", "other_user", "same_batch"]) {
+      const exact = previewLine(2, { recommendations: [
+        { code: "MATCH", name: "EXACT", similarity: "1.0000", source, requestScope },
+      ] });
+      assert.equal(precheckHasExactMatch(exact), true);
+      for (const choice of ["", AI_PRECHECK_NEW, "MATCH"]) {
+        for (const lines of [[exact], [previewLine(0), exact, previewLine(5)]]) {
+          const summary = summarizePrecheck(lines, { 0: AI_PRECHECK_NEW, 2: choice, 5: AI_PRECHECK_NEW });
+          assert.equal(summary.allDecided, false);
+          assert.deepEqual(summary.blockedKeys, [2]);
+          assert.equal(summary.newKeys.includes(2), false);
+        }
+      }
+      assert.equal(buildPrecheckReview(exact), null);
+      assert.equal(buildMassPrecheckReview([exact], [2]), null);
+    }
+  }
+});
+
+test("near matches and unavailable checks remain submittable as new", () => {
+  for (const similarity of [0.94, 0.98, 0.99, 0.9999]) {
+    const near = previewLine(0, { recommendations: [{ name: "RING", similarity }] });
+    assert.equal(precheckHasExactMatch(near), false);
+    const summary = summarizePrecheck([near], { 0: AI_PRECHECK_NEW });
+    assert.equal(summary.allDecided, true);
+    assert.deepEqual(summary.newKeys, [0]);
+    assert.deepEqual(summary.blockedKeys, []);
+  }
+  const failed = previewLine(0, { status: "FAILED", recommendations: [] });
+  assert.equal(precheckHasExactMatch(failed), false);
+  assert.equal(summarizePrecheck([failed], { 0: initialPrecheckChoice(failed) }).allDecided, true);
+});
+
 test("buildPrecheckReview confirms a checked line and has nothing for a failed one", () => {
   assert.deepEqual(buildPrecheckReview(previewLine(0)), {
     confirmedNew: true,
     recommendations: [
-      { code: "900.001", name: "EXISTING 0", similarity: 0.93, matchType: "TEXT", source: "catalog", requestStatus: "", retired: false },
-      { code: "900.002", name: "OTHER 0", similarity: 0.71, matchType: "TEXT", source: "catalog", requestStatus: "", retired: false },
+      { code: "900.001", name: "EXISTING 0", desc: "", similarity: 0.93, matchType: "TEXT", source: "catalog", requestStatus: "", retired: false },
+      { code: "900.002", name: "OTHER 0", desc: "", similarity: 0.71, matchType: "TEXT", source: "catalog", requestStatus: "", retired: false },
     ],
   });
   assert.deepEqual(buildPrecheckReview(previewLine(1, { recommendations: [] })), {
@@ -409,6 +453,39 @@ test("buildPrecheckReview confirms a checked line and has nothing for a failed o
   });
   assert.equal(buildPrecheckReview(previewLine(2, { status: "FAILED", recommendations: [] })), null);
   assert.equal(buildPrecheckReview(undefined), null);
+});
+
+test("descriptions survive normalization and requester review", () => {
+  const line = normalizePrecheckLine({ status: "DONE", recommendations: [
+    { code: "1", name: "KIT", desc: "CHAMBER STACK CR 10-16 GRUNDFOS" },
+    { code: "2", name: "KIT", long_text: "LONG TEXT" },
+  ] });
+  assert.equal(line.recommendations[0].desc, "CHAMBER STACK CR 10-16 GRUNDFOS");
+  assert.equal(line.recommendations[1].desc, "LONG TEXT");
+  assert.equal(buildPrecheckReview(line).recommendations[0].desc, line.recommendations[0].desc);
+});
+
+test("blue evidence preserves text and highlights shared words across name and description", () => {
+  const text = "KIT,CHAMBER STACK CR 10-16 GRUNDFOS";
+  const parts = matchingTextParts(text, { name: "CHAMBER STACK KIT", desc: "grundfos" });
+  assert.equal(parts.map(part => part.text).join(""), text);
+  assert.deepEqual(parts.filter(part => part.matched).map(part => part.text), ["KIT", "CHAMBER", "STACK", "GRUNDFOS"]);
+  assert.deepEqual(matchingTextParts("GASKET", "GAS"), [{ text: "GASKET", matched: false }]);
+});
+
+test("blue evidence recognizes the workbook's zero padding and formatted part numbers", () => {
+  for (const name of ["P/N 009650841500", "P/N 0096-508-41500", "POS 0096 508 41500"]) {
+    const parts = matchingTextParts(name, "P/N 96508415 CHAMBER STACK KIT");
+    assert.equal(parts.map(part => part.text).join(""), name);
+    assert.ok(parts.some(part => part.matched && part.text.includes("415")), name);
+  }
+  assert.ok(matchingTextParts("P/N 96508416", "P/N 96508415").every(part => !part.matched));
+  assert.ok(matchingTextParts("0-150BAR", "150BAR").every(part => !part.matched));
+});
+
+test("highlighting keeps markup as ordinary text", () => {
+  const text = '<script>alert("KIT")</script>';
+  assert.equal(matchingTextParts(text, "KIT").map(part => part.text).join(""), text);
 });
 
 test("buildMassPrecheckReview sends one confirmation per new, checked line keyed by form row", () => {
@@ -453,4 +530,24 @@ test("a recommendation keeps its source, request status and retired flag", () =>
   assert.equal(retired.retired, true);
   assert.equal(plain.source, "catalog");
   assert.equal(plain.retired, false);
+});
+
+test("other-user request details and MDM notice survive normalization and review", () => {
+  const match = normalizeAiMatch(buildDto({ recommendations: [{ code: "REQ1", name: "PUMP", desc: "LONG TEXT",
+    source: "request", similarity: 0.8, request_scope: "other_user", request_details: {
+      requestNo: "REQ1", requesterName: "Bob", materialCode: "910.016.001", status: "DONE", email: "private@example.test",
+    } }] }));
+  const item = match.recommendations[0];
+  assert.equal(requestRecommendationLabel(item), "Other User Request");
+  assert.match(requestRecommendationNotice(item), /another user's request/);
+  assert.match(requestRecommendationNotice(item), /contact MDM/);
+  assert.equal(item.requestDetails.materialCode, "910.016.001");
+  assert.ok(!JSON.stringify(item).includes("private@example.test"));
+  const review = helper.buildPrecheckReview(match);
+  assert.equal(review.recommendations[0].requestScope, "other_user");
+  assert.deepEqual(review.recommendations[0].requestDetails, item.requestDetails);
+  assert.equal(requestRecommendationLabel({ requestScope: "own" }), "Your Request");
+  assert.equal(requestRecommendationLabel({ requestScope: "same_batch" }), "This Request");
+  assert.match(requestRecommendationNotice({ requestScope: "same_batch" }), /duplicate line/);
+  assert.equal(requestRecommendationLabel({}), "Material Request");
 });

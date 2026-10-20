@@ -27,6 +27,7 @@ export const AI_MATCH_MAX_POLLS = 24;
 
 /** Similarity floors for the "this is probably the same material" colouring. */
 export const AI_MATCH_TONE_THRESHOLDS = Object.freeze({
+  veryLikely: 0.98,
   success: 0.9,
   warning: 0.75,
 });
@@ -120,18 +121,20 @@ export function toSimilarity(value) {
 export function formatSimilarityPercent(value) {
   const similarity = toSimilarity(value);
   if (similarity === null) return "-";
-  return `${(similarity * 100).toFixed(1)}%`;
+  // A near match must never round up to the exact-match label.
+  return `${(similarity < 1 ? Math.min(similarity * 100, 99.9) : 100).toFixed(1)}%`;
 }
 
 /**
- * Which of the three colour tones a similarity earns.
+ * Which colour tone a similarity earns.
  *
  * @param {*} value
- * @returns {"success"|"warning"|"neutral"}
+ * @returns {"veryLikely"|"success"|"warning"|"neutral"}
  */
 export function similarityTone(value) {
   const similarity = toSimilarity(value);
   if (similarity === null) return "neutral";
+  if (similarity > AI_MATCH_TONE_THRESHOLDS.veryLikely) return "veryLikely";
   if (similarity >= AI_MATCH_TONE_THRESHOLDS.success) return "success";
   if (similarity >= AI_MATCH_TONE_THRESHOLDS.warning) return "warning";
   return "neutral";
@@ -149,16 +152,24 @@ function normalizeRecommendation(recommendation, index) {
     rank: index + 1,
     code: asText(firstDefined(source.code, source.material_code)),
     name: asText(firstDefined(source.name, source.material_name)),
+    desc: asText(firstDefined(source.desc, source.description, source.long_text)),
     similarity: toSimilarity(source.similarity),
     matchType: asText(firstDefined(source.matchType, source.match_type)),
-    // A request that is not in SAP yet (open, approved but not synced, or
-    // another line of the same form): its code is a request number, and it
-    // cannot be picked as the existing material to use.
+    // Request history or another line of this form: code is a request number,
+    // so this row cannot be picked as an existing SAP material.
     source:
       source.source === AI_MATCH_SOURCE.REQUEST
         ? AI_MATCH_SOURCE.REQUEST
         : AI_MATCH_SOURCE.CATALOG,
     requestStatus: asText(firstDefined(source.requestStatus, source.request_status)),
+    ...(isRequestRecommendation(source) && (source.requestDetails || source.request_details) ? {
+      requestScope: ["other_user", "own", "same_batch"].includes(source.requestScope ?? source.request_scope)
+        ? source.requestScope ?? source.request_scope : "unknown",
+      requestDetails: Object.fromEntries([
+        "kind", "requestNo", "batchNo", "itemNo", "materialCode", "requesterName",
+        "status", "createdAt", "groupCode", "subgroupCode",
+      ].map(key => [key, asText((source.requestDetails || source.request_details)[key])])),
+    } : {}),
     // Flagged for deletion in SAP or renamed "(NOT USE)": the same part, but
     // not one to reuse as is.
     retired: source.retired === true,
@@ -168,6 +179,23 @@ function normalizeRecommendation(recommendation, index) {
 /** Whether a recommendation is a request rather than an SAP material. */
 export function isRequestRecommendation(item) {
   return Boolean(item && item.source === AI_MATCH_SOURCE.REQUEST);
+}
+
+export function requestRecommendationLabel(item) {
+  if (item?.requestScope === "other_user") return "Other User Request";
+  if (item?.requestScope === "own") return "Your Request";
+  if (item?.requestScope === "same_batch") return "This Request";
+  return "Material Request";
+}
+
+export function requestRecommendationNotice(item) {
+  if (item?.requestScope === "same_batch") {
+    return "Another line in this request looks similar. Check the details and remove any duplicate line.";
+  }
+  if (item?.requestScope === "other_user") {
+    return "This material is from another user's request. Please contact MDM to check it before creating a new request.";
+  }
+  return "A similar material was already requested. Please contact MDM to check it before creating a new request.";
 }
 
 /**
@@ -341,6 +369,14 @@ export function precheckNeedsChoice(line) {
   );
 }
 
+/** Exact catalogue, history and same-batch matches all require MDM review. */
+export function precheckHasExactMatch(line) {
+  return Boolean(
+    line?.status === AI_MATCH_STATUS.DONE &&
+    line.recommendations.some(item => item.similarity === 1)
+  );
+}
+
 /**
  * The choice a line starts with: undecided when it has candidates, new when
  * it has none.
@@ -354,16 +390,22 @@ export function initialPrecheckChoice(line) {
  *
  * @param {object[]} lines - Normalized preview lines.
  * @param {Record<string, string>} choices - key → AI_PRECHECK_NEW, or the picked code.
- * @returns {{allDecided: boolean, newKeys: Array, existing: Array<{key, itemLabel, code, name}>}}
+ * @returns {{allDecided: boolean, blockedKeys: Array, newKeys: Array, existing: Array<{key, itemLabel, code, name}>}}
  */
 export function summarizePrecheck(lines, choices) {
   const list = Array.isArray(lines) ? lines.filter(Boolean) : [];
   const answers = choices && typeof choices === "object" ? choices : {};
   const newKeys = [];
   const existing = [];
+  const blockedKeys = [];
   let allDecided = true;
 
   for (const line of list) {
+    if (precheckHasExactMatch(line)) {
+      blockedKeys.push(line.key);
+      allDecided = false;
+      continue;
+    }
     const choice = asText(answers[line.key]);
     if (!choice) {
       allDecided = false;
@@ -382,7 +424,7 @@ export function summarizePrecheck(lines, choices) {
     });
   }
 
-  return { allDecided, newKeys, existing };
+  return { allDecided, blockedKeys, newKeys, existing };
 }
 
 /**
@@ -391,16 +433,18 @@ export function summarizePrecheck(lines, choices) {
  * there is nothing to confirm.
  */
 export function buildPrecheckReview(line) {
-  if (!line || line.status !== AI_MATCH_STATUS.DONE) return null;
+  if (!line || line.status !== AI_MATCH_STATUS.DONE || precheckHasExactMatch(line)) return null;
   return {
     confirmedNew: true,
     recommendations: line.recommendations.map(item => ({
       code: item.code,
       name: item.name,
+      desc: item.desc,
       similarity: item.similarity,
       matchType: item.matchType,
       source: item.source,
       requestStatus: item.requestStatus,
+      ...(item.requestDetails ? { requestScope: item.requestScope, requestDetails: item.requestDetails } : {}),
       retired: item.retired,
     })),
   };
@@ -420,4 +464,78 @@ export function buildMassPrecheckReview(lines, newKeys) {
     })
     .filter(Boolean);
   return rows.length > 0 ? { rows } : null;
+}
+
+// Match complete words and identifiers, preserving the original characters
+// for React to render. This is shared text evidence, not a claim that every
+// word responsible for an embedding score can be identified.
+const MATCH_STOP_WORDS = new Set(["THE", "AND", "FOR", "WITH", "PART", "NUMBER", "NO", "POS"]);
+
+function identifierKey(raw) {
+  let key = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (key.length < 4 || !/\d/.test(key)) return "";
+  if (/^0+[A-Z0-9]/i.test(raw) && key.replace(/^0+/, "").length >= 6) {
+    key = key.replace(/^0+/, "");
+  }
+  if (!/^0[.\-]/.test(raw) && key.replace(/0+$/, "").length >= 6) {
+    key = key.replace(/0+$/, "");
+  }
+  return key;
+}
+
+function evidenceTokens(value) {
+  const text = asText(value);
+  const tokens = [];
+  for (const match of text.matchAll(/[A-Za-z0-9]+(?:[.\-][A-Za-z0-9]+)*/g)) {
+    const word = match[0].toUpperCase();
+    if (word.length >= 2 && !MATCH_STOP_WORDS.has(word)) {
+      tokens.push({ start: match.index, end: match.index + match[0].length, key: word });
+      const key = identifierKey(match[0]);
+      if (key) tokens.push({ start: match.index, end: match.index + match[0].length, key: `PN:${key}` });
+    }
+  }
+  for (const marker of text.matchAll(/\b(?:P\s*\/\s*N|PART\s*(?:NO|NUMBER)|POS)\b[.:#]?\s*/gi)) {
+    const offset = marker.index + marker[0].length;
+    const pieces = [];
+    for (const piece of text.slice(offset).matchAll(/\S+/g)) {
+      const raw = piece[0];
+      const clean = raw.replace(/[^A-Za-z0-9]/g, "");
+      if (pieces.length === 4 || clean.length > 6 || !/\d/.test(clean)) break;
+      pieces.push(piece);
+      if (pieces.length < 2) continue;
+      const joined = pieces.map(item => item[0]).join("");
+      const key = identifierKey(joined);
+      if (key && joined.replace(/[^A-Za-z0-9]/g, "").length >= 6) {
+        tokens.push({ start: offset, end: offset + piece.index + raw.length, key: `PN:${key}` });
+      }
+    }
+  }
+  return tokens;
+}
+
+/** Shared words/part numbers as safe text segments; never produces HTML. */
+export function matchingTextParts(value, query) {
+  const text = asText(value);
+  const queryText = typeof query === "object" && query !== null
+    ? [query.name, query.desc].filter(Boolean).join(" ")
+    : asText(query);
+  const keys = new Set(evidenceTokens(queryText).map(token => token.key));
+  const spans = evidenceTokens(text)
+    .filter(token => keys.has(token.key))
+    .sort((a, b) => a.start - b.start || b.end - a.end);
+  const merged = [];
+  for (const span of spans) {
+    const previous = merged[merged.length - 1];
+    if (previous && span.start <= previous.end) previous.end = Math.max(previous.end, span.end);
+    else merged.push({ start: span.start, end: span.end });
+  }
+  const parts = [];
+  let cursor = 0;
+  for (const span of merged) {
+    if (span.start > cursor) parts.push({ text: text.slice(cursor, span.start), matched: false });
+    parts.push({ text: text.slice(span.start, span.end), matched: true });
+    cursor = span.end;
+  }
+  if (cursor < text.length) parts.push({ text: text.slice(cursor), matched: false });
+  return parts;
 }

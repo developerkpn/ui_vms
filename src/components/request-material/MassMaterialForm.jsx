@@ -473,6 +473,8 @@ const MassMaterialForm = ({ onBack }) => {
     // entered twice in this batch shows up before anything is saved.
     const checkRows = filledRowIndexes.map(rowIndex => ({
       rowIndex,
+      materialGroup: rows[rowIndex].materialGroup,
+      materialSubGroup: rows[rowIndex].materialSubGroup,
       description: rows[rowIndex].description,
       poText: rows[rowIndex].poText,
       spesifikasiTambahan: rows[rowIndex].spesifikasiTambahan,
