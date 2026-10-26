@@ -368,7 +368,7 @@ export default function Materials() {
     // Set the file to preview and open the modal
     setPreviewFile({
       url: fileUrl,
-      name: attachment.attachment,
+      name: attachment.name || attachment.attachment,
       type: attachment.type || attachment.fileType || "application/octet-stream",
     });
     setPreviewModalOpen(true);
@@ -888,11 +888,11 @@ export default function Materials() {
                             edge="end"
                             onClick={() => handleViewAttachment(attachment)}
                             title="Preview file"
-                            sx={canDeleteAttachments ? { mr: 1 } : undefined}
+                            sx={canDeleteAttachments && !attachment.read_only ? { mr: 1 } : undefined}
                           >
                             <Visibility />
                           </IconButton>
-                          {canDeleteAttachments && (
+                          {canDeleteAttachments && !attachment.read_only && (
                             <IconButton
                               edge="end"
                               onClick={() => handleDeleteAttachment(attachment)}
@@ -909,7 +909,7 @@ export default function Materials() {
                         {getFileIcon(attachment.type || attachment.fileType)}
                       </ListItemIcon>
                       <ListItemText
-                        primary={attachment.attachment}
+                        primary={attachment.name || attachment.attachment}
                         secondary={attachment.type || attachment.fileType || "Unknown file type"}
                       />
                     </ListItem>

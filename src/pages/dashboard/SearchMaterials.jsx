@@ -959,7 +959,7 @@ export default function SearchMaterials() {
     setImageLoadError(false);
     setPreviewFile({
       url: fileUrl,
-      name: attachment.attachment,
+      name: attachment.name || attachment.attachment,
       type: attachment.type || attachment.fileType || "application/octet-stream",
     });
     setPreviewModalOpen(true);
@@ -1094,7 +1094,7 @@ export default function SearchMaterials() {
               {previewItems.map((att, idx) => {
                 const isImg = isImageAttachment(att.attachment);
                 return (
-                  <Tooltip key={idx} title={att.attachment} arrow>
+                  <Tooltip key={att.id || idx} title={att.name || att.attachment} arrow>
                     <Box
                       sx={{
                         width: 42,
@@ -1437,18 +1437,18 @@ export default function SearchMaterials() {
                       <IconButton
                         edge="end"
                         onClick={() => handleViewAttachment(att)}
-                        aria-label={`View ${att.attachment}`}
-                        sx={canDeleteAttachments ? { mr: 1 } : undefined}
+                        aria-label={`View ${att.name || att.attachment}`}
+                        sx={canDeleteAttachments && !att.read_only ? { mr: 1 } : undefined}
                       >
                         <Visibility />
                       </IconButton>
-                      {canDeleteAttachments && (
+                      {canDeleteAttachments && !att.read_only && (
                         <IconButton
                           edge="end"
                           color="error"
                           disabled={attachmentsUploading || attachmentDeleting}
                           onClick={() => setAttachmentToDelete(att)}
-                          aria-label={`Delete ${att.attachment}`}
+                          aria-label={`Delete ${att.name || att.attachment}`}
                         >
                           <Delete />
                         </IconButton>
@@ -1463,7 +1463,7 @@ export default function SearchMaterials() {
                       <AttachmentTypeIcon fileName={att.attachment} />
                     )}
                   </ListItemIcon>
-                  <ListItemText primary={att.attachment} />
+                  <ListItemText primary={att.name || att.attachment} />
                 </ListItem>
               ))}
             </List>

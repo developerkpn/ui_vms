@@ -157,6 +157,7 @@ export default function LoginPage() {
             sx={{
               display: "flex",
               width: matches ? "18.75rem" : "37.5rem",
+              maxWidth: "calc(100vw - 32px)",
               height: matches ? "37.5rem" : "18.75rem",
               p: 3,
               flexDirection: "column",
@@ -214,7 +215,7 @@ export default function LoginPage() {
                 justifyContent: "flex-end",
                 alignItems: "center",
                 height: matches ? "3.125rem" : "6.25rem",
-                width: matches ? "18.75rem" : "37.5rem",
+                width: "100%",
               }}
             >
               <Link

@@ -1,8 +1,8 @@
-import { Container, Typography, Grid, Box, Button } from "@mui/material";
+import { Container, Typography, Grid, Box, Button, Alert } from "@mui/material";
 import SelectComp from "src/components/common/SelectComp";
 import { TextFieldComp } from "src/components/common/TextFieldComp";
 import { PasswordWithEyes } from "src/components/common/PasswordWithEyes";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { useEffect, useState, useMemo } from "react";
 import useAxiosPrivate from "src/hooks/useAxiosPrivate";
 import dayjs from "dayjs";
@@ -21,6 +21,7 @@ export default function FormUserPage() {
   const axiosPrivate = useAxiosPrivate();
   const [searchParams] = useSearchParams();
   const [userId, setUserid] = useState("");
+  const [accountType, setAccountType] = useState("");
   const user_id = useSessionStore(state => state.user_id);
   const permission = usePermissionStore(state => state.permission);
   const allowUpdate = useMemo(() => permission["User"]?.update ?? false, [permission]);
@@ -63,11 +64,10 @@ export default function FormUserPage() {
       const data = userDt.data.data;
       if (data) {
         setUserid(data.user_id);
-        if (data.role === "MGR") {
-          setisMgr(true);
-        }
+        setAccountType(data.account_type || "");
+        setisMgr(data.account_type === "MGR" || data.role === "MGR");
         reset({
-          manager: data.mgr_id,
+          manager: data.mgr_id || "",
           fullname: data.fullname,
           username: data.username,
           usergroup: data.usergroup,
@@ -90,13 +90,20 @@ export default function FormUserPage() {
 
   const [userGroup, setuserGroup] = useState([{ value: "", label: "" }]);
   const [roles, setRoles] = useState([{ value: "", label: "" }]);
-  const [manager, setManager] = useState([{ value: "", label: "" }]);
+  const [manager, setManager] = useState([{ value: "", label: "No manager" }]);
+  const [managersLoaded, setManagersLoaded] = useState(false);
+  const managerValue = useWatch({ control, name: "manager" });
+  const managerFound = manager.some(option => option.value === managerValue);
+  const missingManager = managersLoaded && Boolean(managerValue) && !managerFound;
+  const managerOptions = managerValue && !managerFound
+    ? [{
+        value: managerValue,
+        label: managersLoaded ? "Assigned manager no longer exists" : "Loading assigned manager…",
+        disabled: true,
+      }, ...manager]
+    : manager;
   const onRoleChange = data => {
-    if (data !== "MGR") {
-      setisMgr(false);
-    } else {
-      setisMgr(true);
-    }
+    setisMgr(accountType === "MGR" || data === "MGR");
   };
   const [isMgr, setisMgr] = useState(false);
 
@@ -190,11 +197,18 @@ export default function FormUserPage() {
     const controller = new AbortController();
     const getMgr = async () => {
       try {
-        const getManager = await axiosPrivate.get(`/user/mgrs`);
+        const getManager = await axiosPrivate.get(`/user/mgrs`, { signal: controller.signal });
         const dataMgr = getManager.data.data.map(data => {
-          return { value: data.mgr_id, label: data.fullname };
+          const businessUnits = [data.bu_id, data.bu_id_1, data.bu_id_2].filter(Boolean).join(", ");
+          return {
+            value: data.mgr_id,
+            label: [data.fullname, businessUnits, data.dept_id].filter(Boolean).join(" · ")
+              + (data.is_active === false ? " (inactive)" : ""),
+            disabled: data.is_active === false,
+          };
         });
-        setManager(dataMgr);
+        setManager([{ value: "", label: "No manager" }, ...dataMgr]);
+        setManagersLoaded(true);
       } catch (error) {
         console.error(error);
       }
@@ -249,7 +263,7 @@ export default function FormUserPage() {
       }
     } catch (error) {
       setBtnclicked(false);
-      alert(error);
+      alert(error.response?.data?.message || error.message || "Failed to save user.");
     }
   };
 
@@ -360,10 +374,23 @@ export default function FormUserPage() {
                   name="manager"
                   control={control}
                   label="Manager"
-                  options={manager}
+                  options={managerOptions}
                   disabled={isMgr}
+                  rules={{
+                    validate: value => isMgr || !allowUpdate || !managersLoaded || !value
+                      || manager.some(option => option.value === value)
+                      || "Select a current manager before saving this user.",
+                  }}
                 />
               </Grid>
+              {missingManager && !isMgr && (
+                <Grid item xs={12}>
+                  <Alert severity="warning">
+                    This user's assigned manager no longer exists. Select the current manager
+                    and save this user to repair the assignment.
+                  </Alert>
+                </Grid>
+              )}
             </Grid>
           )}
           {allowUpdate && location.state?.page !== "userinfo" && (
