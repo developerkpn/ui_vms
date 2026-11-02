@@ -226,6 +226,7 @@ export default function MiniDrawer() {
         component="main"
         sx={{
           flexGrow: 1,
+          minWidth: 0,
           p: 3,
           height: "90vh",
           width: open ? `calc(94% - ${drawerWidth}px)` : "94%",

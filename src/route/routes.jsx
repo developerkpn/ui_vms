@@ -24,6 +24,8 @@ const MaterialsApproverManagement = lazy(
   () => import("src/pages/dashboard/MaterialsApproverManagement")
 );
 const MaterialsGuideUpload = lazy(() => import("src/pages/dashboard/MaterialsGuideUpload"));
+const MaterialsReport = lazy(() => import("src/pages/dashboard/MaterialsReport"));
+const MaterialsSlaReport = lazy(() => import("src/pages/dashboard/MaterialsSlaReport"));
 const MaterialsDashboard = lazy(
   () => import("src/pages/dashboard/MaterialsDashboard")
 );
@@ -232,7 +234,7 @@ export const routes = createBrowserRouter([
         // The sidebar's Administrator entry lands here: an overview that picks
         // which administration tool to open.
         path: "materials/administrator",
-        // The whole Administrator section is the ADMIN user's.
+        // The Administrator permission also protects each tool's own route.
         element: (
           <ProtectedRoute page="Administrator">
             <MaterialsAdministratorOverview />
@@ -254,6 +256,27 @@ export const routes = createBrowserRouter([
             <MaterialsGuideUpload />
           </ProtectedRoute>
         ),
+      },
+      {
+        path: "materials/report",
+        // Separate submenu, with the same Materials administrator audience.
+        element: (
+          <ProtectedRoute page="Administrator">
+            <MaterialsReport />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "materials/report/sla",
+        element: (
+          <ProtectedRoute page="Administrator">
+            <MaterialsSlaReport />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "materials/administrator/report",
+        element: <Navigate to="/dashboard/materials/report/sla" replace />,
       },
       {
         // Sidebar: Materials > Dashboard (mst_page menu_id seeded by

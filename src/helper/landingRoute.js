@@ -1,15 +1,16 @@
 // Where a user gets sent when no specific page was asked for: after login, from
 // the /dashboard index, and when a guard bounces them off a page.
 //
-// The sidebar (NavSection) renders a parent only when permission[parent.text].read
-// is true, and a child only when that parent is readable AND permission[child.text].read
-// is true. Landing routes are resolved against exactly that rule, so a user is
+// The sidebar (NavSection) renders a parent only when its permission is readable,
+// and a child only when both its parent and its own permission are readable.
+// Items may supply permissionKey when their display label differs from the page.
+// Landing routes are resolved against exactly that rule, so a user is
 // never dropped on a page their own sidebar does not offer. Routes come back in
 // sidebar reading order — a parent's own link, then its children, then the next
 // parent — so the fallback is the topmost thing they can actually see.
 
-function isReadable(permission, text) {
-  return permission?.[text]?.read === true;
+function isReadable(permission, item) {
+  return permission?.[item?.permissionKey || item?.text]?.read === true;
 }
 
 /**
@@ -19,7 +20,7 @@ export function collectReachableRoutes(menu, permission) {
   const routes = [];
 
   for (const parent of Object.values(menu ?? {})) {
-    if (!isReadable(permission, parent?.text)) {
+    if (!isReadable(permission, parent)) {
       continue;
     }
 
@@ -28,7 +29,7 @@ export function collectReachableRoutes(menu, permission) {
     }
 
     for (const child of parent?.children ?? []) {
-      if (isReadable(permission, child?.text) && child?.url) {
+      if (isReadable(permission, child) && child?.url) {
         routes.push(child.url);
       }
     }

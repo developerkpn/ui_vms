@@ -36,7 +36,7 @@ function NavSection({ menu, collapsemen, navmen, onUpNavCol, onUpNavMenu }) {
   return (
     <List>
       {Object.values(menu_sess).map((item) => {
-        if (permission[item.text]?.read === true) {
+        if (permission[item.permissionKey || item.text]?.read === true) {
           const headUrl = item.url || (item.children?.length === 1 ? item.children[0].url : "");
 
           return (
@@ -60,7 +60,7 @@ function NavSection({ menu, collapsemen, navmen, onUpNavCol, onUpNavMenu }) {
               <NavCollapse parent={item.key} curstate={collapsemen}>
                 <List>
                   {item.children.map((child) => {
-                    if (permission[child.text]?.read)
+                    if (permission[child.permissionKey || child.text]?.read)
                       return (
                         <NavItem
                           key={child.key}
