@@ -50,6 +50,8 @@ const columnGroups = [
       ["material_group", "Material Group"],
       ["requester", "Requester Name"],
       ["request_at", "Requester Date"],
+      ["plant_code", "Plant Code"],
+      ["business_unit", "Business Unit"],
       ["request_status", "Request Status"],
     ],
   },
@@ -88,6 +90,8 @@ const columns = columnGroups.flatMap(group => group.columns);
 function columnWidth(key) {
   if (key === "ticket_number") return 156;
   if (key === "request_kind") return 112;
+  if (key === "plant_code") return 120;
+  if (key === "business_unit") return 130;
   if (key === "material_description") return 280;
   if (key === "material_group") return 220;
   if (key.endsWith("_days")) return 144;
