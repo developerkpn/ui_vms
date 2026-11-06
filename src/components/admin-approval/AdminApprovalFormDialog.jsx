@@ -21,6 +21,7 @@ import {
   DialogContent,
   Grid,
   IconButton,
+  InputAdornment,
   Paper,
   Popover,
   Snackbar,
@@ -50,6 +51,7 @@ import {
   resolveMdmClaimErrorMessage,
   resolveStepApproverUserId,
 } from "src/helper/mdmClaimGate.js";
+import { formatIdrInput, parseIdrInput } from "src/helper/idrFormat.js";
 import {
   combineMaterialDescription,
   splitMaterialDescription,
@@ -169,6 +171,17 @@ function createApprovalDraft(detail = {}) {
     ),
     base_uom:
       firstDefined(raw.base_uom, raw.baseUom, raw.uom, detail.basicInfo?.baseUom, "") || "",
+    moving_avg_price:
+      firstDefined(
+        raw.moving_avg_price,
+        raw.movingAvgPrice,
+        raw.price,
+        requestFields.moving_avg_price,
+        requestFields.movingAvgPrice,
+        requestFields.price,
+        detail.basicInfo?.price !== "-" ? detail.basicInfo?.price : "",
+        ""
+      ) || "",
     template_payload: cloneTemplatePayload(
       firstDefined(raw.template_payload, raw.templatePayload, {})
     ),
@@ -211,6 +224,7 @@ const EDITABLE_FIELD_KEYS = [
   "sloc_code",
   "material_description",
   "base_uom",
+  "moving_avg_price",
   "long_text_1",
   "long_text_2",
   "long_text_3",
@@ -576,6 +590,8 @@ export default function AdminApprovalFormDialog({
         index.plant_code = field;
       } else if (field.fieldKey === "storage_location") {
         index.sloc_code = field;
+      } else if (field.fieldKey === "moving_avg_price") {
+        index.moving_avg_price = field;
       } else {
         index[field.fieldKey] = field;
       }
@@ -1543,6 +1559,44 @@ export default function AdminApprovalFormDialog({
               </Grid>
               <Grid item xs={12} md={6}>
                 <FieldHistoryLabel
+                  label={`Price${requestFieldIndex.moving_avg_price?.isRequired ? " *" : ""}`}
+                  sections={detail.fieldHistory?.moving_avg_price || []}
+                />
+                <Box sx={{ display: "flex", alignItems: "flex-end", gap: 1 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    disabled={!canActNow}
+                    value={formatIdrInput(draftValues.moving_avg_price || "")}
+                    onChange={event => {
+                      const next = parseIdrInput(event.target.value);
+                      if (next === "" || /^\d*\.?\d*$/.test(next)) {
+                        updateDraftValues(current => ({
+                          ...current,
+                          moving_avg_price: next,
+                          template_payload: {
+                            ...current.template_payload,
+                            requestFields: {
+                              ...(current.template_payload?.requestFields || {}),
+                              moving_avg_price: next,
+                            },
+                          },
+                        }));
+                      }
+                    }}
+                    placeholder="Input price"
+                    InputProps={{
+                      startAdornment: <InputAdornment position="start">Rp</InputAdornment>,
+                    }}
+                    inputProps={{ maxLength: 50, inputMode: "decimal" }}
+                    error={Boolean(displayFieldErrors.moving_avg_price?.error)}
+                    helperText={displayFieldErrors.moving_avg_price?.message || ""}
+                  />
+                  {renderFieldHint("moving_avg_price")}
+                </Box>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <FieldHistoryLabel
                   label={`Plant${requestFieldIndex.plant_code?.isRequired ? " *" : ""}`}
                   sections={detail.fieldHistory?.plant_code || []}
                 />
@@ -2228,6 +2282,7 @@ export default function AdminApprovalFormDialog({
                         long_text_1: draftValues.long_text_1,
                         long_text_2: draftValues.long_text_2,
                         long_text_3: draftValues.long_text_3,
+                        moving_avg_price: draftValues.moving_avg_price,
                         template_payload: draftValues.template_payload,
                       },
                     }

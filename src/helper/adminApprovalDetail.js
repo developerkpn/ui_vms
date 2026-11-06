@@ -54,6 +54,14 @@ export function buildApprovalDetail(row = {}) {
     requestFields.base_unit_of_measure,
     requestFields.base_uom
   );
+  const movingAvgPrice = pickText(
+    row.movingAvgPrice,
+    row.moving_avg_price,
+    row.price,
+    requestFields.moving_avg_price,
+    requestFields.movingAvgPrice,
+    requestFields.price
+  );
   const approvalSteps = resolveApprovalSteps(row);
   const rewindStepLevels = getRewindStepLevels(row);
   const approvalHistory = buildApprovalHistory(approvalSteps, rewindStepLevels);
@@ -100,6 +108,7 @@ export function buildApprovalDetail(row = {}) {
       ),
       materialDescription,
       baseUom,
+      price: movingAvgPrice,
       plant: pickText(row.plantCode, row.plant_code, requestFields.plant),
       storageLocation: pickText(
         row.slocCode,
@@ -169,6 +178,7 @@ function buildFieldHistoryIndex(row, templateValues) {
     "sloc_code",
     "material_description",
     "base_uom",
+    "moving_avg_price",
     "long_text_1",
     "long_text_2",
     "long_text_3",

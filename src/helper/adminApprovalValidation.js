@@ -11,12 +11,14 @@ const REQUEST_FIELD_UI_KEY_MAP = {
   base_unit_of_measure: "base_uom",
   plant: "plant_code",
   storage_location: "sloc_code",
+  moving_avg_price: "moving_avg_price",
 };
 
 const UI_TO_REQUEST_FIELD_KEY_MAP = {
   base_uom: "base_unit_of_measure",
   plant_code: "plant",
   sloc_code: "storage_location",
+  moving_avg_price: "moving_avg_price",
 };
 
 const APPROVAL_EDITABLE_REQUEST_FIELD_KEYS = new Set([
@@ -24,6 +26,7 @@ const APPROVAL_EDITABLE_REQUEST_FIELD_KEYS = new Set([
   "base_uom",
   "plant_code",
   "sloc_code",
+  "moving_avg_price",
 ]);
 
 
@@ -202,6 +205,11 @@ export function validateApprovalDraft({
 
   if (!toTrimmedString(draftValues?.base_uom).trim()) {
     addError("base_uom", "Base UoM wajib diisi");
+  }
+
+  const movingAvgPrice = toTrimmedString(draftValues?.moving_avg_price);
+  if (movingAvgPrice.trim() && !/^\d+(\.\d+)?$/.test(movingAvgPrice.trim())) {
+    addError("moving_avg_price", "Price harus berupa angka");
   }
 
   requestRuleFields.forEach(field => {
