@@ -2282,22 +2282,20 @@ export default function MassApprovalFormDialog({
       <Dialog
         open={remarkDialogOpen}
         onClose={handleRemarkDialogClose}
-        maxWidth={currentAction === "Rework" ? "lg" : "xs"}
+        maxWidth="md"
         fullWidth
-        PaperProps={
-          currentAction === "Rework"
-            ? {
-                sx: {
-                  m: { xs: 1.5, sm: 3 },
-                  width: { xs: "calc(100% - 24px)", sm: "calc(100% - 48px)" },
-                  maxHeight: { xs: "calc(100% - 24px)", sm: "calc(100% - 48px)" },
-                },
-              }
-            : undefined
-        }
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            m: { xs: 1.5, sm: 3 },
+            width: { xs: "calc(100% - 24px)", sm: "calc(100% - 48px)" },
+            maxWidth: { xs: "100%", sm: currentAction === "Rework" ? 840 : 680 },
+            maxHeight: { xs: "calc(100% - 24px)", sm: "calc(100% - 48px)" },
+          },
+        }}
       >
-        <Box sx={{ p: 2, display: "flex", alignItems: "center", gap: 1 }}>
-          <WarningAmber sx={{ color: "#f59e0b" }} />
+        <Box sx={{ p: 2.5, pb: 1.5, display: "flex", alignItems: "center", gap: 1.5 }}>
+          <WarningAmber sx={{ color: "#f59e0b", fontSize: 28 }} />
           <Typography variant="h6" sx={{ fontWeight: 900 }}>
             {currentAction ? `${currentAction} Reason` : "Reason"}
           </Typography>
@@ -2359,8 +2357,8 @@ export default function MassApprovalFormDialog({
             <TextField
               fullWidth
               multiline
-              minRows={currentAction === "Rework" ? 14 : 4}
-              maxRows={currentAction === "Rework" ? 24 : 4}
+              minRows={currentAction === "Rework" ? 14 : 7}
+              maxRows={currentAction === "Rework" ? 24 : 14}
               placeholder="Enter your message here..."
               key={remarkInputKey}
               defaultValue={remarkText.current}
@@ -2373,6 +2371,9 @@ export default function MassApprovalFormDialog({
               sx={{
                 "& .MuiInputBase-root": {
                   bgcolor: "#f5f5f5",
+                  fontSize: "0.95rem",
+                  lineHeight: 1.6,
+                  p: 1.75,
                 },
               }}
             />
