@@ -1,11 +1,11 @@
 import { create } from 'zustand';
-import { withMaterialReportMenu } from 'src/helper/materialMenu';
+import { withMaterialMenu } from 'src/helper/materialMenu';
 
 const useMenuStore = create((set) => {
   return {
     menu: {},
     setMenu: (menu) => {
-      set({ menu: withMaterialReportMenu(menu) });
+      set({ menu: withMaterialMenu(menu) });
     },
   };
 });

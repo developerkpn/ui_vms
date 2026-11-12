@@ -7,6 +7,7 @@ import {
   resolveLandingRoute,
   resolveLandingRouteForSession,
 } from "./landingRoute.js";
+import { MATERIAL_DASHBOARD_PATH, withMaterialMenu } from "./materialMenu.js";
 
 // Menu shapes below mirror what /user/login returns on dev for the real user
 // groups: a parent per menu header, children already filtered to fread = true
@@ -74,7 +75,7 @@ const vendorPermission = {
   "E-Invoice Submission": { read: true },
 };
 
-test("a materials-only user lands in the material menu, never on the ticket list", () => {
+test("a materials-only user lands on the Materials dashboard", () => {
   // test.requester4 on dev: dept_id is null, so the old dept_id !== "VENDOR"
   // check aimed it at /dashboard/ticket, a page absent from its sidebar.
   const route = resolveLandingRouteForSession({
@@ -84,7 +85,58 @@ test("a materials-only user lands in the material menu, never on the ticket list
     permission: materialOnlyPermission,
   });
 
-  assert.equal(route, "/dashboard/materials/lookup");
+  assert.equal(route, "/dashboard/materials/dashboard");
+});
+
+for (const [page, group] of [
+  ["Material Groups", "MATERIAL"],
+  ["Material Search", "MATERIAL"],
+  ["Request Material", "MATERIAL"],
+  ["My Approval", "MDM_MATERIAL"],
+  ["Administrator", "MATERIAL_ADMIN"],
+]) {
+  test(`${group} with only ${page} access lands on Dashboard at login and session restore`, () => {
+    const menu = {
+      55: {
+        ...materialOnlyMenu[55],
+        children: materialOnlyMenu[55].children.filter(child => child.text === page),
+      },
+    };
+    const permission = { Materials: { read: true }, [page]: { read: true } };
+    const session = { menu, permission, dept_id: null, role: group };
+
+    // Login resolves the raw response; restored sessions use the decorated store.
+    assert.equal(resolveLandingRouteForSession(session), MATERIAL_DASHBOARD_PATH);
+    assert.equal(
+      resolveLandingRouteForSession({ ...session, menu: withMaterialMenu(menu) }),
+      MATERIAL_DASHBOARD_PATH
+    );
+    assert.equal(resolveLandingRoute({ menu, permission }), MATERIAL_DASHBOARD_PATH);
+    assert.deepEqual(collectReachableRoutes(menu, permission), [
+      MATERIAL_DASHBOARD_PATH,
+      menu[55].children[0].url,
+      ...(page === "Administrator" ? ["/dashboard/materials/report"] : []),
+    ]);
+    assert.equal(permission.Dashboard, undefined);
+    assert.equal(menu[55].children.length, 1);
+  });
+}
+
+test("an explicitly readable material Dashboard is preferred over Material Groups", () => {
+  const menu = {
+    55: {
+      ...materialOnlyMenu[55],
+      children: [
+        ...materialOnlyMenu[55].children,
+        { key: 61, text: "Dashboard", url: MATERIAL_DASHBOARD_PATH },
+      ],
+    },
+  };
+  assert.equal(resolveLandingRouteForSession({
+    menu,
+    permission: { ...materialOnlyPermission, Dashboard: { read: true } },
+    dept_id: "MATERIAL",
+  }), MATERIAL_DASHBOARD_PATH);
 });
 
 test("a user who can read the ticket list still lands on it", () => {
@@ -106,7 +158,7 @@ test("a material department keeps its material landing even with ticket access",
     permission: adminPermission,
   });
 
-  assert.equal(route, "/dashboard/materials/lookup");
+  assert.equal(route, "/dashboard/materials/dashboard");
 });
 
 test("a vendor lands on the first page its own menu offers", () => {
@@ -150,9 +202,11 @@ test("unreadable children are skipped while readable siblings remain", () => {
   });
 
   assert.deepEqual(routes, [
+    "/dashboard/materials/dashboard",
     "/dashboard/materials/request",
     "/dashboard/materials/approval",
     "/dashboard/materials/administrator",
+    "/dashboard/materials/report",
   ]);
 });
 
@@ -190,7 +244,7 @@ test("an unreachable preference is ignored, a reachable one is honoured", () => 
       permission: materialOnlyPermission,
       preferred: "/dashboard/ticket",
     }),
-    "/dashboard/materials/lookup"
+    "/dashboard/materials/dashboard"
   );
 
   assert.equal(
@@ -211,8 +265,8 @@ test("a missing menu or permission map resolves to no route instead of throwing"
 });
 
 test("department and role decide only the preference, not the outcome", () => {
-  assert.equal(preferredRouteFor({ dept_id: "MDM_MAT" }), "/dashboard/materials/lookup");
-  assert.equal(preferredRouteFor({ dept_id: "MATERIAL" }), "/dashboard/materials/lookup");
+  assert.equal(preferredRouteFor({ dept_id: "MDM_MAT" }), "/dashboard/materials/dashboard");
+  assert.equal(preferredRouteFor({ dept_id: "MATERIAL" }), "/dashboard/materials/dashboard");
   assert.equal(preferredRouteFor({ dept_id: "", role: "VENDOR" }), null);
   assert.equal(preferredRouteFor({ dept_id: "ADMIN" }), "/dashboard/ticket");
   assert.equal(preferredRouteFor({ dept_id: null }), "/dashboard/ticket");

@@ -1,3 +1,5 @@
+import { MATERIAL_DASHBOARD_PATH, withMaterialMenu } from "./materialMenu.js";
+
 // Where a user gets sent when no specific page was asked for: after login, from
 // the /dashboard index, and when a guard bounces them off a page.
 //
@@ -19,7 +21,7 @@ function isReadable(permission, item) {
 export function collectReachableRoutes(menu, permission) {
   const routes = [];
 
-  for (const parent of Object.values(menu ?? {})) {
+  for (const parent of Object.values(withMaterialMenu(menu))) {
     if (!isReadable(permission, parent)) {
       continue;
     }
@@ -42,8 +44,8 @@ export function collectReachableRoutes(menu, permission) {
  * The landing route for a user, or null when they can reach no page at all.
  *
  * `preferred` is honoured only when the user can actually reach it; otherwise it
- * is ignored in favour of the first route the sidebar offers. That is the whole
- * point: a preference is a nicety, permission is the rule.
+ * is ignored in favour of the Materials dashboard when available, then the
+ * first route the sidebar offers.
  */
 export function resolveLandingRoute({ menu, permission, preferred } = {}) {
   const routes = collectReachableRoutes(menu, permission);
@@ -54,6 +56,10 @@ export function resolveLandingRoute({ menu, permission, preferred } = {}) {
 
   if (preferred && routes.includes(preferred)) {
     return preferred;
+  }
+
+  if (routes.includes(MATERIAL_DASHBOARD_PATH)) {
+    return MATERIAL_DASHBOARD_PATH;
   }
 
   return routes[0];
@@ -68,7 +74,7 @@ export function resolveLandingRoute({ menu, permission, preferred } = {}) {
  */
 export function preferredRouteFor({ dept_id, role } = {}) {
   if (dept_id === "MDM_MAT" || dept_id === "MATERIAL") {
-    return "/dashboard/materials/lookup";
+    return MATERIAL_DASHBOARD_PATH;
   }
 
   if (role === "VENDOR") {
