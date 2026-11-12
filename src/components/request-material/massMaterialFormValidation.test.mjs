@@ -16,7 +16,14 @@ const helper = await import(
   `data:text/javascript;base64,${fs.readFileSync(helperPath).toString("base64")}`
 );
 
-const { normalizeMassMaterialFieldValue, validateMassRow, MASS_OPTIONAL_FIELDS } = helper;
+const {
+  normalizeMassMaterialFieldValue,
+  validateMassRow,
+  MASS_OPTIONAL_FIELDS,
+  MASS_MAX_PO_TEXT_LENGTH,
+  toMassGridRowPayload,
+  mapMassRequestServerErrors,
+} = helper;
 
 test("lowercase input uppercases", () => {
   assert.equal(normalizeMassMaterialFieldValue("consumable"), "CONSUMABLE");
@@ -83,4 +90,56 @@ test("optional mass fields are exactly PO text, spesifikasi tambahan and sub gro
     [...MASS_OPTIONAL_FIELDS].sort(),
     ["materialSubGroup", "poText", "spesifikasiTambahan"]
   );
+});
+
+test("PO text is capped at the 210 chars SAP's PURCHASE_ORDER_TEXT holds", () => {
+  const row = {
+    plant: "PS23",
+    sloc: "WN01",
+    materialGroup: "927",
+    description: "PUMP",
+    uom: "PC",
+  };
+
+  assert.equal(MASS_MAX_PO_TEXT_LENGTH, 210);
+  assert.equal(validateMassRow({ ...row, poText: "X".repeat(210) }).poText, undefined);
+  assert.equal(
+    validateMassRow({ ...row, poText: "X".repeat(211) }).poText?.message,
+    "PO text maksimal 210 karakter."
+  );
+});
+
+test("a grid line goes to the API as its 8 text fields only", () => {
+  assert.deepEqual(
+    toMassGridRowPayload({
+      plant: "PS23",
+      sloc: "WN01",
+      materialGroup: "927",
+      description: "PUMP",
+      uom: "PC",
+      attachments: [{}],
+      rowErrors: { uom: { error: true } },
+    }),
+    {
+      plant: "PS23",
+      sloc: "WN01",
+      materialGroup: "927",
+      materialSubGroup: "",
+      description: "PUMP",
+      poText: "",
+      uom: "PC",
+      spesifikasiTambahan: "",
+    }
+  );
+});
+
+test("master-data errors from the validate endpoint land on their cells", () => {
+  const mapped = mapMassRequestServerErrors([
+    { rowIndex: 0, fieldKey: "uom", message: 'Base UoM "PCS" tidak ditemukan di master UoM.' },
+    { rowIndex: 2, fieldKey: "materialGroup", message: 'Material group "696" tidak ditemukan di master material group.' },
+  ]);
+
+  assert.equal(mapped[0].uom.message, 'Base UoM "PCS" tidak ditemukan di master UoM.');
+  assert.equal(mapped[2].materialGroup.error, true);
+  assert.deepEqual(mapMassRequestServerErrors(undefined), {});
 });

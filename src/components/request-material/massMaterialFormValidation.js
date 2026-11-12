@@ -9,6 +9,9 @@ export const MASS_MAX_ATTACHMENTS_PER_ROW = 3;
 export const MASS_MIN_ATTACHMENTS_PER_ROW = 1;
 export const MASS_SHARED_MIN_ATTACHMENTS = 1;
 export const MASS_MAX_DESCRIPTION_LENGTH = 40;
+// PO text is staged into SAP's PURCHASE_ORDER_TEXT, 3 x 70 = 210 chars wide;
+// anything longer would be cut off on the way to SAP.
+export const MASS_MAX_PO_TEXT_LENGTH = 210;
 
 // Sub material group is optional on a mass row: the column it lands in
 // (mat_mass_request_item.material_sub_group) is nullable, and the backend's
@@ -102,7 +105,23 @@ export function validateMassRow(row) {
     );
   }
 
+  const poText = toTrimmedString(row.poText);
+  if (poText.length > MASS_MAX_PO_TEXT_LENGTH) {
+    errors.poText = createFieldError(
+      `PO text maksimal ${MASS_MAX_PO_TEXT_LENGTH} karakter.`
+    );
+  }
+
   return errors;
+}
+
+// The 8 text fields of one grid line, as the create and validate endpoints
+// take them (no attachments, no error state).
+export function toMassGridRowPayload(row) {
+  const source = row && typeof row === "object" ? row : {};
+  return Object.fromEntries(
+    MASS_TEXT_FIELDS.map(fieldKey => [fieldKey, source[fieldKey] ?? ""])
+  );
 }
 
 // Validates the full 10-row batch.

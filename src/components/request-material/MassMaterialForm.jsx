@@ -37,12 +37,14 @@ import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 import MaterialAiPrecheckDialog from "../common/MaterialAiPrecheckDialog";
 import {
   MASS_MAX_DESCRIPTION_LENGTH,
+  MASS_MAX_PO_TEXT_LENGTH,
   MASS_MAX_ROWS,
   MASS_SHARED_MIN_ATTACHMENTS,
   MASS_TEXT_FIELDS,
   isMassRowFilled,
   mapMassRequestServerErrors,
   normalizeMassMaterialFieldValue,
+  toMassGridRowPayload,
   validateMassRequestBatch,
 } from "./massMaterialFormValidation.js";
 import {
@@ -115,6 +117,7 @@ const MassMaterialForm = ({ onBack }) => {
   const axiosPrivate = useAxiosPrivate();
   const [rows, setRows] = useState(createInitialRows);
   const [submitting, setSubmitting] = useState(false);
+  const [checkingMasters, setCheckingMasters] = useState(false);
   const [saveSuccessOpen, setSaveSuccessOpen] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [reasonDialogOpen, setReasonDialogOpen] = useState(false);
@@ -137,6 +140,17 @@ const MassMaterialForm = ({ onBack }) => {
   const updateRow = (rowIndex, updater) => {
     setRows(prev =>
       prev.map((row, idx) => (idx === rowIndex ? updater(row) : row))
+    );
+  };
+
+  // Merge { [rowIndex]: { [fieldKey]: error } } into the rows' cell errors.
+  const applyRowErrors = errorsByRow => {
+    setRows(prev =>
+      prev.map((row, idx) =>
+        errorsByRow[idx]
+          ? { ...row, rowErrors: { ...row.rowErrors, ...errorsByRow[idx] } }
+          : row
+      )
     );
   };
 
@@ -395,7 +409,7 @@ const MassMaterialForm = ({ onBack }) => {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSubmitError("");
     setImportFeedback(null);
 
@@ -411,21 +425,7 @@ const MassMaterialForm = ({ onBack }) => {
     }
 
     if (rowErrors && Object.keys(rowErrors).length > 0) {
-      setRows(prev =>
-        prev.map((row, idx) => {
-          const errorsForRow = rowErrors[idx];
-          if (!errorsForRow) {
-            return row;
-          }
-          return {
-            ...row,
-            rowErrors: {
-              ...row.rowErrors,
-              ...errorsForRow,
-            },
-          };
-        })
-      );
+      applyRowErrors(rowErrors);
       const topLevelRowError =
         rowErrors[-1]?.rows?.message ||
         rowErrors[-1]?.sharedAttachments?.message;
@@ -434,6 +434,31 @@ const MassMaterialForm = ({ onBack }) => {
       } else if (rowErrors[-1]?.sharedAttachments?.error) {
         setSharedFileError(rowErrors[-1].sharedAttachments.message);
       }
+      return;
+    }
+
+    // Plant, sloc, material group and UoM against our master data, before
+    // the reason and AI pre-check dialogs. Saving runs the same check again,
+    // so if this call itself fails the requester is not blocked here.
+    let masterErrors = {};
+    try {
+      setCheckingMasters(true);
+      const response = await axiosPrivate.post(
+        "/material/requests/mass/validate",
+        { rows: rows.map(toMassGridRowPayload) }
+      );
+      masterErrors = mapMassRequestServerErrors(response?.data?.data?.errors);
+    } catch (error) {
+      console.error("Mass master-data check failed:", error);
+    } finally {
+      setCheckingMasters(false);
+    }
+
+    if (Object.keys(masterErrors).length > 0) {
+      applyRowErrors(masterErrors);
+      setSubmitError(
+        "Ada data yang tidak sesuai master data. Periksa kolom yang ditandai merah."
+      );
       return;
     }
 
@@ -518,18 +543,7 @@ const MassMaterialForm = ({ onBack }) => {
       "rows",
       JSON.stringify(
         rows.map((row, rowIndex) =>
-          keep.has(rowIndex)
-            ? {
-                plant: row.plant,
-                sloc: row.sloc,
-                materialGroup: row.materialGroup,
-                materialSubGroup: row.materialSubGroup,
-                description: row.description,
-                poText: row.poText,
-                uom: row.uom,
-                spesifikasiTambahan: row.spesifikasiTambahan,
-              }
-            : {}
+          keep.has(rowIndex) ? toMassGridRowPayload(row) : {}
         )
       )
     );
@@ -569,21 +583,7 @@ const MassMaterialForm = ({ onBack }) => {
       const mapped = mapMassRequestServerErrors(serverErrors);
 
       if (Object.keys(mapped).length > 0) {
-        setRows(prev =>
-          prev.map((row, idx) => {
-            const rowErrorMap = mapped[idx];
-            if (!rowErrorMap) {
-              return row;
-            }
-            return {
-              ...row,
-              rowErrors: {
-                ...row.rowErrors,
-                ...rowErrorMap,
-              },
-            };
-          })
-        );
+        applyRowErrors(mapped);
       }
 
       const topLevel =
@@ -814,7 +814,9 @@ const MassMaterialForm = ({ onBack }) => {
                             inputProps={
                               fieldKey === "description"
                                 ? { maxLength: MASS_MAX_DESCRIPTION_LENGTH }
-                                : undefined
+                                : fieldKey === "poText"
+                                  ? { maxLength: MASS_MAX_PO_TEXT_LENGTH }
+                                  : undefined
                             }
                             value={row[fieldKey]}
                             onChange={e =>
@@ -1086,9 +1088,9 @@ const MassMaterialForm = ({ onBack }) => {
             minWidth: 100,
           }}
           onClick={handleSave}
-          disabled={submitting}
+          disabled={submitting || checkingMasters}
         >
-          {submitting ? "Saving..." : "Save"}
+          {submitting ? "Saving..." : checkingMasters ? "Checking..." : "Save"}
         </Button>
       </Box>
       <Dialog
