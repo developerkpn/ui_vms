@@ -91,7 +91,11 @@ import {
 } from "src/helper/reworkEmailThread.js";
 import MaterialAiMatchPanel from "src/components/common/MaterialAiMatchPanel";
 import ReworkDestinationField from "./ReworkDestinationField";
-import MaterialActionDialog, { materialReasonFieldProps } from "./MaterialActionDialog";
+import MaterialActionDialog, {
+  materialReasonContentSx,
+  materialReasonFieldProps,
+  materialReasonFillSx,
+} from "./MaterialActionDialog";
 import ReworkEmailThreadSection from "./ReworkEmailThreadSection";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 import useInputDraft from "src/hooks/useInputDraft";
@@ -1879,10 +1883,11 @@ export default function AdminApprovalFormDialog({
         </Stack>
       </DialogActions>
 
-      <MaterialActionDialog
+      <Dialog
         open={finalCodeDialogOpen}
         onClose={handleFinalCodeDialogClose}
-        action="Approve"
+        maxWidth="sm"
+        fullWidth
       >
         <Box sx={{ p: 2, display: "flex", alignItems: "center", gap: 1 }}>
           <WarningAmber sx={{ color: "#f59e0b" }} />
@@ -2061,12 +2066,13 @@ export default function AdminApprovalFormDialog({
             Next
           </Button>
         </DialogActions>
-      </MaterialActionDialog>
+      </Dialog>
 
       <MaterialActionDialog
         open={remarkDialogOpen}
         onClose={handleRemarkDialogClose}
         action={currentAction}
+        compact={currentAction === "Approve"}
       >
         <Box sx={{ p: 2.5, pb: 1.5, display: "flex", alignItems: "center", gap: 1.5 }}>
           <WarningAmber sx={{ color: "#f59e0b", fontSize: 28 }} />
@@ -2074,7 +2080,7 @@ export default function AdminApprovalFormDialog({
             {currentAction ? `${currentAction} Reason` : "Reason"}
           </Typography>
         </Box>
-        <DialogContent sx={{ pt: 0 }}>
+        <DialogContent sx={{ pt: 0, ...materialReasonContentSx }}>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             {isReworkEmailReason
               ? "Please review the email below before proceeding with rework."
@@ -2143,14 +2149,17 @@ export default function AdminApprovalFormDialog({
                   setRemarkError("");
                 }
               }}
-              sx={{
-                "& .MuiInputBase-root": {
-                  bgcolor: "#f5f5f5",
-                  fontSize: "0.95rem",
-                  lineHeight: 1.6,
-                  p: 1.75,
+              sx={[
+                materialReasonFillSx,
+                {
+                  "& .MuiInputBase-root": {
+                    bgcolor: "#f5f5f5",
+                    fontSize: "0.95rem",
+                    lineHeight: 1.6,
+                    p: 1.75,
+                  },
                 },
-              }}
+              ]}
             />
           )}
         </DialogContent>

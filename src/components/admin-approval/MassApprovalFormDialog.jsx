@@ -110,7 +110,11 @@ import {
 } from "src/helper/reworkEmailThread.js";
 import MaterialAiMatchPanel from "src/components/common/MaterialAiMatchPanel";
 import ReworkDestinationField from "./ReworkDestinationField";
-import MaterialActionDialog, { materialReasonFieldProps } from "./MaterialActionDialog";
+import MaterialActionDialog, {
+  materialReasonContentSx,
+  materialReasonFieldProps,
+  materialReasonFillSx,
+} from "./MaterialActionDialog";
 import ReworkEmailThreadSection from "./ReworkEmailThreadSection";
 
 const EDITABLE_FIELD_META = [
@@ -1386,11 +1390,14 @@ export default function MassApprovalFormDialog({
       helperText={decisionRemarkErrors[action]}
       disabled={submitting}
       onChange={event => handleDecisionRemarkChange(action, event.target.value)}
-      sx={{
-        "& .MuiInputBase-root": {
-          bgcolor: "#f5f5f5",
+      sx={[
+        materialReasonFillSx,
+        {
+          "& .MuiInputBase-root": {
+            bgcolor: "#f5f5f5",
+          },
         },
-      }}
+      ]}
     />
   );
 
@@ -2286,7 +2293,7 @@ export default function MassApprovalFormDialog({
             {currentAction ? `${currentAction} Reason` : "Reason"}
           </Typography>
         </Box>
-        <DialogContent sx={{ pt: 0 }}>
+        <DialogContent sx={{ pt: 0, ...materialReasonContentSx }}>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             {isReworkEmailReason
               ? "Please review the email below before proceeding with rework."
@@ -2353,14 +2360,17 @@ export default function MassApprovalFormDialog({
                 remarkText.current = e.target.value;
                 if (remarkError) setRemarkError("");
               }}
-              sx={{
-                "& .MuiInputBase-root": {
-                  bgcolor: "#f5f5f5",
-                  fontSize: "0.95rem",
-                  lineHeight: 1.6,
-                  p: 1.75,
+              sx={[
+                materialReasonFillSx,
+                {
+                  "& .MuiInputBase-root": {
+                    bgcolor: "#f5f5f5",
+                    fontSize: "0.95rem",
+                    lineHeight: 1.6,
+                    p: 1.75,
+                  },
                 },
-              }}
+              ]}
             />
           )}
         </DialogContent>
@@ -2407,7 +2417,7 @@ export default function MassApprovalFormDialog({
                 </Typography>
               </Box>
             </Box>
-            <DialogContent sx={{ pt: 0 }}>
+            <DialogContent sx={{ pt: 0, ...materialReasonContentSx }}>
               {decisionStepIndex === 0 && discardedChangesAlert}
               {decisionStep === MASS_DECISION_REWORK && canChooseReworkTarget && (
                 <ReworkDestinationField
