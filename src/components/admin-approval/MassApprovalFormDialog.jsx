@@ -110,6 +110,7 @@ import {
 } from "src/helper/reworkEmailThread.js";
 import MaterialAiMatchPanel from "src/components/common/MaterialAiMatchPanel";
 import ReworkDestinationField from "./ReworkDestinationField";
+import MaterialActionDialog, { materialReasonFieldProps } from "./MaterialActionDialog";
 import ReworkEmailThreadSection from "./ReworkEmailThreadSection";
 
 const EDITABLE_FIELD_META = [
@@ -1373,8 +1374,7 @@ export default function MassApprovalFormDialog({
     <TextField
       fullWidth
       multiline
-      minRows={action === MASS_DECISION_REWORK ? 14 : 3}
-      maxRows={action === MASS_DECISION_REWORK ? 24 : 3}
+      {...materialReasonFieldProps(action)}
       placeholder={
         action === MASS_DECISION_APPROVE
           ? "Approve remark..."
@@ -2094,14 +2094,10 @@ export default function MassApprovalFormDialog({
       {/* Final Code dialog — Master Data stage only, ahead of the remark step.
           In the per-item decision wizard it is the Approve step, carrying the
           approve remark under the running numbers. */}
-      <Dialog
+      <MaterialActionDialog
         open={isFinalCodeOpen}
         onClose={decisionStep ? handleDecisionStepClose : handleFinalCodeDialogClose}
-        // Five columns, two of which now carry a name caption under the code.
-        // "sm" wrapped them into an unreadable stack.
-        maxWidth="md"
-        fullWidth
-        PaperProps={{ sx: { borderRadius: 2 } }}
+        action="Approve"
       >
         <Stack alignItems="center" spacing={1} sx={{ pt: 3, px: 3 }}>
           {decisionStep === MASS_DECISION_APPROVE && (
@@ -2276,23 +2272,13 @@ export default function MassApprovalFormDialog({
             {decisionStep ? decisionStepNextLabel : "Next"}
           </Button>
         </DialogActions>
-      </Dialog>
+      </MaterialActionDialog>
 
       {/* Remark dialog — shown after clicking any action button */}
-      <Dialog
+      <MaterialActionDialog
         open={remarkDialogOpen}
         onClose={handleRemarkDialogClose}
-        maxWidth="md"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 2,
-            m: { xs: 1.5, sm: 3 },
-            width: { xs: "calc(100% - 24px)", sm: "calc(100% - 48px)" },
-            maxWidth: { xs: "100%", sm: currentAction === "Rework" ? 840 : 680 },
-            maxHeight: { xs: "calc(100% - 24px)", sm: "calc(100% - 48px)" },
-          },
-        }}
+        action={currentAction}
       >
         <Box sx={{ p: 2.5, pb: 1.5, display: "flex", alignItems: "center", gap: 1.5 }}>
           <WarningAmber sx={{ color: "#f59e0b", fontSize: 28 }} />
@@ -2357,8 +2343,7 @@ export default function MassApprovalFormDialog({
             <TextField
               fullWidth
               multiline
-              minRows={currentAction === "Rework" ? 14 : 7}
-              maxRows={currentAction === "Rework" ? 24 : 14}
+              {...materialReasonFieldProps(currentAction)}
               placeholder="Enter your message here..."
               key={remarkInputKey}
               defaultValue={remarkText.current}
@@ -2396,27 +2381,15 @@ export default function MassApprovalFormDialog({
             {submitting ? "Saving..." : currentAction || "Save"}
           </Button>
         </DialogActions>
-      </Dialog>
+      </MaterialActionDialog>
 
       {/* Rework and Reject steps of the per-item decision wizard (Approve is
           the Final Code dialog above): one action per step, each with its own
           reason. */}
-      <Dialog
+      <MaterialActionDialog
         open={decisionStep === MASS_DECISION_REWORK || decisionStep === MASS_DECISION_REJECT}
         onClose={handleDecisionStepClose}
-        maxWidth={decisionStep === MASS_DECISION_REWORK ? "lg" : "xs"}
-        fullWidth
-        PaperProps={
-          decisionStep === MASS_DECISION_REWORK
-            ? {
-                sx: {
-                  m: { xs: 1.5, sm: 3 },
-                  width: { xs: "calc(100% - 24px)", sm: "calc(100% - 48px)" },
-                  maxHeight: { xs: "calc(100% - 24px)", sm: "calc(100% - 48px)" },
-                },
-              }
-            : undefined
-        }
+        action={decisionStep}
       >
         {(decisionStep === MASS_DECISION_REWORK || decisionStep === MASS_DECISION_REJECT) && (
           <>
@@ -2508,7 +2481,7 @@ export default function MassApprovalFormDialog({
             </DialogActions>
           </>
         )}
-      </Dialog>
+      </MaterialActionDialog>
     </>
   );
 }

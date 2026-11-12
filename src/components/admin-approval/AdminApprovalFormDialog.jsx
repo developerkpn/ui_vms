@@ -91,6 +91,7 @@ import {
 } from "src/helper/reworkEmailThread.js";
 import MaterialAiMatchPanel from "src/components/common/MaterialAiMatchPanel";
 import ReworkDestinationField from "./ReworkDestinationField";
+import MaterialActionDialog, { materialReasonFieldProps } from "./MaterialActionDialog";
 import ReworkEmailThreadSection from "./ReworkEmailThreadSection";
 import useAxiosPrivate from "../../hooks/useAxiosPrivate";
 import useInputDraft from "src/hooks/useInputDraft";
@@ -1878,11 +1879,10 @@ export default function AdminApprovalFormDialog({
         </Stack>
       </DialogActions>
 
-      <Dialog
+      <MaterialActionDialog
         open={finalCodeDialogOpen}
         onClose={handleFinalCodeDialogClose}
-        maxWidth="sm"
-        fullWidth
+        action="Approve"
       >
         <Box sx={{ p: 2, display: "flex", alignItems: "center", gap: 1 }}>
           <WarningAmber sx={{ color: "#f59e0b" }} />
@@ -2061,22 +2061,12 @@ export default function AdminApprovalFormDialog({
             Next
           </Button>
         </DialogActions>
-      </Dialog>
+      </MaterialActionDialog>
 
-      <Dialog
+      <MaterialActionDialog
         open={remarkDialogOpen}
         onClose={handleRemarkDialogClose}
-        maxWidth="md"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 2,
-            m: { xs: 1.5, sm: 3 },
-            width: { xs: "calc(100% - 24px)", sm: "calc(100% - 48px)" },
-            maxWidth: { xs: "100%", sm: currentAction === "Rework" ? 840 : 680 },
-            maxHeight: { xs: "calc(100% - 24px)", sm: "calc(100% - 48px)" },
-          },
-        }}
+        action={currentAction}
       >
         <Box sx={{ p: 2.5, pb: 1.5, display: "flex", alignItems: "center", gap: 1.5 }}>
           <WarningAmber sx={{ color: "#f59e0b", fontSize: 28 }} />
@@ -2141,8 +2131,7 @@ export default function AdminApprovalFormDialog({
             <TextField
               fullWidth
               multiline
-              minRows={currentAction === "Rework" ? 10 : 7}
-              maxRows={currentAction === "Rework" ? 20 : 14}
+              {...materialReasonFieldProps(currentAction)}
               placeholder="Enter your message here..."
               key={remarkInputKey}
               defaultValue={remarkText.current}
@@ -2295,7 +2284,7 @@ export default function AdminApprovalFormDialog({
             {submitting ? "Saving..." : currentAction || "Save"}
           </Button>
         </DialogActions>
-      </Dialog>
+      </MaterialActionDialog>
 
       <Snackbar
         open={validationSnackbarOpen}
